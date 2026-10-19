@@ -13,6 +13,7 @@ import { buildProviderRouter } from "./api/providers.js";
 import { buildFilesRouter } from "./api/files.js";
 import { buildWorkspaceRouter } from "./api/workspace.js";
 import { buildScrapeRouter } from "./api/scrape.js";
+import { buildTtsRouter } from "./api/tts.js";
 import { buildStateRouter, buildSessionsRouter } from "./api/state.js";
 import { buildToolsRouter } from "./api/tools.js";
 import { buildMemoryAgentRouter } from "./api/memoryagent.js";
@@ -246,6 +247,7 @@ function main(): void {
   app.use("/api/files", buildFilesRouter(config));
   app.use("/api/workspace", buildWorkspaceRouter());
   app.use("/api/scrape", buildScrapeRouter(config));
+  app.use("/api/tts", buildTtsRouter(config));
   app.use("/api/state", buildStateRouter(db));
   app.use("/api/sessions", buildSessionsRouter(db, { store, config, mainAgentPrompts, customAgents, multiAgent, ceoAgent }));
   app.use("/api/memory-agent", buildMemoryAgentRouter(memoryAgent));

@@ -6,6 +6,7 @@ import type { ToolRegistry } from "../tools/index.js";
 import type { ChatSession } from "../../services/sessionStore.js";
 import type { SessionEventBuffer } from "../../services/eventBuffer.js";
 import type { WebToolsConfig } from "../tools/types.js";
+import { isTtsConfigured } from "../../tts/engine.js";
 import { createMemoryRuntime } from "../memory.js";
 import { createKnowledgeRuntime } from "../knowledge.js";
 import { createSkillRuntime } from "../skills.js";
@@ -195,6 +196,7 @@ export class MultiAgentRunner {
         temperature: request.temperature,
         effort: request.effort,
         web,
+        tts: isTtsConfigured(request.tts) ? request.tts : undefined,
         memory,
         knowledge,
         promptLibrary: this.promptLibrary,

@@ -1,4 +1,5 @@
 import type { AppConfig } from "../../config.js";
+import type { TtsToolsConfig } from "../../tts/types.js";
 import type { Provider } from "../providers/types.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type {
@@ -94,6 +95,8 @@ export interface TeamOrchestratorDeps {
   temperature?: number;
   effort?: string;
   web: WebToolsConfig;
+  /** The user's connected TTS configuration — forwarded to every agent's tool context. */
+  tts?: TtsToolsConfig;
   /** Optional persistent schedule store + background scheduler for the schedule_* tools. */
   scheduleStore?: ScheduleStore;
   scheduleScheduler?: ScheduleScheduler;
@@ -491,6 +494,7 @@ export class TeamOrchestrator {
       shellTimeoutMs: this.deps.config.shellTimeoutMs,
       signal: this.deps.signal,
       web: this.deps.web,
+      tts: this.deps.tts,
       // Each agent gets its own sub-agent runtime (bound to its conversation for context sharing).
       subAgents: actor.subAgentRuntime,
       skills: this.deps.skills,

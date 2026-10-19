@@ -158,6 +158,36 @@ export const API_ROUTES = {
     path: "/api/files/upload",
     description: "Upload prompt attachments (any type, 300 MB per file) into workspace uploads/.",
   },
+  ttsProviders: {
+    name: "tts.providers",
+    method: "GET",
+    path: "/api/tts/providers",
+    description: "List every supported TTS provider with its requirements and setup instructions.",
+  },
+  ttsModels: {
+    name: "tts.models",
+    method: "POST",
+    path: "/api/tts/models",
+    description: "Fetch the live TTS model catalog for a provider.",
+  },
+  ttsVoices: {
+    name: "tts.voices",
+    method: "POST",
+    path: "/api/tts/voices",
+    description: "Fetch the live TTS voice catalog for a provider/model.",
+  },
+  ttsLocalStatus: {
+    name: "tts.localStatus",
+    method: "POST",
+    path: "/api/tts/local/status",
+    description: "Check whether the local TTS Studio service is reachable at the given base URL.",
+  },
+  ttsPreview: {
+    name: "tts.preview",
+    method: "POST",
+    path: "/api/tts/preview",
+    description: "Synthesize a short preview clip with the current TTS configuration.",
+  },
   scrapeUrl: {
     name: "scrape.url",
     method: "POST",

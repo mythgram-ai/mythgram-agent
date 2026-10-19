@@ -19,6 +19,7 @@ import type {
   MemoryFile,
   SSEEventData,
   TodoItem,
+  TtsSpeechFile,
 } from "@/types";
 
 type Store = ReturnType<typeof useStore.getState>;
@@ -212,6 +213,33 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
         filePath: (data.args as Record<string, unknown> | undefined)?.file_path as string | undefined,
       });
       break;
+
+    case "generate_speech": {
+      // The generate_speech tool produced audio: attach the file to the tool's block
+      // (matched by tool_call_id) so an inline player renders as soon as it is known.
+      const raw = data as Record<string, unknown>;
+      const toolId = typeof raw.tool_call_id === "string" ? raw.tool_call_id : null;
+      const file = raw.file as TtsSpeechFile | undefined;
+      if (toolId && file) {
+        s.upsertTool(convId, msgId, {
+          id: toolId,
+          name: "generate_speech",
+          label: `Generate Speech: ${String(file.name)}`,
+          status: "running",
+          args: {},
+          result: {
+            ok: true,
+            data: {
+              file,
+              provider: raw.provider,
+              model: raw.model,
+              voice: raw.voice,
+            },
+          },
+        });
+      }
+      break;
+    }
 
     case "plan_review": {
       const planId = String(data.id ?? uid("tool"));

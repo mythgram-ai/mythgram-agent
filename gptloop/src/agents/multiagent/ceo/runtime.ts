@@ -1,4 +1,5 @@
 import type { AppConfig } from "../../../config.js";
+import type { TtsToolsConfig } from "../../../tts/types.js";
 import type { Provider } from "../../providers/types.js";
 import type { ToolRegistry } from "../../tools/registry.js";
 import type {
@@ -96,6 +97,8 @@ export interface CeoOrchestratorDeps {
   temperature?: number;
   effort?: string;
   web: WebToolsConfig;
+  /** The user's connected TTS configuration — forwarded to every agent's tool context. */
+  tts?: TtsToolsConfig;
   /** Optional persistent schedule store + background scheduler for the schedule_* tools. */
   scheduleStore?: ScheduleStore;
   scheduleScheduler?: ScheduleScheduler;
@@ -542,6 +545,7 @@ export class CeoOrchestrator {
       shellTimeoutMs: this.deps.config.shellTimeoutMs,
       signal: this.deps.signal,
       web: this.deps.web,
+      tts: this.deps.tts,
       subAgents: actor.subAgentRuntime,
       skills: this.deps.skills,
       todos: this.deps.todos,

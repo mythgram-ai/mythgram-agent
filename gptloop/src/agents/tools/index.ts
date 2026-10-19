@@ -47,6 +47,7 @@ import { deleteCustomSystemPromptTool } from "./delete_custom_system_prompt.js";
 import { listAvailableCustomSystemPromptTool } from "./list_available_custom_system_prompt.js";
 import { embedUrlTool } from "./embedUrl.js";
 import { attachFilesTool } from "./attachFiles.js";
+import { generateSpeechTool } from "./generate_speech.js";
 import { waitTool } from "./wait.js";
 import { createCheckpointTool } from "./create_checkpoint.js";
 import { listCheckpointsTool } from "./list_checkpoints.js";
@@ -182,6 +183,7 @@ export { submitPlanTool } from "./submit_plan.js";
 export { askUserTool, ASK_ANSWERED, ASK_TIMEOUT, ASK_CHANNEL_UNAVAILABLE } from "./askuser.js";
 export { embedUrlTool } from "./embedUrl.js";
 export { attachFilesTool, formatFileSizeLabel } from "./attachFiles.js";
+export { generateSpeechTool } from "./generate_speech.js";
 export { waitTool, WAIT_MIN_SECONDS, WAIT_MAX_SECONDS } from "./wait.js";
 export { createCheckpointTool } from "./create_checkpoint.js";
 export { listCheckpointsTool } from "./list_checkpoints.js";
@@ -330,6 +332,7 @@ export function createToolRegistry(): ToolRegistry {
     listAvailableCustomSystemPromptTool,
     embedUrlTool,
     attachFilesTool,
+    generateSpeechTool,
     waitTool,
     createCheckpointTool,
     listCheckpointsTool,
@@ -426,6 +429,7 @@ export const tools = {
   listAvailableCustomSystemPromptTool,
   embedUrlTool,
   attachFilesTool,
+  generateSpeechTool,
   waitTool,
   createCheckpointTool,
   listCheckpointsTool,

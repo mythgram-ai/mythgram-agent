@@ -120,6 +120,7 @@ export type Section =
   | "connectors"
   | "mcp"
   | "channels"
+  | "tts"
   | "profiles";
 
 /** Connection state surfaced to the user. Slow ≠ offline; only a lost connection is "offline". */
@@ -699,6 +700,21 @@ const defaultSettings: Settings = {
   manualContextLimits: {},
   contextManagementMethod: "summarization",
   slidingWindowTruncatePercent: 0.3,
+  tts: {
+    provider: null,
+    apiKey: "",
+    baseUrl: "",
+    model: "",
+    voice: "",
+    language: "",
+    speed: null,
+    outputFormat: "",
+    instructions: "",
+    azureRegion: "",
+    volcengineAppId: "",
+    volcengineCluster: "",
+    minimaxGroupId: "",
+  },
 };
 
 function touch(conv: Conversation): Conversation {

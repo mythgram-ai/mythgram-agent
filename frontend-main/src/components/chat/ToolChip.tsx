@@ -49,6 +49,7 @@ import {
   Trash2,
   UserMinus,
   UserPlus,
+  Volume2,
   Wand2,
   Wrench,
   X,
@@ -285,6 +286,7 @@ export function ToolChip({ tool }: { tool: ToolActivity }) {
   if (PROMPT_LIBRARY_TOOLS.has(tool.name)) return <PromptLibraryChip tool={tool} />;
   if (tool.name === "embed_url") return <EmbedUrlChip tool={tool} />;
   if (tool.name === "attach_files") return <AttachFilesChip tool={tool} />;
+  if (tool.name === "generate_speech") return <GenerateSpeechChip tool={tool} />;
   if (tool.name === "list_sub_agents") return <ListSubAgentsChip tool={tool} />;
   if (tool.name === "list_skills") return <ListSkillsChip tool={tool} />;
   if (tool.name === "skill_initialize") return <SkillInitChip tool={tool} />;
@@ -1583,6 +1585,72 @@ function AttachFilesChip({ tool }: { tool: ToolActivity }) {
         </>
       )}
     />
+  );
+}
+
+/* ------------------------------------------------------------------ generate_speech */
+
+/** The generate_speech tool block — plays the generated audio inline. */
+function GenerateSpeechChip({ tool }: { tool: ToolActivity }) {
+  const { data, error, args, hasResult } = parts(tool);
+  const file = data?.file as
+    | { name: string; path: string; size: number; content_type: string }
+    | undefined;
+  const provider = data?.provider as string | undefined;
+  const voice = data?.voice as string | undefined;
+  const speech = String(args.speech ?? "").trim();
+  return (
+    <div className="w-full max-w-full space-y-1.5">
+      <Shell
+        icon={<Volume2 className="h-3.5 w-3.5" />}
+        label={tool.label}
+        status={tool.status}
+        expandable={hasResult}
+        pills={provider ? <Pill>{provider}</Pill> : undefined}
+        panel={() => (
+          <>
+            {speech && (
+              <div className="rounded-[var(--radius-sm)] border border-[var(--border)] p-2 text-xs leading-relaxed text-[var(--muted)]">
+                “{speech.length > 400 ? `${speech.slice(0, 400)}…` : speech}”
+              </div>
+            )}
+            {voice && <div className="text-[10px] text-[var(--subtle)]">Voice: {voice}</div>}
+          </>
+        )}
+      />
+      {error?.message && (
+        <div className="px-1 text-xs text-[var(--danger)]">{error.message}</div>
+      )}
+      {/* The player renders as soon as the file is known — even while the tool is still
+          running — so the user can play the audio without expanding anything. */}
+      {file && (
+        <div className="rounded-[var(--radius-sm)] border border-[var(--border)] p-2">
+          <div className="mb-1.5 flex items-center gap-2">
+            <Volume2 className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-mono text-[var(--fg)]">{file.name}</div>
+              <div className="truncate text-[10px] text-[var(--subtle)]">
+                {file.path} · {formatBytes(file.size)}
+                {voice ? ` · voice ${voice}` : ""}
+              </div>
+            </div>
+            <a
+              href={routeUrl(API_ROUTES.filesDownload, { query: { path: file.path } })}
+              download={file.name}
+              className="rounded-[var(--radius-sm)] border border-[var(--border)] px-2 py-1 text-[10px] hover:bg-[var(--chip)]"
+            >
+              <Download className="inline h-3 w-3" />
+            </a>
+          </div>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <audio
+            controls
+            className="w-full"
+            src={routeUrl(API_ROUTES.filesPreview, { query: { path: file.path } })}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

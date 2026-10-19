@@ -1,6 +1,7 @@
 import type { StoredMessage } from "../../../services/sessionStore.js";
 import type { ConnectorWire } from "../../connectors/index.js";
 import type { McpServerSelection } from "../../mcp/index.js";
+import type { TtsToolsConfig } from "../../../tts/types.js";
 import type {
   KnowledgeFile,
   MemoryFile,
@@ -57,6 +58,8 @@ export interface RunCeoRequest {
   searchProvider?: "duckduckgo" | "tavily" | "exa" | "serpapi";
   fetchProvider?: "builtin" | "firecrawl";
   firecrawlApiKey?: string;
+  // The user's connected TTS configuration (forwarded so every CEO-mode agent can generate speech).
+  tts?: TtsToolsConfig;
 
   // Shared tooling — every agent (CEO + leaders + members) shares one memory/knowledge/skill/sub-agent surface.
   subAgents?: SubAgentDefinition[];

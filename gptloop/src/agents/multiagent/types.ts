@@ -1,6 +1,7 @@
 import type { StoredMessage } from "../../services/sessionStore.js";
 import type { ConnectorWire } from "../connectors/index.js";
 import type { McpServerSelection } from "../mcp/index.js";
+import type { TtsToolsConfig } from "../../tts/types.js";
 import type {
   KnowledgeFile,
   MemoryFile,
@@ -68,6 +69,8 @@ export interface RunTeamRequest {
   searchProvider?: "duckduckgo" | "tavily" | "exa" | "serpapi";
   fetchProvider?: "builtin" | "firecrawl";
   firecrawlApiKey?: string;
+  // The user's connected TTS configuration (forwarded so the team agents can generate speech).
+  tts?: TtsToolsConfig;
 
   // Shared team tooling — every agent shares one memory/knowledge/skill/sub-agent surface.
   subAgents?: SubAgentDefinition[];

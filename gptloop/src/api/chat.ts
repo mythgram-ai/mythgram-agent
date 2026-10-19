@@ -38,6 +38,8 @@ import {
   type McpManager,
   type McpServerSelection,
 } from "../agents/mcp/index.js";
+import { isTtsConfigured } from "../tts/engine.js";
+import type { TtsToolsConfig } from "../tts/types.js";
 
 /** Extract a string field from an untrusted object (used on the custom_provider payload). */
 function str(value: unknown): string {
@@ -132,6 +134,33 @@ function sanitizeContextManagementMethod(value: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Normalize the per-turn TTS configuration sent by the frontend TTS panel: trim
+ * the string fields and drop the whole config when it is not a usable connection
+ * (unknown provider or missing key/base URL). Agent modes only — chat mode never
+ * receives it.
+ */
+function parseTtsConfig(value: unknown): TtsToolsConfig | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const config: TtsToolsConfig = {
+    provider: typeof raw.provider === "string" ? (raw.provider.trim() as TtsToolsConfig["provider"]) : undefined,
+    apiKey: typeof raw.apiKey === "string" ? raw.apiKey.trim() : undefined,
+    baseUrl: typeof raw.baseUrl === "string" ? raw.baseUrl.trim() : undefined,
+    model: typeof raw.model === "string" ? raw.model.trim() : undefined,
+    voice: typeof raw.voice === "string" ? raw.voice.trim() : undefined,
+    language: typeof raw.language === "string" ? raw.language.trim() : undefined,
+    speed: typeof raw.speed === "number" && Number.isFinite(raw.speed) ? raw.speed : undefined,
+    outputFormat: typeof raw.outputFormat === "string" ? raw.outputFormat.trim() : undefined,
+    instructions: typeof raw.instructions === "string" ? raw.instructions.trim() : undefined,
+    azureRegion: typeof raw.azureRegion === "string" ? raw.azureRegion.trim() : undefined,
+    volcengineAppId: typeof raw.volcengineAppId === "string" ? raw.volcengineAppId.trim() : undefined,
+    volcengineCluster: typeof raw.volcengineCluster === "string" ? raw.volcengineCluster.trim() : undefined,
+    minimaxGroupId: typeof raw.minimaxGroupId === "string" ? raw.minimaxGroupId.trim() : undefined,
+  };
+  return isTtsConfigured(config) ? config : undefined;
+}
+
 /** Coerce the per-turn sliding-window truncate fraction (0.05..0.9), or undefined. */
 function sanitizeSlidingWindowTruncatePercent(value: unknown): number | undefined {
   const n =
@@ -161,6 +190,8 @@ interface StreamBody {
   search_provider?: "duckduckgo" | "tavily" | "exa" | "serpapi";
   fetch_provider?: "builtin" | "firecrawl";
   firecrawl_api_key?: string;
+  /** The user's connected TTS configuration from the TTS panel (agent modes only). */
+  tts?: TtsToolsConfig;
   sub_agents?: unknown;
   skills?: unknown;
   todos?: unknown;
@@ -693,6 +724,7 @@ export function buildChatRouter(
           searchProvider: body.search_provider,
           fetchProvider: body.fetch_provider,
           firecrawlApiKey: body.firecrawl_api_key,
+          tts: parseTtsConfig(body.tts),
           subAgents: normalizeSubAgents(body.sub_agents),
           skills: normalizeSkills(body.skills),
           todos: normalizeTodos(body.todos),
@@ -751,6 +783,7 @@ export function buildChatRouter(
           searchProvider: body.search_provider,
           fetchProvider: body.fetch_provider,
           firecrawlApiKey: body.firecrawl_api_key,
+          tts: parseTtsConfig(body.tts),
           subAgents: normalizeSubAgents(body.sub_agents),
           skills: normalizeSkills(body.skills),
           todos: normalizeTodos(body.todos),
@@ -802,6 +835,7 @@ export function buildChatRouter(
         searchProvider: body.search_provider,
         fetchProvider: body.fetch_provider,
         firecrawlApiKey: body.firecrawl_api_key,
+        tts: parseTtsConfig(body.tts),
         subAgents: normalizeSubAgents(body.sub_agents),
         skills: normalizeSkills(body.skills),
         todos: normalizeTodos(body.todos),

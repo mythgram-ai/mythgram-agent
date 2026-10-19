@@ -839,6 +839,92 @@ export interface BrowserPreview {
   open: boolean;
 }
 
+/** Every TTS provider the backend TTS engine supports (mirrors gptloop/src/tts/types.ts). */
+export type TtsProviderId =
+  | "local"
+  | "openrouter"
+  | "azure_speech"
+  | "elevenlabs"
+  | "google"
+  | "gradium"
+  | "inworld"
+  | "minimax"
+  | "volcengine"
+  | "xai"
+  | "xiaomi_mimo"
+  | "kittenml"
+  | "custom";
+
+/** One TTS model offered by a provider (live-fetched from the provider API). */
+export interface TtsModelInfo {
+  id: string;
+  label?: string;
+}
+
+/** One voice offered by a provider/model (live-fetched from the provider API). */
+export interface TtsVoiceInfo {
+  id: string;
+  label?: string;
+  language?: string;
+  gender?: string;
+  previewUrl?: string;
+}
+
+/** One provider card from GET /api/tts/providers. */
+export interface TtsProviderInfo {
+  id: TtsProviderId;
+  label: string;
+  requires_api_key: boolean;
+  requires_base_url: boolean;
+  requires_voice: boolean;
+  instructions: string;
+  has_model_list: boolean;
+  has_voice_list: boolean;
+}
+
+/**
+ * The user's TTS configuration (TTS panel). The active provider's fields are
+ * sent with each agent turn so the generate_speech tool can run; voice, model
+ * and credential selection are entirely user-owned.
+ */
+export interface TtsSettings {
+  /** Active provider; null = nothing connected (generate_speech returns a clear error). */
+  provider: TtsProviderId | null;
+  /** API key for the active cloud provider (or optional key for local/custom). */
+  apiKey: string;
+  /** Base URL for the local (TTS Studio) and custom OpenAI-compatible providers. */
+  baseUrl: string;
+  /** Selected model id (provider-specific; blank where the provider has none). */
+  model: string;
+  /** Selected voice id (provider-specific; blank where the provider has none). */
+  voice: string;
+  /** BCP-47 language hint (xAI / Google). */
+  language: string;
+  /** Speech speed multiplier (providers that support one). */
+  speed: number | null;
+  /** Output audio format (e.g. mp3, wav). */
+  outputFormat: string;
+  /** Delivery instructions (OpenRouter passthrough). */
+  instructions: string;
+  /** Azure Speech region (e.g. eastus). */
+  azureRegion: string;
+  /** Volcengine App ID. */
+  volcengineAppId: string;
+  /** Volcengine cluster (default volcano_tts). */
+  volcengineCluster: string;
+  /** MiniMax GroupId. */
+  minimaxGroupId: string;
+}
+
+/** The speech file the generate_speech tool produced (streamed + tool result). */
+export interface TtsSpeechFile {
+  name: string;
+  path: string;
+  absolute_path?: string;
+  size: number;
+  content_type: string;
+}
+
 export interface Settings {
   provider: string;
   model: string;
@@ -850,6 +936,12 @@ export interface Settings {
   exaApiKey: string;
   serpapiApiKey: string;
   firecrawlApiKey: string;
+  /**
+   * TTS (text-to-speech) configuration from the TTS panel. The active provider's
+   * config travels with every agent turn so the generate_speech tool can run;
+   * voice/model selection is entirely user-owned. provider null = not connected.
+   */
+  tts: TtsSettings;
   /**
    * Composio API key for third-party app connectors (GitHub, Slack, …).
    * Sent with each turn; the backend falls back to its stored/server key when empty.
@@ -958,6 +1050,8 @@ export interface StreamRequest {
   search_provider?: SearchProvider;
   fetch_provider?: FetchProvider;
   firecrawl_api_key?: string;
+  /** The user's connected TTS configuration (TTS panel) so the generate_speech tool can run. */
+  tts?: TtsSettings & { provider: NonNullable<TtsSettings["provider"]> };
   /** Composio API key for this turn (from Settings → Composio). */
   composio_api_key?: string;
   /** The turn's authenticated app connectors (only ACTIVE ones are sent). */

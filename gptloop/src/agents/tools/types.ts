@@ -734,6 +734,14 @@ export interface ToolContext {
   signal?: AbortSignal;
   /** Optional keys/provider for the web search and fetch tools. */
   web?: WebToolsConfig;
+  /**
+   * The user's connected TTS configuration (provider/credentials/model/voice) from the TTS
+   * panel, carried per turn. Present for main-agent, custom-agent, team-agent and CEO tool
+   * calls — absent for chat mode and sub-agent tool calls, so generate_speech is only
+   * available to those top-level agents. When absent the tool returns a clear
+   * tts_not_configured error instead of failing silently.
+   */
+  tts?: import("../../tts/types.js").TtsToolsConfig;
   /** Sub-agent runtime — present only for main-agent tool calls, never for sub-agent tool calls
    * (a sub-agent must never delegate recursively). */
   subAgents?: SubAgentRuntime;

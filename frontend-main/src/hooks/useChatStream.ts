@@ -169,6 +169,10 @@ function buildStartRequest(convId: string, text: string): StreamRequest {
     search_provider: settings.searchProvider,
     fetch_provider: settings.fetchProvider,
     firecrawl_api_key: settings.firecrawlApiKey || undefined,
+    tts:
+      !isChatMode && settings.tts.provider
+        ? { ...settings.tts, provider: settings.tts.provider }
+        : undefined,
     chat_mode: isChatMode,
     agent_mode: isChatMode ? "chat" : "agent",
     sub_agents: isChatMode ? [] : subAgents,

@@ -11,6 +11,8 @@ import {
 } from "./tools/readImage.js";
 import { isVisionCapableModel } from "../utils/vision.js";
 import type { SkillDefinition, SubAgentDefinition, WebToolsConfig } from "./tools/types.js";
+import type { TtsToolsConfig } from "../tts/types.js";
+import { isTtsConfigured } from "../tts/engine.js";
 import type { ChannelToolContext } from "./tools/types.js";
 import type { ToolCall, ToolCallDelta } from "./providers/types.js";
 import type { ChatSession, StoredMessage } from "../services/sessionStore.js";
@@ -88,6 +90,8 @@ export interface RunAgentRequest {
   searchProvider?: "duckduckgo" | "tavily" | "exa" | "serpapi";
   fetchProvider?: "builtin" | "firecrawl";
   firecrawlApiKey?: string;
+  /** The user's connected TTS configuration (TTS panel) so generate_speech can run this turn. */
+  tts?: TtsToolsConfig;
   /** User-defined sub-agents (from the frontend, stored in the browser) available this turn. */
   subAgents?: SubAgentDefinition[];
   /** User-defined skills (from the frontend, stored in the browser) available this turn. */
@@ -728,6 +732,7 @@ export class AgentRunner {
               shellTimeoutMs: this.config.shellTimeoutMs,
               signal,
               web,
+              tts: isTtsConfigured(request.tts) ? request.tts : undefined,
               subAgents: subAgentRuntime,
               skills: skillRuntime,
               todos: todoRuntime,
