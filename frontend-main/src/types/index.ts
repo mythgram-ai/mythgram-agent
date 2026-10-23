@@ -1374,3 +1374,85 @@ export interface ChannelChatMessage {
   text: string;
   has_tools: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Text-to-speech (TTS)
+// ---------------------------------------------------------------------------
+
+/** The provider kinds the TTS engine understands. */
+export type TtsProviderKind = "openrouter" | "kittenml" | "custom";
+
+/** Supported output container formats. */
+export type TtsOutputFormat = "mp3" | "wav" | "flac" | "aac" | "opus" | "pcm";
+
+/**
+ * One configured TTS provider (browser-safe projection — never carries the API
+ * key). Keys stay server-side in the backend SQLite database.
+ */
+export interface TtsProvider {
+  id: string;
+  kind: TtsProviderKind;
+  name: string;
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  voice: string;
+  responseFormat: string;
+  headers: CustomHeader[];
+  /** Manually declared models (custom providers). */
+  models: string[];
+  /** Manually declared voices (custom providers). */
+  voices: string[];
+  /** True when a key is stored server-side (or provided by env for a built-in). */
+  hasApiKey: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Static provider metadata + setup instructions shown in the panel. */
+export interface TtsProviderDefinition {
+  kind: TtsProviderKind;
+  name: string;
+  description: string;
+  docsUrl: string;
+  signupUrl: string;
+  defaultBaseUrl: string;
+  requiresApiKey: boolean;
+  supportsModelListing: boolean;
+  supportsVoiceListing: boolean;
+  defaultModel: string;
+  defaultVoice: string;
+  defaultFormat: TtsOutputFormat;
+  instructions: string[];
+}
+
+/** One selectable voice returned by a provider. */
+export interface TtsVoice {
+  id: string;
+  name: string;
+  language?: string;
+  type?: string;
+  model?: string;
+}
+
+/** One TTS model returned by a provider. */
+export interface TtsModel {
+  id: string;
+  name: string;
+  voices: TtsVoice[];
+  languages: string[];
+}
+
+/** The result of a synthesis request (audio is base64-encoded). */
+export interface TtsAudioResult {
+  providerId: string;
+  providerKind: TtsProviderKind;
+  providerName: string;
+  model: string;
+  voice: string;
+  format: string;
+  mime: string;
+  base64: string;
+  filename: string;
+  bytes: number;
+}

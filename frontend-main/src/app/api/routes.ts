@@ -501,6 +501,48 @@ export const API_ROUTES = {
     path: "/api/channels/:id/chats/:userKey/new-chat",
     description: "Start a fresh chat for an external user.",
   },
+  ttsProviders: {
+    name: "tts.providers",
+    method: "GET",
+    path: "/api/tts/providers",
+    description: "List configured TTS providers + the static catalog with setup instructions.",
+  },
+  ttsProviderCreate: {
+    name: "tts.provider.create",
+    method: "POST",
+    path: "/api/tts/providers",
+    description: "Create a custom TTS provider or upsert a built-in one.",
+  },
+  ttsProviderUpdate: {
+    name: "tts.provider.update",
+    method: "PUT",
+    path: "/api/tts/providers/:id",
+    description: "Update a TTS provider (write-only API key, base URL, model, voice).",
+  },
+  ttsProviderDelete: {
+    name: "tts.provider.delete",
+    method: "DELETE",
+    path: "/api/tts/providers/:id",
+    description: "Delete a custom TTS provider.",
+  },
+  ttsProviderModels: {
+    name: "tts.provider.models",
+    method: "GET",
+    path: "/api/tts/providers/:id/models",
+    description: "Fetch the TTS models available for a provider (live from the provider).",
+  },
+  ttsProviderVoices: {
+    name: "tts.provider.voices",
+    method: "GET",
+    path: "/api/tts/providers/:id/voices",
+    description: "Fetch the voices for a provider/model (live from the provider).",
+  },
+  ttsSpeech: {
+    name: "tts.speech",
+    method: "POST",
+    path: "/api/tts/speech",
+    description: "Synthesize text into speech (returns base64 audio).",
+  },
   promptAgentStream: {
     name: "promptAgent.stream",
     method: "POST",

@@ -43,6 +43,13 @@ export interface AppConfig {
   firecrawlApiKey: string;
   /** Server fallback for the Composio API key (overridden by frontend Settings). */
   composioApiKey: string;
+  /**
+   * Server fallback TTS API keys, used when a provider has no key stored in the
+   * TTS panel. Optional so existing test fixtures keep type-checking (matching
+   * the `summaryThreshold` convention).
+   */
+  openrouterApiKey?: string;
+  kittenmlApiKey?: string;
   /** Model-id substrings that are always treated as vision capable (read_image tool). */
   visionModelPatterns: string[];
   /** Model-id substrings that are always treated as text-only (read_image tool). */
@@ -135,6 +142,8 @@ export const config: AppConfig = {
   serpapiApiKey: process.env.SERPAPI_API_KEY?.trim() ?? "",
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY?.trim() ?? "",
   composioApiKey: process.env.COMPOSIO_API_KEY?.trim() ?? "",
+  openrouterApiKey: process.env.OPENROUTER_API_KEY?.trim() ?? "",
+  kittenmlApiKey: process.env.KITTENML_API_KEY?.trim() ?? "",
   visionModelPatterns: parsePatterns(process.env.VISION_MODEL_PATTERNS),
   textOnlyModelPatterns: parsePatterns(process.env.TEXT_ONLY_MODEL_PATTERNS),
   memoryAgentEnabled: parseMemoryAgentEnabled(process.env.MEMORY_AGENT_ENABLED),

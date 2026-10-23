@@ -25,6 +25,7 @@ import { buildMainAgentPromptsRouter } from "./api/mainagentprompts.js";
 import { buildPromptLibraryRouter } from "./api/promptlibrary.js";
 import { buildSchedulesRouter } from "./api/schedules.js";
 import { buildChannelsRouter } from "./api/channels.js";
+import { buildTtsRouter } from "./api/tts.js";
 import { buildSummaryRouter } from "./api/summaries.js";
 import { buildPromptAgentRouter } from "./api/promptagent.js";
 import { ScheduleStore } from "./cron/store.js";
@@ -41,6 +42,7 @@ import { PromptAgentRunner } from "./agents/promptagent/index.js";
 import { ConnectorManager } from "./agents/connectors/index.js";
 import { McpManager } from "./agents/mcp/index.js";
 import { ChannelManager } from "./channels/index.js";
+import { TtsManager } from "./tts/index.js";
 import { GptLoopDatabase } from "./database/index.js";
 
 function main(): void {
@@ -62,6 +64,14 @@ function main(): void {
   // SQLite app_state repository; the router serves connect/status/tools from them, and
   // the agent-driven connector tools manage them on the user's behalf.
   const connectors = new ConnectorManager(db.appState);
+  // Text-to-speech: provider configurations (API keys, models, voices) live in the
+  // SQLite app_state repository; the router lists live models/voices and synthesizes
+  // speech. Server env keys act as fallbacks for the built-in providers.
+  const tts = new TtsManager({
+    appState: db.appState,
+    openrouterApiKey: config.openrouterApiKey,
+    kittenmlApiKey: config.kittenmlApiKey,
+  });
   const agent = new AgentRunner(
     providers,
     tools,
@@ -253,6 +263,7 @@ function main(): void {
   app.use("/api/mcp", buildMcpRouter(mcp));
   app.use("/api/schedules", buildSchedulesRouter(scheduleStore, scheduler, db, customAgents));
   app.use("/api/channels", buildChannelsRouter(channels, customAgents));
+  app.use("/api/tts", buildTtsRouter(tts));
   app.use("/api/summaries", buildSummaryRouter());
   app.use("/api/prompt-agent", buildPromptAgentRouter(promptAgent, store, config));
 

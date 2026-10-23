@@ -47,6 +47,7 @@ import type {
   TeamRunState,
   TodoItem,
   ToolActivity,
+  TtsProvider,
   UserProfile,
 } from "@/types";
 import { uid, newSessionId } from "@/utils/id";
@@ -120,6 +121,7 @@ export type Section =
   | "connectors"
   | "mcp"
   | "channels"
+  | "tts"
   | "profiles";
 
 /** Connection state surfaced to the user. Slow ≠ offline; only a lost connection is "offline". */
@@ -491,6 +493,21 @@ interface AppState {
   upsertChannelConnection: (connection: ChannelConnection) => void;
   /** Drop one connection by id. */
   removeChannelConnection: (id: string) => void;
+
+  // Text-to-speech (backend-owned providers, ephemeral mirror)
+  /**
+   * Ephemeral mirror of the backend TTS provider list, refreshed from the TTS
+   * API by the Text-to-speech panel. The backend SQLite database is the source
+   * of truth (API keys never leave it) — this slice is never synced through the
+   * app-state bridge and never touches browser storage.
+   */
+  ttsProviders: TtsProvider[];
+  /** Replace the whole provider list (used after a backend fetch). */
+  setTtsProviders: (providers: TtsProvider[]) => void;
+  /** Insert or replace one provider by id (used after create/update). */
+  upsertTtsProvider: (provider: TtsProvider) => void;
+  /** Drop one provider by id. */
+  removeTtsProvider: (id: string) => void;
 
   // Schedules (persistent cron tasks, executed by the backend scheduler)
   /**
@@ -928,6 +945,7 @@ export const useStore = create<AppState>()(
       connectors: [],
       mcpServers: [],
       channelConnections: [],
+      ttsProviders: [],
       schedules: [],
       userProfiles: mergeProfilesWithDefaults([]),
       activeUserProfileId: null,
@@ -1977,6 +1995,18 @@ export const useStore = create<AppState>()(
 
       removeChannelConnection: (id) =>
         set((s) => ({ channelConnections: s.channelConnections.filter((c) => c.id !== id) })),
+
+      // ---- Text-to-speech providers (backend-owned, ephemeral mirror) ----------------
+      setTtsProviders: (ttsProviders) => set(() => ({ ttsProviders })),
+
+      upsertTtsProvider: (provider) =>
+        set((s) => {
+          const rest = s.ttsProviders.filter((p) => p.id !== provider.id);
+          return { ttsProviders: [...rest, provider] };
+        }),
+
+      removeTtsProvider: (id) =>
+        set((s) => ({ ttsProviders: s.ttsProviders.filter((p) => p.id !== id) })),
 
       // ---- Schedules (persistent cron tasks, backend-owned) ----------------
       setSchedules: (schedules) => set(() => ({ schedules })),
