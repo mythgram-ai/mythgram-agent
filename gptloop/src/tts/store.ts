@@ -6,6 +6,7 @@ import {
   ttsProviderDefinition,
 } from "./configuration.js";
 import {
+  TTS_BUILTIN_KINDS,
   isTtsOutputFormat,
   normalizeHeaders,
   normalizeStringList,
@@ -23,6 +24,7 @@ export interface TtsProviderPatch {
   baseUrl?: unknown;
   model?: unknown;
   voice?: unknown;
+  language?: unknown;
   responseFormat?: unknown;
   headers?: unknown;
   models?: unknown;
@@ -85,7 +87,7 @@ export class TtsStore {
     const byId = new Set(existing.map((c) => c.id));
     const now = Date.now();
     const additions: TtsProviderConfig[] = [];
-    for (const kind of ["openrouter", "kittenml"] as const) {
+    for (const kind of TTS_BUILTIN_KINDS) {
       if (!byId.has(kind)) additions.push(createDefaultTtsProvider(kind, kind, now));
     }
     if (additions.length > 0) this.persist([...existing, ...additions]);
@@ -146,6 +148,7 @@ export class TtsStore {
     const baseUrl = asString(patch.baseUrl);
     const model = asString(patch.model);
     const voice = asString(patch.voice);
+    const language = asString(patch.language);
     const responseFormat = asString(patch.responseFormat)?.trim().toLowerCase();
 
     return {
@@ -157,6 +160,7 @@ export class TtsStore {
       baseUrl: baseUrl !== undefined ? baseUrl.trim().replace(/\/+$/, "") : base.baseUrl,
       model: model !== undefined ? model.trim() : base.model,
       voice: voice !== undefined ? voice.trim() : base.voice,
+      language: language !== undefined ? language.trim() : base.language,
       responseFormat:
         responseFormat !== undefined
           ? isTtsOutputFormat(responseFormat)

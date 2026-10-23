@@ -29,3 +29,18 @@ export {
   type TtsListOptions,
 } from "./types.js";
 export { TtsError, type TtsFetch } from "./client.js";
+export {
+  OpenRouterTtsProvider,
+  KittenMlTtsProvider,
+  CustomTtsProvider,
+  SarvamTtsProvider,
+  AzureTtsProvider,
+  ElevenLabsTtsProvider,
+  GoogleTtsProvider,
+  GradiumTtsProvider,
+  InworldTtsProvider,
+  MiniMaxTtsProvider,
+  VolcengineTtsProvider,
+  XaiTtsProvider,
+  MimoTtsProvider,
+} from "./providers/index.js";

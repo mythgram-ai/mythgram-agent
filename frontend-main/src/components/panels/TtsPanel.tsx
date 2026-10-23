@@ -48,6 +48,16 @@ const OUTPUT_FORMATS: TtsOutputFormat[] = ["mp3", "wav", "flac", "aac", "opus", 
 const KIND_BADGE: Record<TtsProvider["kind"], string> = {
   openrouter: "Cloud",
   kittenml: "Cloud",
+  sarvam: "Cloud",
+  azure: "Cloud",
+  elevenlabs: "Cloud",
+  google: "Cloud",
+  gradium: "Cloud",
+  inworld: "Cloud",
+  minimax: "Cloud",
+  volcengine: "Cloud",
+  xai: "Cloud",
+  mimo: "Cloud",
   custom: "Custom",
 };
 
@@ -338,6 +348,7 @@ function Studio({
   const [voices, setVoices] = useState<TtsVoice[]>([]);
   const [model, setModel] = useState("");
   const [voice, setVoice] = useState("");
+  const [language, setLanguage] = useState("");
   const [text, setText] = useState("");
   const [format, setFormat] = useState<TtsOutputFormat | "">("");
   const [speed, setSpeed] = useState("");
@@ -375,10 +386,12 @@ function Studio({
         if (cancelled) return;
         setModels(list);
         setModel((prev) => prev || provider.model || list[0]?.id || "");
+        setLanguage((prev) => prev || provider.language || "");
       } catch (e) {
         if (cancelled) return;
         setModels(provider.models.map((id) => ({ id, name: id, voices: [], languages: [] })));
         setModel((prev) => prev || provider.model || provider.models[0] || "");
+        setLanguage((prev) => prev || provider.language || "");
         setEngineError(e instanceof Error ? e.message : String(e));
       } finally {
         if (!cancelled) setLoadingModels(false);
@@ -429,6 +442,7 @@ function Studio({
         text,
         model: model || undefined,
         voice: voice || undefined,
+        language: language.trim() || undefined,
         format: format || undefined,
         speed: speed.trim() !== "" && Number.isFinite(Number(speed)) ? Number(speed) : undefined,
         instructions: instructions.trim() || undefined,
@@ -527,6 +541,14 @@ function Studio({
               ))}
             </Select>
           </Field>
+
+          <Field label="Language" hint="optional BCP-47">
+            <TextInput
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              placeholder="en-US"
+            />
+          </Field>
         </div>
 
         <div className="mt-4">
@@ -559,13 +581,7 @@ function Studio({
         </div>
 
         {definition && (
-          <p className="mt-3 text-[11px] leading-relaxed text-[var(--subtle)]">
-            {provider?.kind === "openrouter"
-              ? "OpenRouter bills per character. Voices are per-model; picking a model loads its voices."
-              : provider?.kind === "kittenml"
-                ? "Kitten TTS 2 supports 170+ voices and 20 languages; the 0.8 models use 8 English voices."
-                : "Any OpenAI-compatible /audio/speech endpoint works, including local servers."}
-          </p>
+          <p className="mt-3 text-[11px] leading-relaxed text-[var(--subtle)]">{definition.description}</p>
         )}
 
         <div className="mt-4 flex items-center gap-2">
@@ -631,6 +647,7 @@ function ProviderConfigModal({
   const [name, setName] = useState(provider?.name ?? definition?.name ?? "Custom provider");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(provider?.baseUrl ?? definition?.defaultBaseUrl ?? "");
+  const [language, setLanguage] = useState(provider?.language ?? definition?.defaultLanguage ?? "");
   const [enabled, setEnabled] = useState(provider?.enabled ?? true);
   const [responseFormat, setResponseFormat] = useState<TtsOutputFormat | "">(
     (provider?.responseFormat as TtsOutputFormat) || "",
@@ -653,6 +670,7 @@ function ProviderConfigModal({
         name: name.trim(),
         enabled,
         baseUrl: baseUrl.trim(),
+        language: language.trim(),
         responseFormat: responseFormat || "",
         headers: headers.filter((h) => h.key.trim()),
         models,
@@ -753,7 +771,14 @@ function ProviderConfigModal({
             />
           </Field>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field label="Language" hint="BCP-47">
+              <TextInput
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                placeholder="en-US"
+              />
+            </Field>
             <Field label="Default format">
               <Select value={responseFormat} onChange={(e) => setResponseFormat(e.target.value as TtsOutputFormat | "")}>
                 <option value="">Provider default</option>

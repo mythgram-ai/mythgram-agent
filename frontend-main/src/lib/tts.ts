@@ -42,7 +42,21 @@ function normalizeStringList(raw: unknown): string[] {
   return raw.filter((item): item is string => typeof item === "string");
 }
 
-const KINDS: TtsProviderKind[] = ["openrouter", "kittenml", "custom"];
+const KINDS: TtsProviderKind[] = [
+  "openrouter",
+  "kittenml",
+  "sarvam",
+  "azure",
+  "elevenlabs",
+  "google",
+  "gradium",
+  "inworld",
+  "minimax",
+  "volcengine",
+  "xai",
+  "mimo",
+  "custom",
+];
 
 function normalizeProvider(raw: unknown): TtsProvider | null {
   if (!raw || typeof raw !== "object") return null;
@@ -58,6 +72,7 @@ function normalizeProvider(raw: unknown): TtsProvider | null {
     baseUrl: str(r.baseUrl),
     model: str(r.model),
     voice: str(r.voice),
+    language: str(r.language),
     responseFormat: str(r.responseFormat),
     headers: normalizeHeaders(r.headers),
     models: normalizeStringList(r.models),
@@ -118,6 +133,7 @@ export interface TtsProviderInput {
   baseUrl?: string;
   model?: string;
   voice?: string;
+  language?: string;
   responseFormat?: TtsOutputFormat | "";
   headers?: CustomHeader[];
   models?: string[];
@@ -186,6 +202,7 @@ export interface TtsSpeechInput {
   text: string;
   model?: string;
   voice?: string;
+  language?: string;
   format?: TtsOutputFormat;
   speed?: number;
   instructions?: string;

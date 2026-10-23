@@ -8,6 +8,7 @@ import {
 import { buildTtsProvider } from "./registry.js";
 import { TtsStore, type TtsProviderPatch } from "./store.js";
 import {
+  TTS_PROVIDER_KINDS,
   toPublicTtsProvider,
   type TtsModel,
   type TtsProviderConfig,
@@ -31,6 +32,7 @@ export interface TtsSynthesizeRequest {
   text: string;
   model?: string;
   voice?: string;
+  language?: string;
   format?: string;
   speed?: number;
   instructions?: string;
@@ -82,7 +84,7 @@ export class TtsManager {
 
   /** The static catalog of provider kinds (labels, docs, setup instructions). */
   catalog(): TtsProviderDefinition[] {
-    return (["openrouter", "kittenml", "custom"] as const).map(ttsProviderDefinition);
+    return TTS_PROVIDER_KINDS.map(ttsProviderDefinition);
   }
 
   /** Browser-safe provider configurations. */
@@ -122,6 +124,7 @@ export class TtsManager {
     const models = await provider.listModels({
       apiKey: this.resolveApiKey(config),
       baseUrl: config.baseUrl || undefined,
+      language: config.language || undefined,
     });
     return models;
   }
@@ -130,7 +133,11 @@ export class TtsManager {
   async listVoices(id: string, model?: string): Promise<TtsVoice[]> {
     const { config, provider } = this.resolve(id);
     return provider.listVoices(
-      { apiKey: this.resolveApiKey(config), baseUrl: config.baseUrl || undefined },
+      {
+        apiKey: this.resolveApiKey(config),
+        baseUrl: config.baseUrl || undefined,
+        language: config.language || undefined,
+      },
       model || config.model || undefined,
     );
   }
@@ -146,6 +153,7 @@ export class TtsManager {
     const model = (request.model ?? "").trim() || config.model;
     if (!model) throw new Error("A model is required.");
     const voice = (request.voice ?? "").trim() || config.voice;
+    const language = (request.language ?? "").trim() || config.language;
     const format = (request.format ?? "").trim().toLowerCase() || config.responseFormat;
 
     const audio = await provider.synthesize({
@@ -154,6 +162,7 @@ export class TtsManager {
       model,
       input: text,
       voice: voice || undefined,
+      language: language || undefined,
       responseFormat: format || undefined,
       speed: typeof request.speed === "number" ? request.speed : undefined,
       instructions: request.instructions?.trim() || undefined,

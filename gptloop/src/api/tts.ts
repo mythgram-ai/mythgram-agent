@@ -128,6 +128,7 @@ export function buildTtsRouter(manager: TtsManager): Router {
         text,
         model: typeof body.model === "string" ? body.model : undefined,
         voice: typeof body.voice === "string" ? body.voice : undefined,
+        language: typeof body.language === "string" ? body.language : undefined,
         format: typeof body.format === "string" ? body.format : undefined,
         speed: typeof body.speed === "number" ? body.speed : undefined,
         instructions: typeof body.instructions === "string" ? body.instructions : undefined,

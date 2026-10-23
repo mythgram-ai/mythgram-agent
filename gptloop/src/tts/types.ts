@@ -15,12 +15,39 @@
  */
 
 /** Every provider kind the engine understands. */
-export const TTS_PROVIDER_KINDS = ["openrouter", "kittenml", "custom"] as const;
+export const TTS_PROVIDER_KINDS = [
+  "openrouter",
+  "kittenml",
+  "sarvam",
+  "azure",
+  "elevenlabs",
+  "google",
+  "gradium",
+  "inworld",
+  "minimax",
+  "volcengine",
+  "xai",
+  "mimo",
+  "custom",
+] as const;
 
 export type TtsProviderKind = (typeof TTS_PROVIDER_KINDS)[number];
 
 /** Provider kinds that ship built-in (as opposed to user-added custom providers). */
-export const TTS_BUILTIN_KINDS = ["openrouter", "kittenml"] as const;
+export const TTS_BUILTIN_KINDS = [
+  "openrouter",
+  "kittenml",
+  "sarvam",
+  "azure",
+  "elevenlabs",
+  "google",
+  "gradium",
+  "inworld",
+  "minimax",
+  "volcengine",
+  "xai",
+  "mimo",
+] as const;
 
 export type TtsBuiltinKind = (typeof TTS_BUILTIN_KINDS)[number];
 
@@ -78,6 +105,8 @@ export interface TtsProviderConfig {
   model: string;
   /** Last selected / default voice. */
   voice: string;
+  /** BCP-47 language code / locale, when the provider needs one (e.g. en-US, en-IN, auto). */
+  language: string;
   /** Preferred output format; empty means "provider default". */
   responseFormat: string;
   /** Extra HTTP headers merged into every request (custom providers). */
@@ -99,6 +128,7 @@ export interface TtsProviderPublic {
   baseUrl: string;
   model: string;
   voice: string;
+  language: string;
   responseFormat: string;
   headers: TtsHeader[];
   models: string[];
@@ -121,6 +151,9 @@ export interface TtsProviderWire {
   baseUrl?: unknown;
   model?: unknown;
   voice?: unknown;
+  language?: unknown;
+  language_code?: unknown;
+  locale?: unknown;
   response_format?: unknown;
   responseFormat?: unknown;
   headers?: unknown;
@@ -205,6 +238,7 @@ export function normalizeTtsProvider(
     baseUrl: str(r.base_url ?? r.baseUrl).trim().replace(/\/+$/, ""),
     model: str(r.model).trim(),
     voice: str(r.voice).trim(),
+    language: str(r.language ?? r.language_code ?? r.locale).trim(),
     responseFormat: isTtsOutputFormat(responseFormat) ? responseFormat : "",
     headers: normalizeHeaders(r.headers),
     models: normalizeStringList(r.models),
@@ -227,6 +261,7 @@ export function toPublicTtsProvider(
     baseUrl: config.baseUrl,
     model: config.model,
     voice: config.voice,
+    language: config.language,
     responseFormat: config.responseFormat,
     headers: config.headers,
     models: config.models,
@@ -276,6 +311,8 @@ export interface TtsAudioResult {
 export interface TtsListOptions {
   apiKey: string;
   baseUrl?: string;
+  /** BCP-47 language/locale hint for providers that scope listings by language. */
+  language?: string;
   signal?: AbortSignal;
 }
 

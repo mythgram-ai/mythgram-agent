@@ -1380,7 +1380,20 @@ export interface ChannelChatMessage {
 // ---------------------------------------------------------------------------
 
 /** The provider kinds the TTS engine understands. */
-export type TtsProviderKind = "openrouter" | "kittenml" | "custom";
+export type TtsProviderKind =
+  | "openrouter"
+  | "kittenml"
+  | "sarvam"
+  | "azure"
+  | "elevenlabs"
+  | "google"
+  | "gradium"
+  | "inworld"
+  | "minimax"
+  | "volcengine"
+  | "xai"
+  | "mimo"
+  | "custom";
 
 /** Supported output container formats. */
 export type TtsOutputFormat = "mp3" | "wav" | "flac" | "aac" | "opus" | "pcm";
@@ -1397,6 +1410,8 @@ export interface TtsProvider {
   baseUrl: string;
   model: string;
   voice: string;
+  /** BCP-47 language / locale, when the provider needs one. */
+  language: string;
   responseFormat: string;
   headers: CustomHeader[];
   /** Manually declared models (custom providers). */
@@ -1422,6 +1437,7 @@ export interface TtsProviderDefinition {
   supportsVoiceListing: boolean;
   defaultModel: string;
   defaultVoice: string;
+  defaultLanguage: string;
   defaultFormat: TtsOutputFormat;
   instructions: string[];
 }
