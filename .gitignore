@@ -30,3 +30,7 @@ venv/
 # Logs
 *.log
 logs/
+
+# Voice models & download cache (large binaries)
+packages/local-tts/backend/data/
+packages/local-tts/.local-tts-*.log
