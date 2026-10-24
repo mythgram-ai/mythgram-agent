@@ -131,3 +131,33 @@ export const IconPause = (p: IconProps) => (
     <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none" />
   </Svg>
 )
+
+export const IconServer = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="2" y="3" width="20" height="8" rx="2" />
+    <rect x="2" y="13" width="20" height="8" rx="2" />
+    <path d="M6 7h0M6 17h0" />
+  </Svg>
+)
+
+export const IconBook = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    <path d="M9 7h7M9 11h7" />
+  </Svg>
+)
+
+export const IconKey = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="M10.7 12.3 21 2M18 5l2.5 2.5M14.5 8.5l2.5 2.5" />
+  </Svg>
+)
+
+export const IconCopy = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="9" y="9" width="13" height="13" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </Svg>
+)

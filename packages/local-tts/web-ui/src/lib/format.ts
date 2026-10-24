@@ -53,3 +53,25 @@ export function parseVoiceKey(key: string): { name: string; language: string; qu
   const name = parts.length >= 2 ? key.slice(language.length + 1, key.length - (quality.length + 1)) : key
   return { name, language, quality }
 }
+
+/** Copy text to the clipboard with a fallback for non-secure HTTP contexts. */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(area)
+      return ok
+    } catch {
+      return false
+    }
+  }
+}

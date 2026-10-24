@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import queue
+import secrets
 import sys
 import threading
 from typing import Any, AsyncIterator
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .config import settings
 from .logstore import store
+from .openai_api import ALL_FORMATS, NATIVE_FORMATS, ffmpeg_available
 from .piper import (
     InstallFailure,
     PiperNotInstalled,
@@ -75,6 +77,25 @@ class InstallRequest(BaseModel):
 class SettingsRequest(BaseModel):
     voices_dir: str | None = None
     device: str | None = None
+
+
+class OpenAIAuthRequest(BaseModel):
+    """Ranges/limits are validated in settings.update() for uniform messages."""
+
+    api_key_enabled: bool | None = None
+    api_key: str | None = None
+
+
+class OpenAISpeechRequest(BaseModel):
+    """Server-side config applied to every /v1/audio/speech call."""
+
+    default_voice: str | None = None
+    speaker_id: int | None = None
+    speed: float | None = None
+    volume: float | None = None
+    noise_scale: float | None = None
+    noise_w_scale: float | None = None
+    normalize: bool | None = None
 
 
 # --------------------------------------------------------------------- helpers
@@ -138,6 +159,126 @@ def write_settings(req: SettingsRequest) -> dict[str, Any]:
         runtime.clear_cache()
         store.emit("info", "settings", f"compute device set to {req.device}")
     return {"voices_dir": settings.voices_dir, "device": settings.device}
+
+
+# --------------------------------------------------------------------- openai-compatible api settings
+
+
+def _mask_key(key: str) -> str:
+    if len(key) <= 8:
+        return "***"
+    return f"{key[:4]}…{key[-4:]}"
+
+
+def _openai_view() -> dict[str, Any]:
+    return {
+        "api_key_enabled": settings.api_key_enabled,
+        "api_key": settings.api_key,
+        "default_voice": settings.api_default_voice,
+        "speaker_id": settings.api_speaker_id,
+        "speed": settings.api_speed,
+        "volume": settings.api_volume,
+        "noise_scale": settings.api_noise_scale,
+        "noise_w_scale": settings.api_noise_w_scale,
+        "normalize": settings.api_normalize,
+        "base_path": "/v1",
+        "formats": sorted(ALL_FORMATS),
+        "native_formats": sorted(NATIVE_FORMATS),
+        "ffmpeg_available": ffmpeg_available(),
+    }
+
+
+@router.get("/openai/settings")
+def read_openai_settings() -> dict[str, Any]:
+    return _openai_view()
+
+
+@router.post("/openai/settings")
+def write_openai_settings(req: OpenAIAuthRequest) -> dict[str, Any]:
+    """Patch the auth part of the OpenAI surface.
+
+    Enabling the key requirement without a stored key never creates a
+    broken state: an active auth requirement with no key would lock every
+    /v1 request out, so a random key is minted instead and reported back
+    (plain text on purpose — local app, no encryption).
+    """
+    enable_wanted = settings.api_key_enabled if req.api_key_enabled is None else req.api_key_enabled
+    key_wanted = (req.api_key or "").strip() if req.api_key is not None else settings.api_key
+    generated = False
+    if enable_wanted and not key_wanted:
+        key_wanted = secrets.token_hex(24)
+        generated = True
+    try:
+        settings.update(api_key_enabled=enable_wanted, api_key=key_wanted)
+    except ValueError as exc:
+        raise _http_error(422, "bad_openai_auth", str(exc)) from exc
+    if generated:
+        store.emit(
+            "info",
+            "openai.api",
+            f"API key requirement enabled with an auto-generated key {_mask_key(key_wanted)}",
+        )
+    elif req.api_key is not None:
+        store.emit("info", "openai.api", f"API key set to {_mask_key(key_wanted)}")
+    if req.api_key_enabled is not None:
+        store.emit(
+            "info",
+            "openai.api",
+            f"API key requirement turned {'ON' if enable_wanted else 'OFF'} "
+            f"({_client_note()})",
+        )
+    return _openai_view()
+
+
+def _client_note() -> str:
+    return "clients must send the key from now on" if settings.api_key_enabled else "open access restored"
+
+
+@router.post("/openai/speech-defaults")
+def write_openai_speech_defaults(req: OpenAISpeechRequest) -> dict[str, Any]:
+    """Patch the voice/prosody defaults used for every /v1 request."""
+    next_voice = (
+        (req.default_voice or "").strip()
+        if req.default_voice is not None
+        else settings.api_default_voice
+    )
+    if next_voice and registry.installed_lookup(next_voice) is None:
+        raise _http_error(422, "voice_not_installed", f"voice {next_voice} is not downloaded")
+
+    next_speaker = req.speaker_id if req.speaker_id is not None else settings.api_speaker_id
+    if next_voice:
+        voice = registry.installed_lookup(next_voice)
+        num_speakers = int((voice or {}).get("num_speakers", 1) or 1)
+        if num_speakers == 1:
+            next_speaker = None
+        elif next_speaker is not None and not 0 <= next_speaker < num_speakers:
+            raise _http_error(
+                422,
+                "speaker_out_of_range",
+                f"speaker_id must be an integer in [0, {num_speakers - 1}] for {next_voice}",
+            )
+    elif next_speaker is not None:
+        next_speaker = None
+
+    try:
+        settings.update(
+            api_default_voice=next_voice,
+            api_speaker_id=req.speaker_id,
+            api_speed=req.speed,
+            api_volume=req.volume,
+            api_noise_scale=req.noise_scale,
+            api_noise_w_scale=req.noise_w_scale,
+            api_normalize=req.normalize,
+        )
+    except ValueError as exc:
+        raise _http_error(422, "bad_openai_speech", str(exc)) from exc
+    store.emit(
+        "info",
+        "openai.api",
+        f"speech defaults updated (voice={next_voice or 'none'}, speed={settings.api_speed:g}x, "
+        f"volume={settings.api_volume:g}x, normalizer {'on' if settings.api_normalize else 'off'})",
+    )
+    return _openai_view()
 
 
 # --------------------------------------------------------------------- voices

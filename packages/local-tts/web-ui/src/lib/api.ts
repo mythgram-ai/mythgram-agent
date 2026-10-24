@@ -178,6 +178,37 @@ export interface SynthesisParams {
   speaker_id?: number
 }
 
+export interface OpenAIApiSettings {
+  api_key_enabled: boolean
+  api_key: string
+  default_voice: string
+  speaker_id: number | null
+  speed: number
+  volume: number
+  noise_scale: number | null
+  noise_w_scale: number | null
+  normalize: boolean
+  base_path: string
+  formats: string[]
+  native_formats: string[]
+  ffmpeg_available: boolean
+}
+
+export interface OpenAIAuthPatch {
+  api_key_enabled?: boolean
+  api_key?: string
+}
+
+export interface OpenAISpeechPatch {
+  default_voice?: string
+  speaker_id?: number | null
+  speed?: number
+  volume?: number
+  noise_scale?: number | null
+  noise_w_scale?: number | null
+  normalize?: boolean
+}
+
 // ── endpoints ────────────────────────────────────────────────────────
 
 export const api = {
@@ -191,6 +222,14 @@ export const api = {
   settings: () => request<Settings>('/settings'),
 
   saveSettings: (patch: Partial<Settings>) => request<Settings>('/settings', json('POST', patch)),
+
+  openaiSettings: () => request<OpenAIApiSettings>('/openai/settings'),
+
+  saveOpenAIAuth: (patch: OpenAIAuthPatch) =>
+    request<OpenAIApiSettings>('/openai/settings', json('POST', patch)),
+
+  saveSpeechDefaults: (patch: OpenAISpeechPatch) =>
+    request<OpenAIApiSettings>('/openai/speech-defaults', json('POST', patch)),
 
   catalog: (force = false) => request<CatalogResponse>(`/voices/catalog${force ? '?force=1' : ''}`),
 

@@ -2,8 +2,10 @@ import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import StudioPage from './pages/StudioPage'
 import VoicesPage from './pages/VoicesPage'
 import LogsPage from './pages/LogsPage'
+import ApiPage from './pages/ApiPage'
+import ApiDocsPage from './pages/ApiDocsPage'
 import { useBackendAlive } from './lib/hooks'
-import { IconChip, IconScript, IconSliders, IconWave } from './components/icons'
+import { IconBook, IconChip, IconScript, IconServer, IconSliders, IconWave } from './components/icons'
 
 function Sidebar() {
   const navigate = useNavigate()
@@ -35,6 +37,16 @@ function Sidebar() {
         Logs
       </NavLink>
 
+      <div className="nav-label">Interface</div>
+      <NavLink to="/voice-api" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+        <span className="nav-ico"><IconServer size={16} /></span>
+        API access
+      </NavLink>
+      <NavLink to="/voice-api/docs" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+        <span className="nav-ico"><IconBook size={16} /></span>
+        API docs
+      </NavLink>
+
       <div className="sidebar-foot">
         <div className={`backend-chip${alive ? ' ok' : ''}`}>
           <span className="dot" />
@@ -57,6 +69,8 @@ export default function App() {
           <Route path="/" element={<StudioPage />} />
           <Route path="/voices" element={<VoicesPage />} />
           <Route path="/logs" element={<LogsPage />} />
+          <Route path="/voice-api" element={<ApiPage />} />
+          <Route path="/voice-api/docs" element={<ApiDocsPage />} />
           <Route path="*" element={<StudioPage />} />
         </Routes>
       </main>
