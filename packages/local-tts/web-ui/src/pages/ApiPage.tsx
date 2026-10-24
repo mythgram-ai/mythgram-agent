@@ -128,11 +128,6 @@ export default function ApiPage() {
     if (ok) window.setTimeout(() => setCopied((c) => (c === tag ? null : c)), 1800)
   }
 
-  const curlSample = useMemo(() => {
-    const authLine = authOn ? ' \\\n  -H "Authorization: Bearer <api key>"' : ''
-    return `curl ${speechUrl} \\\n  -H "Content-Type: application/json"${authLine} \\\n  -d '{"model":"tts-1","input":"Hello world"}' --output speech.wav`
-  }, [speechUrl, authOn])
-
   // ── local preview (uses the internal API directly) ─────────────────
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [ktur, setKtur] = useState(0)
@@ -260,16 +255,6 @@ export default function ApiPage() {
           </div>
 
           <hr className="hr" />
-          <div className="field-name">One-liner for your terminal</div>
-          <div className="code-block">
-            <div className="code-block-head">
-              <span>curl</span>
-              <button className="copy-btn" onClick={() => void copy('curl', curlSample)}>
-                <IconCopy size={11} /> {copied === 'curl' ? 'Copied ✓' : 'Copy'}
-              </button>
-            </div>
-            <pre>{curlSample}</pre>
-          </div>
           <div className="field-hint">
             Defaults to WAV audio, no rate limits.{' '}
             <Link to="/voice-api/docs">Full documentation with client examples →</Link>
