@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Haku — a quiet, streaming-first workspace for the GPTLoop AI agent (Vite + React 19 + Tailwind v4 + Zustand).",
+  "description": "Haku — a quiet, streaming-first workspace for the Mythgram AI agent (Vite + React 19 + Tailwind v4 + Zustand).",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

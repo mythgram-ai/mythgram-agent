@@ -6,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 /**
  * The browser only ever calls this app's own same-origin `/api/*` routes. In dev and
- * preview, Vite proxies those to the gptloop backend, so the browser never resolves
+ * preview, Vite proxies those to the mythgram backend, so the browser never resolves
  * `localhost` itself — that keeps SSE streaming and CORS working even when the UI is
  * opened through a remote proxy URL.
  *
@@ -14,12 +14,12 @@ import tailwindcss from "@tailwindcss/vite";
  * `timeout` and `proxyTimeout` are 0 (disabled). A slow network must never be turned
  * into a failed request — only a fully-closed connection ends a stream.
  */
-const GPTLOOP_API_URL = process.env.GPTLOOP_API_URL ?? "http://localhost:8787";
+const MYTHGRAM_API_URL = process.env.MYTHGRAM_API_URL ?? "http://localhost:8787";
 const FRONTEND_PORT = Number(process.env.VITE_PORT ?? 5173);
 
 const proxy = {
   "/api": {
-    target: GPTLOOP_API_URL,
+    target: MYTHGRAM_API_URL,
     changeOrigin: true,
     // Disable all proxy-level timeouts so long-running / slow SSE streams are never cut.
     timeout: 0,

@@ -3,7 +3,7 @@ import { requestJson } from "@/lib/api";
 import { cleanToolDescription, humanizeToolName, type SubAgentToolMeta } from "@/lib/subAgentTools";
 
 /**
- * Tools a Custom Agent can be granted. The authoritative list is fetched at runtime from the gptloop
+ * Tools a Custom Agent can be granted. The authoritative list is fetched at runtime from the mythgram
  * backend (`GET /api/tools/custom-agent`), which returns every registered tool the Main Agent has
  * MINUS the multi-agent/team tools — so a Custom Agent, being a top-level Main Agent, gets the full
  * main-agent tool surface (sub-agent, memory, skills, knowledge, and more). The popup fetches this on

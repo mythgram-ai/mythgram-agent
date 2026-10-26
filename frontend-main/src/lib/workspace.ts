@@ -2,10 +2,10 @@ import { API_ROUTES, routeUrl } from "@/app/api/routes";
 import { requestJson } from "@/lib/api";
 
 /**
- * Workspace client — the agent's workspace defaults to wherever gptloop is
+ * Workspace client — the agent's workspace defaults to wherever mythgram is
  * started/running. The picker shows the current absolute path, lets the user
  * switch it (absolute or relative), and can create new folders (nested
- * `<folder>` or `<a>/<b>/<c>` supported). The ".gptloop" dir is initialized
+ * `<folder>` or `<a>/<b>/<c>` supported). The ".mythgram" dir is initialized
  * where the workspace is set.
  */
 

@@ -10,7 +10,7 @@ import type {
 
 /**
  * Client API — every call targets this app's own `/api/*` routes (see `app/api/routes.ts`),
- * which Vite proxies to the gptloop backend. The browser never talks to the backend directly,
+ * which Vite proxies to the mythgram backend. The browser never talks to the backend directly,
  * so `localhost` stays server-side and streaming/CORS keep working through a proxy URL.
  */
 

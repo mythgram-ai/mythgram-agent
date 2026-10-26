@@ -1,7 +1,7 @@
 /**
  * API routes — the single source of truth for every `/api/*` endpoint the frontend
  * calls. In the browser these same-origin routes are served by Vite's dev/preview
- * proxy, which forwards them to the gptloop backend (see `vite.config.ts`).
+ * proxy, which forwards them to the mythgram backend (see `vite.config.ts`).
  *
  * This mirrors the Next.js App Router `src/app/api/<route>/route.ts` layout that
  * `frontend-2` used, expressed as a typed registry for the Vite/React app.

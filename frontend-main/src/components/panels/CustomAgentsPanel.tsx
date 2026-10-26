@@ -316,7 +316,7 @@ export function CustomAgentsPanel() {
           </div>
         </div>
         <p className="m-0 mt-2 text-sm leading-relaxed text-[var(--muted)]">
-          The default GPTLoop agent with the full tool set.
+          The default Mythgram agent with the full tool set.
         </p>
       </article>
 

@@ -3,7 +3,7 @@ import { requestJson } from "@/lib/api";
 
 /**
  * Catalog of tools a sub-agent can be granted. The authoritative list is fetched at runtime from
- * the gptloop backend (`GET /api/tools`), which returns every registered tool minus the 14
+ * the mythgram backend (`GET /api/tools`), which returns every registered tool minus the 14
  * restricted sub-agent tools — so the popup always mirrors the backend and never needs a
  * hand-maintained list in code. The constant below is only a bundled FALLBACK used if that fetch
  * fails (offline / backend not ready). Keep it roughly in sync, but the backend is the source of

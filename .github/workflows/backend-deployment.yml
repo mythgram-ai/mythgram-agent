@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "gptloop/**"
+      - "mythgram/**"
       - ".github/workflows/backend-deployment.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - "gptloop/**"
+      - "mythgram/**"
       - ".github/workflows/backend-deployment.yml"
   workflow_dispatch:
 
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Build gptloop
+    name: Build mythgram
     runs-on: ubuntu-latest
     environment:
       name: backend-production
@@ -59,7 +59,7 @@ jobs:
               repo: context.repo.repo,
               deployment_id: Number(process.env.DEPLOYMENT_ID),
               state: 'in_progress',
-              description: 'Building gptloop'
+              description: 'Building mythgram'
             });
 
       - name: Check out repository
@@ -72,14 +72,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: gptloop/package-lock.json
+          cache-dependency-path: mythgram/package-lock.json
 
       - name: Install dependencies
-        working-directory: gptloop
+        working-directory: mythgram
         run: npm ci
 
       - name: Build backend
-        working-directory: gptloop
+        working-directory: mythgram
         run: npm run build
 
       - name: Mark deployment successful
@@ -94,7 +94,7 @@ jobs:
               repo: context.repo.repo,
               deployment_id: Number(process.env.DEPLOYMENT_ID),
               state: 'success',
-              description: 'gptloop build completed successfully'
+              description: 'mythgram build completed successfully'
             });
 
       - name: Mark deployment failed
@@ -109,6 +109,6 @@ jobs:
               repo: context.repo.repo,
               deployment_id: Number(process.env.DEPLOYMENT_ID),
               state: 'failure',
-              description: 'gptloop build failed'
+              description: 'mythgram build failed'
             });
 
