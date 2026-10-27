@@ -1,11 +1,18 @@
-name: publish
+name: local-tts publish
 
-# Publishes the local-tts package on every v* tag:
-#   1. python-package : builds wheel + sdist and attaches them to the GitHub
-#                       Release for the tag (pip install from the release URL).
-#   2. container      : builds the local-tts OCI image and pushes it to
-#                       ghcr.io, which is what makes the package show up in
-#                       the repository's "Packages" section.
+# Publishes the `local-tts` package on every v* tag and provides all three
+# install methods:
+#
+#   1. PyPI      (already published — pip install local-tts-studio)
+#   2. Releases  (python-package job: builds wheel + sdist and attaches them to
+#                 the GitHub Release for this tag, so users can install with:
+#                 pip install <release asset url>)
+#   3. Docker    (container job: builds the local-tts OCI image and pushes it to
+#                 ghcr.io/mythgram-ai/local-tts, which is where the package
+#                 appears in the repository's "Packages" section:
+#                 docker run -p 7878:7878 -v local-tts-data:/data \
+#                   ghcr.io/mythgram-ai/local-tts:latest)
+#
 # workflow_dispatch (manual run) publishes only the container, from main.
 
 on:
