@@ -1,0 +1,93 @@
+name: publish
+
+# Publishes the local-tts package on every v* tag:
+#   1. python-package : builds wheel + sdist and attaches them to the GitHub
+#                       Release for the tag (pip install from the release URL).
+#   2. container      : builds the local-tts OCI image and pushes it to
+#                       ghcr.io, which is what makes the package show up in
+#                       the repository's "Packages" section.
+# workflow_dispatch (manual run) publishes only the container, from main.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  python-package:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/local-tts/web-ui/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build web UI
+        working-directory: packages/local-tts/web-ui
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Bundle web UI into the package
+        run: |
+          rm -rf packages/local-tts/python/local_tts/_web
+          cp -r packages/local-tts/web-ui/dist packages/local-tts/python/local_tts/_web
+
+      - name: Build distributions
+        working-directory: packages/local-tts/python
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build --outdir dist
+          python -m twine check dist/*
+
+      - name: Attach distributions to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+            !dist/*.sha256
+          fail_on_unmatched_files: true
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/local-tts
+          tags: |
+            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=ref,event=branch,enable=${{ github.ref_type == 'branch' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: packages/local-tts
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
