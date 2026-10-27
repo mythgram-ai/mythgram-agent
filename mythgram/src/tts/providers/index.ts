@@ -18,3 +18,9 @@ export { MiniMaxTtsProvider, MINIMAX_TTS_BASE_URL } from "./minimax.js";
 export { VolcengineTtsProvider, VOLCENGINE_TTS_BASE_URL } from "./volcengine.js";
 export { XaiTtsProvider, XAI_TTS_BASE_URL } from "./xai.js";
 export { MimoTtsProvider, MIMO_TTS_BASE_URL } from "./mimo.js";
+export {
+  LocalTtsProvider,
+  LOCAL_TTS_DEFAULT_BASE_URL,
+  normalizeLocalTtsBaseUrl,
+  type LocalTtsConfig,
+} from "./localtts.js";

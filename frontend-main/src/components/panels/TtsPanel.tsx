@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AudioLines,
   Check,
+  Copy,
   Download,
   ExternalLink,
   KeyRound,
@@ -9,6 +10,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Server,
   Settings2,
   Trash2,
   TriangleAlert,
@@ -19,6 +21,7 @@ import {
 import { useStore } from "@/store/useStore";
 import type {
   CustomHeader,
+  LocalTtsInstallStatus,
   TtsAudioResult,
   TtsModel,
   TtsOutputFormat,
@@ -31,9 +34,11 @@ import {
   createTtsProvider,
   deleteTtsProvider,
   downloadAudioResult,
+  fetchLocalTtsStatus,
   fetchTtsModels,
   fetchTtsProviders,
   fetchTtsVoices,
+  installLocalTts,
   synthesizeTts,
   updateTtsProvider,
   type TtsProviderInput,
@@ -58,6 +63,7 @@ const KIND_BADGE: Record<TtsProvider["kind"], string> = {
   volcengine: "Cloud",
   xai: "Cloud",
   mimo: "Cloud",
+  localtts: "Local",
   custom: "Custom",
 };
 
@@ -128,8 +134,9 @@ export function TtsPanel() {
     <div className="mx-auto w-full max-w-3xl panel-in">
       <PanelHeader kicker="Speak any text" title="Text to speech" />
       <p className="mb-6 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
-        Turn text into natural speech with a cloud voice. Add an API key for a provider below, fetch its
-        models and voices, then generate audio you can play or download. Keys are stored server-side only.
+        Run a private Piper server on your own machine, or turn text into natural speech with a cloud
+        voice. Local TTS only needs a base URL; cloud providers need an API key and a model + voice.
+        Keys are stored server-side only.
       </p>
 
       {error && (
@@ -145,8 +152,17 @@ export function TtsPanel() {
         </div>
       ) : (
         <>
+          <LocalTtsCard
+            provider={providers.find((p) => p.kind === "localtts") ?? null}
+            onSaved={(saved) => {
+              setProviders((prev) => [...prev.filter((p) => p.id !== saved.id), saved]);
+              useStore.getState().upsertTtsProvider(saved);
+            }}
+            onRefresh={reload}
+          />
+
           <ProviderSection
-            providers={providers}
+            providers={providers.filter((p) => p.kind !== "localtts")}
             definitionOf={definitionOf}
             onConfigure={setConfiguringId}
             onAddCustom={() => setCreatingCustom(true)}
@@ -197,6 +213,476 @@ export function TtsPanel() {
           onDeleted={() => undefined}
         />
       )}
+    </div>
+  );
+}
+
+const LOCAL_TTS_DEFAULT_BASE_URL = "http://localhost:7878/v1";
+
+type LocalInstallTab = "pypi" | "release" | "docker";
+
+const LOCAL_INSTALL_TABS: Array<{ id: LocalInstallTab; label: string }> = [
+  { id: "pypi", label: "pip · PyPI" },
+  { id: "release", label: "pip · Release" },
+  { id: "docker", label: "Docker" },
+];
+
+/**
+ * Local TTS quick-start card.
+ *
+ * local-tts is a self-hosted Piper server that exposes an OpenAI-compatible
+ * `/v1/audio/speech` endpoint where `input` is the only required field. This
+ * card shows the install methods, stores the base URL (+ optional API key used
+ * only when encryption is enabled) and generates speech without ever asking for
+ * a model or voice.
+ */
+function LocalTtsCard({
+  provider,
+  onSaved,
+  onRefresh,
+}: {
+  provider: TtsProvider | null;
+  onSaved: (provider: TtsProvider) => void;
+  onRefresh: () => void;
+}) {
+  const [installTab, setInstallTab] = useState<LocalInstallTab>("pypi");
+  const [baseUrl, setBaseUrl] = useState(provider?.baseUrl || LOCAL_TTS_DEFAULT_BASE_URL);
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [savedOnce, setSavedOnce] = useState(false);
+
+  const [installStatus, setInstallStatus] = useState<LocalTtsInstallStatus | null>(null);
+  const [installBusy, setInstallBusy] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  const [text, setText] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [result, setResult] = useState<TtsAudioResult | null>(null);
+
+  const resultUrl = useMemo(
+    () => (result ? URL.createObjectURL(audioResultToBlob(result)) : ""),
+    [result],
+  );
+  useEffect(() => {
+    return () => {
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+    };
+  }, [resultUrl]);
+
+  // Read the installer's current state once when the card mounts.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await fetchLocalTtsStatus();
+        if (cancelled) return;
+        setInstallStatus(next);
+        if (next.state === "running") {
+          if (next.baseUrl) setBaseUrl(next.baseUrl);
+          onRefresh();
+        }
+      } catch {
+        // Status is best-effort: keep the card usable if the endpoint is absent.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [onRefresh]);
+
+  // Poll while an install/start is in flight; stop once it settles.
+  useEffect(() => {
+    const active = installStatus?.state === "installing" || installStatus?.state === "starting";
+    if (!active) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const next = await fetchLocalTtsStatus();
+        if (cancelled) return;
+        setInstallStatus(next);
+        if (next.state === "running") {
+          if (next.baseUrl) setBaseUrl(next.baseUrl);
+          onRefresh();
+        }
+      } catch {
+        // Keep polling; a transient failure is not fatal.
+      }
+    };
+    const id = window.setInterval(() => void tick(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [installStatus?.state, onRefresh]);
+
+  const installNow = async () => {
+    setInstallError(null);
+    setInstallBusy(true);
+    try {
+      const next = await installLocalTts(installTab);
+      setInstallStatus(next);
+    } catch (e) {
+      setInstallError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setInstallBusy(false);
+    }
+  };
+
+  const installActive =
+    installStatus?.state === "installing" || installStatus?.state === "starting";
+  const selectedTabLabel =
+    LOCAL_INSTALL_TABS.find((tab) => tab.id === installTab)?.label ?? installTab;
+
+  const persist = async (): Promise<TtsProvider | null> => {
+    const url = baseUrl.trim();
+    if (!url) {
+      setFormError("An API base URL is required.");
+      return null;
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      setFormError("Enter a valid URL, e.g. http://localhost:7878/v1.");
+      return null;
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      setFormError("The base URL must start with http:// or https://.");
+      return null;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const input: TtsProviderInput = {
+        kind: "localtts",
+        name: "Local TTS",
+        enabled: true,
+        baseUrl: url,
+        responseFormat: "wav",
+        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+      };
+      const saved = provider
+        ? await updateTtsProvider(provider.id, input)
+        : await createTtsProvider(input);
+      onSaved(saved);
+      setApiKey("");
+      return saved;
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : String(e));
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const save = async () => {
+    if (await persist()) setSavedOnce(true);
+  };
+
+  const generate = async () => {
+    if (!text.trim()) return;
+    setGenerating(true);
+    setGenError(null);
+    setResult(null);
+    try {
+      const saved = await persist();
+      if (!saved) return;
+      setResult(await synthesizeTts({ providerId: saved.id, text }));
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <section className="mb-8">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
+          <Server className="h-4 w-4 text-[var(--subtle)]" /> Local TTS
+        </h2>
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+            installStatus?.reachable
+              ? "bg-emerald-500/15 text-emerald-600"
+              : "bg-[var(--chip)] text-[var(--muted)]",
+          )}
+        >
+          {installStatus?.reachable ? "Running" : "On-device"}
+        </span>
+      </div>
+
+      <div
+        className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg)] p-5"
+        style={{ boxShadow: "var(--shadow-chip)" }}
+      >
+        <p className="max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
+          Run local-tts: a self-hosted Piper studio with a web UI and an OpenAI-compatible speech API.
+          Only its base URL is needed here — install the engine, download a voice and pick the API voice
+          inside local-tts.
+        </p>
+
+        <div className="mt-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--chip)] p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--fg)]">
+              <Download className="h-3.5 w-3.5" /> Install &amp; run local-tts
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {LOCAL_INSTALL_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setInstallTab(tab.id)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
+                    installTab === tab.id
+                      ? "bg-[var(--secondary)] text-[var(--secondary-fg)]"
+                      : "text-[var(--muted)] hover:bg-[var(--bg)]",
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {installTab === "pypi" && (
+            <div className="space-y-2">
+              <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                Install the published package, then start the server. It listens on port 7878.
+              </p>
+              <CopyableCommand command="pip install local-tts-studio" />
+              <CopyableCommand command="local-tts" />
+            </div>
+          )}
+
+          {installTab === "release" && (
+            <div className="space-y-2">
+              <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                Install the wheel attached to a GitHub Release (replace v1.0.0 with the version you want),
+                then start the server.
+              </p>
+              <CopyableCommand command="pip install https://github.com/mythgram-ai/mythgram-agent/releases/download/v1.0.0/local_tts_studio-1.0.0-py3-none-any.whl" />
+              <CopyableCommand command="local-tts" />
+              <p className="break-all text-[11px] leading-relaxed text-[var(--subtle)]">
+                Source build: pip install
+                https://github.com/mythgram-ai/mythgram-agent/releases/download/v1.0.0/local_tts_studio-1.0.0.tar.gz
+              </p>
+            </div>
+          )}
+
+          {installTab === "docker" && (
+            <div className="space-y-2">
+              <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                Pull the container, then run it with port 7878 mapped and a data volume for voices and
+                settings.
+              </p>
+              <CopyableCommand command="docker pull ghcr.io/mythgram-ai/local-tts:main" />
+              <CopyableCommand
+                command={
+                  "docker run -d --name local-tts \\\n  -p 7878:7878 \\\n  -v local-tts-data:/data \\\n  ghcr.io/mythgram-ai/local-tts:main"
+                }
+              />
+            </div>
+          )}
+
+          <p className="mt-2 text-[11px] leading-relaxed text-[var(--muted)]">
+            Then open{" "}
+            <a
+              href="http://127.0.0.1:7878"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[var(--secondary)] hover:underline"
+            >
+              http://127.0.0.1:7878 <ExternalLink className="h-3 w-3" />
+            </a>{" "}
+            to install the Piper engine, download a voice and choose the API default voice. The web UI,
+            <code className="mx-1">/api</code> and <code className="mx-1">/v1</code> all share that port.
+          </p>
+        </div>
+
+        <div className="mt-3 rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] bg-[var(--chip)] p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-[var(--fg)]">One-click install &amp; start</p>
+              <p className="mt-0.5 max-w-xl text-[11px] leading-relaxed text-[var(--muted)]">
+                Runs the selected method ({selectedTabLabel}) on the backend host, starts local-tts on
+                port 7878, then points the base URL at it.
+              </p>
+            </div>
+            <Button onClick={() => void installNow()} disabled={installBusy || installActive}>
+              {installBusy || installActive ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {installActive ? "Installing..." : installBusy ? "Starting..." : "Install & start"}
+            </Button>
+          </div>
+
+          {installError && (
+            <div className="mt-2 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[var(--danger-soft)] p-2.5 text-[11px] text-[var(--danger)]">
+              <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="break-words">{installError}</span>
+            </div>
+          )}
+
+          {installStatus && installStatus.state !== "idle" && (
+            <div
+              className={cn(
+                "mt-2 rounded-[var(--radius-md)] border p-2.5 text-[11px]",
+                installStatus.state === "running"
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
+                  : installStatus.state === "failed"
+                    ? "border-[color:color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[var(--danger-soft)] text-[var(--danger)]"
+                    : "border-[var(--border)] bg-[var(--bg)] text-[var(--muted)]",
+              )}
+            >
+              <div className="flex items-center gap-2">
+                {installActive ? (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                ) : installStatus.state === "running" ? (
+                  <Check className="h-3.5 w-3.5 shrink-0" />
+                ) : installStatus.state === "failed" ? (
+                  <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                ) : null}
+                <span className="break-words font-medium">
+                  {installStatus.message || installStatus.state}
+                </span>
+              </div>
+              {installStatus.log && (
+                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-md)] bg-[var(--bg)] p-2 font-mono text-[10px] leading-relaxed text-[var(--muted)]">
+                  {installStatus.log}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="API base URL" hint="required">
+            <TextInput
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder={LOCAL_TTS_DEFAULT_BASE_URL}
+              inputMode="url"
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="API key" hint="optional">
+            <TextInput
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={
+                provider?.hasApiKey ? "•••• saved — leave blank to keep" : "Only if encryption is enabled"
+              }
+              autoComplete="off"
+            />
+          </Field>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--subtle)]">
+          The base URL is all that is required. Model, voice and prosody are configured inside local-tts;
+          paste its API key above only if you enabled encryption there.
+        </p>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => void save()} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {saving ? "Saving..." : "Save settings"}
+          </Button>
+          {savedOnce && <span className="text-[11px] text-[var(--success)]">Saved</span>}
+          {provider?.hasApiKey && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-[var(--subtle)]">
+              <KeyRound className="h-3 w-3" /> API key stored
+            </span>
+          )}
+        </div>
+
+        {formError && (
+          <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="break-words">{formError}</span>
+          </div>
+        )}
+
+        <div className="mt-5 border-t border-[var(--border)] pt-4">
+          <Field label="Text" hint={`${text.length} chars`}>
+            <TextArea
+              rows={4}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Type or paste the text you want spoken..."
+            />
+          </Field>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button onClick={() => void generate()} disabled={generating || !text.trim()}>
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              {generating ? "Generating..." : "Generate speech"}
+            </Button>
+            <span className="text-[11px] text-[var(--subtle)]">Saves these settings automatically.</span>
+          </div>
+
+          {genError && (
+            <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="break-words">{genError}</span>
+            </div>
+          )}
+
+          {result && resultUrl && (
+            <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] p-4">
+              <div className="mb-2 flex items-center gap-2 text-xs text-[var(--muted)]">
+                <AudioLines className="h-4 w-4" />
+                <span className="truncate">
+                  {result.format.toUpperCase()} · {(result.bytes / 1024).toFixed(0)} KB
+                </span>
+              </div>
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <audio controls src={resultUrl} className="w-full" />
+              <div className="mt-2 flex justify-end">
+                <Button variant="outline" onClick={() => downloadAudioResult(result)}>
+                  <Download className="h-4 w-4" /> Download {result.filename}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** A copy-to-clipboard command line. */
+function CopyableCommand({ command }: { command: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div className="flex items-start gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2">
+      <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-[var(--fg)]">
+        {command}
+      </code>
+      <button
+        type="button"
+        onClick={() => void copy()}
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-[var(--radius-md)] text-[var(--subtle)] transition-colors hover:bg-[var(--chip)] hover:text-[var(--fg)]"
+        title="Copy command"
+        aria-label="Copy command"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
     </div>
   );
 }
@@ -336,6 +822,8 @@ function Studio({
   const usable = useMemo(
     () =>
       providers.filter((p) => {
+        // local-tts has its own dedicated card above; keep it out of the studio.
+        if (p.kind === "localtts") return false;
         if (!p.enabled) return false;
         const def = definitionOf(p.kind);
         return p.kind === "custom" || !def?.requiresApiKey || p.hasApiKey;

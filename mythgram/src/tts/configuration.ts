@@ -29,6 +29,8 @@ export interface TtsProviderDefinition {
   defaultBaseUrl: string;
   /** Whether an API key must be present before listing/synthesizing. */
   requiresApiKey: boolean;
+  /** Whether synthesis needs a model id. Defaults to true; local servers may ignore it. */
+  requiresModel?: boolean;
   /** Whether the provider exposes a model-listing endpoint. */
   supportsModelListing: boolean;
   /** Whether the provider exposes a voice-listing endpoint. */
@@ -297,6 +299,30 @@ export const TTS_PROVIDER_CATALOG: Record<TtsProviderKind, TtsProviderDefinition
       "MiMo uses the Chat Completions API: the text to speak is sent as the assistant message; the “Instructions” field becomes the style prompt.",
       "Pick a model (mimo-v2.5-tts) and a built-in voice (e.g. mimo_default, Mia, Chloe).",
       "Audio is returned base64-encoded; choose WAV, MP3 or PCM.",
+    ],
+  },
+  localtts: {
+    kind: "localtts",
+    name: "Local TTS",
+    description:
+      "Self-hosted Piper text-to-speech — only a base URL is needed; voices and prosody are configured inside local-tts.",
+    docsUrl: "https://github.com/mythgram-ai/mythgram-agent/tree/main/packages/local-tts",
+    signupUrl: "https://github.com/mythgram-ai/mythgram-agent/pkgs/container/local-tts",
+    defaultBaseUrl: "http://localhost:7878/v1",
+    requiresApiKey: false,
+    requiresModel: false,
+    supportsModelListing: false,
+    supportsVoiceListing: false,
+    defaultModel: "",
+    defaultVoice: "",
+    defaultLanguage: "",
+    defaultFormat: "wav",
+    instructions: [
+      "Install local-tts with pip (pip install local-tts-studio), from a GitHub Release wheel, or with Docker — the Local TTS card shows the exact commands.",
+      "Start it, then open http://127.0.0.1:7878 to install the Piper engine, download a voice, and pick the API default voice.",
+      "Set the base URL below to http://localhost:7878/v1 — speech is served at /v1/audio/speech on the same port.",
+      "Only text is needed to generate speech; model, voice, speed and other settings live inside local-tts.",
+      "If you enabled encryption in local-tts, paste the same API key here. It is optional otherwise.",
     ],
   },
   custom: {

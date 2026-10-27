@@ -151,7 +151,10 @@ export class TtsManager {
       throw new Error(`Text is too long (max ${MAX_INPUT_CHARS} characters).`);
     }
     const model = (request.model ?? "").trim() || config.model;
-    if (!model) throw new Error("A model is required.");
+    // Local providers (local-tts) own the model/voice; only cloud kinds need one.
+    if (!model && ttsProviderDefinition(config.kind).requiresModel !== false) {
+      throw new Error("A model is required.");
+    }
     const voice = (request.voice ?? "").trim() || config.voice;
     const language = (request.language ?? "").trim() || config.language;
     const format = (request.format ?? "").trim().toLowerCase() || config.responseFormat;

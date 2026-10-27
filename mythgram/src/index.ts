@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "node:path";
 import { config, ensureWorkspace } from "./config.js";
 import { createProviderRegistry } from "./agents/providers/registry.js";
 import { createToolRegistry } from "./agents/tools/index.js";
@@ -42,7 +43,7 @@ import { PromptAgentRunner } from "./agents/promptagent/index.js";
 import { ConnectorManager } from "./agents/connectors/index.js";
 import { McpManager } from "./agents/mcp/index.js";
 import { ChannelManager } from "./channels/index.js";
-import { TtsManager } from "./tts/index.js";
+import { LocalTtsInstaller, TtsManager } from "./tts/index.js";
 import { MythgramDatabase } from "./database/index.js";
 
 function main(): void {
@@ -71,6 +72,13 @@ function main(): void {
     appState: db.appState,
     openrouterApiKey: config.openrouterApiKey,
     kittenmlApiKey: config.kittenmlApiKey,
+  });
+  // One-click local-tts installer: runs fixed pip/docker commands on this host,
+  // starts the server, and points the `localtts` provider at it.
+  const localTtsInstaller = new LocalTtsInstaller({
+    manager: tts,
+    dataDir: path.join(config.workspaceRoot, ".mythgram"),
+    python: process.env.LOCAL_TTS_PYTHON?.trim() || undefined,
   });
   const agent = new AgentRunner(
     providers,
@@ -263,7 +271,7 @@ function main(): void {
   app.use("/api/mcp", buildMcpRouter(mcp));
   app.use("/api/schedules", buildSchedulesRouter(scheduleStore, scheduler, db, customAgents));
   app.use("/api/channels", buildChannelsRouter(channels, customAgents));
-  app.use("/api/tts", buildTtsRouter(tts));
+  app.use("/api/tts", buildTtsRouter(tts, localTtsInstaller));
   app.use("/api/summaries", buildSummaryRouter());
   app.use("/api/prompt-agent", buildPromptAgentRouter(promptAgent, store, config));
 

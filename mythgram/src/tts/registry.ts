@@ -12,6 +12,7 @@ import { MiniMaxTtsProvider, MINIMAX_TTS_BASE_URL } from "./providers/minimax.js
 import { VolcengineTtsProvider, VOLCENGINE_TTS_BASE_URL } from "./providers/volcengine.js";
 import { XaiTtsProvider, XAI_TTS_BASE_URL } from "./providers/xai.js";
 import { MimoTtsProvider, MIMO_TTS_BASE_URL } from "./providers/mimo.js";
+import { LocalTtsProvider, LOCAL_TTS_DEFAULT_BASE_URL } from "./providers/localtts.js";
 import type { TtsHeader, TtsProviderConfig } from "./types.js";
 import type { TtsProvider, TtsProviderRuntime } from "./providers/base.js";
 
@@ -66,6 +67,14 @@ export function buildTtsProvider(
       return new XaiTtsProvider(base(XAI_TTS_BASE_URL));
     case "mimo":
       return new MimoTtsProvider(base(MIMO_TTS_BASE_URL));
+    case "localtts":
+      return new LocalTtsProvider({
+        id: config.id,
+        name: config.name,
+        baseUrl: config.baseUrl || LOCAL_TTS_DEFAULT_BASE_URL,
+        headers: userHeaders,
+        fetchFn: options.fetchFn,
+      });
     case "custom":
       return new CustomTtsProvider({
         id: config.id,

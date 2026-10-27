@@ -28,6 +28,7 @@ export const TTS_PROVIDER_KINDS = [
   "volcengine",
   "xai",
   "mimo",
+  "localtts",
   "custom",
 ] as const;
 
@@ -47,6 +48,7 @@ export const TTS_BUILTIN_KINDS = [
   "volcengine",
   "xai",
   "mimo",
+  "localtts",
 ] as const;
 
 export type TtsBuiltinKind = (typeof TTS_BUILTIN_KINDS)[number];

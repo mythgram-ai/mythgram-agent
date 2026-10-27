@@ -5,6 +5,16 @@
  *   `import { TtsManager } from "./tts/index.js"`
  */
 export { TtsManager, type TtsManagerDeps, type TtsSynthesizeRequest, type TtsSynthesisResult } from "./manager.js";
+export {
+  LocalTtsInstaller,
+  LocalTtsInstallError,
+  LOCAL_TTS_INSTALL_METHODS,
+  isLocalTtsInstallMethod,
+  type LocalTtsInstallMethod,
+  type LocalTtsInstallState,
+  type LocalTtsInstallStatus,
+  type LocalTtsInstallerDeps,
+} from "./installer.js";
 export { TtsStore, type TtsProviderPatch } from "./store.js";
 export { buildTtsProvider } from "./registry.js";
 export { ttsProviderDefinition, ttsBuiltinDefinitions, TTS_PROVIDER_CATALOG, type TtsProviderDefinition } from "./configuration.js";
@@ -43,4 +53,5 @@ export {
   VolcengineTtsProvider,
   XaiTtsProvider,
   MimoTtsProvider,
+  LocalTtsProvider,
 } from "./providers/index.js";

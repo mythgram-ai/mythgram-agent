@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { isSafeSessionId } from "../database/index.js";
 import type { TtsManager } from "../tts/index.js";
+import { LocalTtsInstallError, type LocalTtsInstaller } from "../tts/installer.js";
 
 /**
  * Text-to-speech API — provider configuration + speech generation.
@@ -12,6 +13,8 @@ import type { TtsManager } from "../tts/index.js";
  *   GET    /api/tts/providers/:id/models       live model list (fetched from provider)
  *   GET    /api/tts/providers/:id/voices       live voice list (optionally ?model=)
  *   POST   /api/tts/speech                     synthesize text → base64 audio
+ *   GET    /api/tts/local/status               local-tts install/run status
+ *   POST   /api/tts/local/install              install + start local-tts in one click
  *
  * API keys are write-only: the browser sends a key on create/update, the backend
  * stores it server-side and only ever serves the public projection (hasApiKey flag).
@@ -29,7 +32,7 @@ function errorCode(error: unknown): string {
   return (error as { code?: string }).code ?? "tts_error";
 }
 
-export function buildTtsRouter(manager: TtsManager): Router {
+export function buildTtsRouter(manager: TtsManager, installer?: LocalTtsInstaller): Router {
   const router = Router();
 
   /** Configured providers (public) plus the static catalog with setup instructions. */
@@ -136,6 +139,35 @@ export function buildTtsRouter(manager: TtsManager): Router {
       res.json({ ok: true, audio });
     } catch (error) {
       err(res, 502, errorCode(error), errorMessage(error));
+    }
+  });
+
+  /** Live install/run status for the one-click local-tts installer. */
+  router.get("/local/status", async (_req: Request, res: Response) => {
+    if (!installer) {
+      err(res, 503, "installer_unavailable", "Local TTS auto-install is not available.");
+      return;
+    }
+    try {
+      res.json({ ok: true, status: await installer.status() });
+    } catch (error) {
+      err(res, 500, errorCode(error), errorMessage(error));
+    }
+  });
+
+  /** Install and start local-tts with the selected method (fixed command set). */
+  router.post("/local/install", (req: Request, res: Response) => {
+    if (!installer) {
+      err(res, 503, "installer_unavailable", "Local TTS auto-install is not available.");
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    try {
+      const status = installer.start(body.method);
+      res.status(202).json({ ok: true, status });
+    } catch (error) {
+      const conflict = error instanceof LocalTtsInstallError && error.code === "install_in_progress";
+      err(res, conflict ? 409 : 400, errorCode(error), errorMessage(error));
     }
   });
 

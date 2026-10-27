@@ -12,6 +12,13 @@ import { SarvamTtsProvider } from "./providers/sarvam.js";
 import { MiniMaxTtsProvider } from "./providers/minimax.js";
 import { GoogleTtsProvider } from "./providers/google.js";
 import { ElevenLabsTtsProvider } from "./providers/elevenlabs.js";
+import {
+  LocalTtsProvider,
+  LOCAL_TTS_DEFAULT_BASE_URL,
+  normalizeLocalTtsBaseUrl,
+} from "./providers/localtts.js";
+import { LocalTtsInstallError, LocalTtsInstaller } from "./installer.js";
+import os from "node:os";
 
 /** Build an in-memory app-state repository (the pattern every manager test uses). */
 function testRepo(): AppStateRepo {
@@ -282,6 +289,128 @@ describe("tts — new provider adapters", () => {
     assert.match(calls[0]!.url, /\/v1\/text-to-speech\/JBFqnCBsd6RMkjVDRZzb\?output_format=mp3_44100_128$/);
     const headers = calls[0]!.init.headers as Record<string, string>;
     assert.equal(headers["xi-api-key"], "sk");
+  });
+});
+
+describe("tts — local-tts provider", () => {
+  const wavResponse = (bytes: number[]): Response =>
+    new Response(new Uint8Array(bytes), {
+      status: 200,
+      headers: { "content-type": "audio/wav" },
+    });
+
+  it("normalizes server root, /v1 and full speech URLs to the /v1 base", () => {
+    assert.equal(normalizeLocalTtsBaseUrl("http://localhost:7878"), "http://localhost:7878/v1");
+    assert.equal(normalizeLocalTtsBaseUrl("http://localhost:7878/v1/"), "http://localhost:7878/v1");
+    assert.equal(
+      normalizeLocalTtsBaseUrl("http://localhost:7878/v1/audio/speech"),
+      "http://localhost:7878/v1",
+    );
+    assert.equal(normalizeLocalTtsBaseUrl(""), LOCAL_TTS_DEFAULT_BASE_URL);
+  });
+
+  it("sends only input (no model or voice) when no options are set", async () => {
+    const { fetchFn, calls } = stubFetch(() => wavResponse([1, 2, 3]));
+    const provider = new LocalTtsProvider({ baseUrl: "http://localhost:7878", fetchFn });
+
+    const result = await provider.synthesize({ apiKey: "", model: "", input: "Hello" });
+
+    assert.equal(Buffer.from(result.bytes).toString("hex"), "010203");
+    assert.equal(result.format, "wav");
+    assert.equal(result.model, "");
+    assert.equal(calls[0]!.url, "http://localhost:7878/v1/audio/speech");
+    assert.deepEqual(JSON.parse(String(calls[0]!.init.body)), { input: "Hello" });
+    const headers = calls[0]!.init.headers as Record<string, string>;
+    assert.equal(headers.Authorization, undefined);
+  });
+
+  it("adds a Bearer key and the chosen response format", async () => {
+    const { fetchFn, calls } = stubFetch(() => wavResponse([4, 5]));
+    const provider = new LocalTtsProvider({ baseUrl: "http://localhost:7878/v1", fetchFn });
+
+    await provider.synthesize({ apiKey: "secret", model: "", input: "hi", responseFormat: "wav" });
+
+    const headers = calls[0]!.init.headers as Record<string, string>;
+    assert.equal(headers.Authorization, "Bearer secret");
+    assert.deepEqual(JSON.parse(String(calls[0]!.init.body)), {
+      input: "hi",
+      response_format: "wav",
+    });
+  });
+
+  it("synthesizes through the manager without requiring a model", async () => {
+    const { fetchFn, calls } = stubFetch(() => wavResponse([7, 8, 9]));
+    const manager = new TtsManager({ appState: testRepo(), fetchFn });
+
+    const result = await manager.synthesize("localtts", { text: "Hello local" });
+
+    assert.equal(result.providerKind, "localtts");
+    assert.equal(result.model, "");
+    assert.equal(result.format, "wav");
+    assert.equal(Buffer.from(result.base64, "base64").toString("hex"), "070809");
+    assert.match(result.filename, /^local-tts-\d+\.wav$/);
+    assert.equal(calls[0]!.url, "http://localhost:7878/v1/audio/speech");
+    assert.equal(JSON.parse(String(calls[0]!.init.body)).input, "Hello local");
+  });
+});
+
+describe("tts — local-tts one-click installer", () => {
+  const okFetch = (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+
+  async function waitForState(installer: LocalTtsInstaller, expected: string) {
+    const deadline = Date.now() + 2000;
+    let last = await installer.status();
+    while (Date.now() < deadline) {
+      last = await installer.status();
+      if (last.state === expected) return last;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`Timed out waiting for ${expected}; last state was ${last.state}`);
+  }
+
+  it("rejects an unknown install method", () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: okFetch });
+    const installer = new LocalTtsInstaller({ manager, dataDir: os.tmpdir(), fetchFn: okFetch });
+    assert.throws(
+      () => installer.start("apt"),
+      (error: unknown) => error instanceof LocalTtsInstallError && error.code === "invalid_method",
+    );
+  });
+
+  it("short-circuits when local-tts is already running and configures the provider", async () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: okFetch });
+    const installer = new LocalTtsInstaller({ manager, dataDir: os.tmpdir(), fetchFn: okFetch });
+
+    installer.start("pypi");
+    const status = await waitForState(installer, "running");
+
+    assert.equal(status.reachable, true);
+    assert.equal(status.baseUrl, LOCAL_TTS_DEFAULT_BASE_URL);
+    assert.equal(manager.get("localtts")!.baseUrl, LOCAL_TTS_DEFAULT_BASE_URL);
+    assert.equal(manager.get("localtts")!.enabled, true);
+  });
+
+  it("refuses a second install while one is in flight", () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: okFetch });
+    const installer = new LocalTtsInstaller({ manager, dataDir: os.tmpdir(), fetchFn: okFetch });
+
+    installer.start("docker");
+    assert.throws(
+      () => installer.start("pypi"),
+      (error: unknown) => error instanceof LocalTtsInstallError && error.code === "install_in_progress",
+    );
+  });
+
+  it("reports idle when the server cannot be reached", async () => {
+    const failing = (async () => {
+      throw new Error("connection refused");
+    }) as unknown as typeof fetch;
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: failing });
+    const installer = new LocalTtsInstaller({ manager, dataDir: os.tmpdir(), fetchFn: failing });
+
+    const status = await installer.status();
+    assert.equal(status.state, "idle");
+    assert.equal(status.reachable, false);
   });
 });
 

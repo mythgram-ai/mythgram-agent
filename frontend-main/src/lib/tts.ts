@@ -2,6 +2,8 @@ import { API_ROUTES, routeUrl } from "@/app/api/routes";
 import { requestJson } from "@/lib/api";
 import type {
   CustomHeader,
+  LocalTtsInstallMethod,
+  LocalTtsInstallStatus,
   TtsAudioResult,
   TtsModel,
   TtsOutputFormat,
@@ -55,6 +57,7 @@ const KINDS: TtsProviderKind[] = [
   "volcengine",
   "xai",
   "mimo",
+  "localtts",
   "custom",
 ];
 
@@ -219,6 +222,49 @@ export async function synthesizeTts(input: TtsSpeechInput): Promise<TtsAudioResu
     throw new Error("The backend did not return audio.");
   }
   return audio;
+}
+
+function numOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeLocalTtsStatus(raw: unknown): LocalTtsInstallStatus {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const states = ["idle", "installing", "starting", "running", "failed"];
+  const methods = ["pypi", "release", "docker"];
+  const state = typeof r.state === "string" && states.includes(r.state) ? r.state : "idle";
+  const method = typeof r.method === "string" && methods.includes(r.method) ? r.method : "";
+  return {
+    state: state as LocalTtsInstallStatus["state"],
+    method: method as LocalTtsInstallStatus["method"],
+    message: str(r.message),
+    log: str(r.log),
+    reachable: r.reachable === true,
+    baseUrl: str(r.baseUrl),
+    startedAt: numOrNull(r.startedAt),
+    finishedAt: numOrNull(r.finishedAt),
+    error: str(r.error) || null,
+  };
+}
+
+/** Read the current local-tts install/run status. */
+export async function fetchLocalTtsStatus(signal?: AbortSignal): Promise<LocalTtsInstallStatus> {
+  const data = await requestJson<{ status?: unknown }>(
+    routeUrl(API_ROUTES.ttsLocalStatus),
+    undefined,
+    signal,
+  );
+  return normalizeLocalTtsStatus(data.status);
+}
+
+/** Install and start local-tts with the chosen method (returns the initial status). */
+export async function installLocalTts(method: LocalTtsInstallMethod): Promise<LocalTtsInstallStatus> {
+  const data = await requestJson<{ status?: unknown }>(routeUrl(API_ROUTES.ttsLocalInstall), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method }),
+  });
+  return normalizeLocalTtsStatus(data.status);
 }
 
 /** Decode a base64 audio result into a playable Blob. */

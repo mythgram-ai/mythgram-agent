@@ -1393,6 +1393,7 @@ export type TtsProviderKind =
   | "volcengine"
   | "xai"
   | "mimo"
+  | "localtts"
   | "custom";
 
 /** Supported output container formats. */
@@ -1433,6 +1434,8 @@ export interface TtsProviderDefinition {
   signupUrl: string;
   defaultBaseUrl: string;
   requiresApiKey: boolean;
+  /** Whether synthesis needs a model id (local servers may own it). */
+  requiresModel?: boolean;
   supportsModelListing: boolean;
   supportsVoiceListing: boolean;
   defaultModel: string;
@@ -1457,6 +1460,25 @@ export interface TtsModel {
   name: string;
   voices: TtsVoice[];
   languages: string[];
+}
+
+/** Install methods the one-click local-tts installer supports. */
+export type LocalTtsInstallMethod = "pypi" | "release" | "docker";
+
+/** Lifecycle of the one-click local-tts install/start operation. */
+export type LocalTtsInstallState = "idle" | "installing" | "starting" | "running" | "failed";
+
+/** Status of the one-click local-tts installer. */
+export interface LocalTtsInstallStatus {
+  state: LocalTtsInstallState;
+  method: LocalTtsInstallMethod | "";
+  message: string;
+  log: string;
+  reachable: boolean;
+  baseUrl: string;
+  startedAt: number | null;
+  finishedAt: number | null;
+  error: string | null;
 }
 
 /** The result of a synthesis request (audio is base64-encoded). */

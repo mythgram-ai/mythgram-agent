@@ -543,6 +543,18 @@ export const API_ROUTES = {
     path: "/api/tts/speech",
     description: "Synthesize text into speech (returns base64 audio).",
   },
+  ttsLocalStatus: {
+    name: "tts.local.status",
+    method: "GET",
+    path: "/api/tts/local/status",
+    description: "Read the local-tts install/run status (and live reachability).",
+  },
+  ttsLocalInstall: {
+    name: "tts.local.install",
+    method: "POST",
+    path: "/api/tts/local/install",
+    description: "Install and start local-tts in one click (pypi / release / docker).",
+  },
   promptAgentStream: {
     name: "promptAgent.stream",
     method: "POST",
