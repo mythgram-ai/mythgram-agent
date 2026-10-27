@@ -1,4 +1,4 @@
-# Mythgram Agent
+# Mythgram Agent 🪄
 
 Mythgram AI is a general-purpose AI assistant and action-taking agent workspace—not just a coding chatbot. It can help with research, writing, planning, software development, and everyday digital work: explore a project, edit files, run commands, search the web, and use connected tools to carry tasks forward. It can draw on persistent memory and knowledge, reusable skills and prompts, specialist agents and coordinated teams, and scheduled or messaging-based workflows. Mythgram belongs to the broader personal-agent category that includes projects such as OpenClaw, Hermes, and Manus; its focus is a workspace you can run and configure yourself, with agents that work through tools rather than only returning answers.
 
