@@ -9,19 +9,30 @@ command starts a server that opens **exactly one port (7878)** and serves:
 - **OpenAI-compatible speech API** under `/v1/*` (`/v1/audio/speech`) so any
   OpenAI client can point at `http://127.0.0.1:7878/v1`
 
-## Install
+## Install — three ways
 
-From **GitHub Releases** (wheel is attached to the release):
+**1. PyPI** (published as `local-tts-studio`; the command stays `local-tts`):
+
+```bash
+pip install local-tts-studio
+```
+
+**2. GitHub Releases** (wheel/sdist attached to every `v*` tag):
 
 ```bash
 pip install https://github.com/mythgram-ai/mythgram-agent/releases/download/v1.0.0/local_tts_studio-1.0.0-py3-none-any.whl
 ```
 
-Or from source (sdist builds the same package):
+**3. Docker** (published to GitHub Packages — ghcr.io; settings and voices
+persist in the `/data` volume):
 
 ```bash
-pip install https://github.com/mythgram-ai/mythgram-agent/releases/download/v1.0.0/local_tts_studio-1.0.0.tar.gz
+docker run -d --name local-tts -p 7878:7878 -v local-tts-data:/data \
+  ghcr.io/mythgram-ai/local-tts:main
 ```
+
+All three run the same server; the full docs live in
+[packages/local-tts/README.md](../../../tree/main/packages/local-tts/README.md).
 
 ## Run
 
