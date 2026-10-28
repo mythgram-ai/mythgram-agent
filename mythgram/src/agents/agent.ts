@@ -320,6 +320,18 @@ export class AgentRunner {
   private customSystemPromptsManager?: import("./mainagentprompt/index.js").MainAgentPromptManager;
 
   /**
+   * Attach the speech runtime (called once at boot). When set, the generate_speech tool can
+   * synthesize audio with an automatically selected, connected TTS provider for the Main Agent
+   * and every Custom Agent (both run through this core runtime). When unset, the tool returns a
+   * structured "unavailable" error.
+   */
+  setSpeechRuntime(runtime?: import("./tools/types.js").SpeechRuntime): void {
+    this.speechRuntime = runtime;
+  }
+
+  private speechRuntime?: import("./tools/types.js").SpeechRuntime;
+
+  /**
    * Execute a full autonomous turn: stream reasoning + tokens, run tools natively, and
    * loop (Thought -> Action -> Observation) until the model produces a final answer with
    * no further tool calls. The loop is UNBOUNDED — there is no iteration limit; the agent
@@ -733,6 +745,7 @@ export class AgentRunner {
               todos: todoRuntime,
               memory: memoryRuntime,
               knowledge: knowledgeRuntime,
+              speech: this.speechRuntime,
               promptLibrary: promptLibraryRuntime,
               customAgents: customAgentsRuntime,
               customSystemPrompts: customSystemPromptsRuntime,

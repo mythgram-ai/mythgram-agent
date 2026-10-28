@@ -1,5 +1,5 @@
 import type { AppStateRepo } from "../database/repositories/appStateRepo.js";
-import type { TtsFetch } from "./client.js";
+import { TtsError, type TtsFetch } from "./client.js";
 import {
   isBuiltinProviderId,
   ttsProviderDefinition,
@@ -9,7 +9,9 @@ import { buildTtsProvider } from "./registry.js";
 import { TtsStore, type TtsProviderPatch } from "./store.js";
 import {
   TTS_PROVIDER_KINDS,
+  normalizeTtsAgentConfig,
   toPublicTtsProvider,
+  type TtsAgentConfig,
   type TtsModel,
   type TtsProviderConfig,
   type TtsProviderKind,
@@ -36,6 +38,8 @@ export interface TtsSynthesizeRequest {
   format?: string;
   speed?: number;
   instructions?: string;
+  /** Optional abort signal so a cancelled turn stops an in-flight synthesis. */
+  signal?: AbortSignal;
 }
 
 /** The result of a synthesis request, with the audio base64-encoded. */
@@ -169,6 +173,7 @@ export class TtsManager {
       responseFormat: format || undefined,
       speed: typeof request.speed === "number" ? request.speed : undefined,
       instructions: request.instructions?.trim() || undefined,
+      signal: request.signal,
     });
 
     const extension = audio.format || format || "mp3";
@@ -185,6 +190,73 @@ export class TtsManager {
       filename,
       bytes: audio.bytes.length,
     };
+  }
+
+  /**
+   * Pick the best connected TTS provider for automatic (agent-driven) synthesis, or null when
+   * none is usable. Selection follows the application's provider-selection logic and prioritizes:
+   *   1. configured cloud, built-in providers that have a usable API key (in catalog order),
+   *   2. user-defined custom providers (which require only a base URL),
+   *   3. the local TTS provider (keyless, self-hosted).
+   * Disabled providers are never selected.
+   */
+  selectProvider(): TtsProviderConfig | null {
+    const enabled = this.store.list().filter((config) => config.enabled);
+    const cloud = enabled.filter(
+      (config) => config.kind !== "custom" && config.kind !== "localtts" && this.hasApiKey(config),
+    );
+    if (cloud.length > 0) return cloud[0];
+    const custom = enabled.filter(
+      (config) => config.kind === "custom" && config.baseUrl.trim().length > 0,
+    );
+    if (custom.length > 0) return custom[0];
+    return enabled.find((config) => config.kind === "localtts") ?? null;
+  }
+
+  /**
+   * Synthesize speech with the best available provider, automatically selected via
+   * `selectProvider()`. Throws a clear, typed error when no usable provider is connected.
+   * Used by the agent's `generate_speech` tool so the LLM never has to pick a provider.
+   */
+  async synthesizeAuto(request: TtsSynthesizeRequest): Promise<TtsSynthesisResult> {
+    const agent = this.store.getAgentConfig();
+    // The panel can pin a specific provider for agent speech; fall back to auto-selection when it
+    // is unset, deleted, or disabled.
+    const pinned = agent.providerId ? this.store.get(agent.providerId) : null;
+    const config = pinned && pinned.enabled ? pinned : this.selectProvider();
+    if (!config) {
+      throw new TtsError(
+        "tts_no_provider",
+        "No text-to-speech provider is connected. Connect a provider in the TTS settings panel " +
+          "or start the local TTS provider, then try again.",
+      );
+    }
+    return this.synthesize(config.id, {
+      text: request.text,
+      model: agent.model || request.model,
+      voice: agent.voice || request.voice,
+      language: agent.language || request.language,
+      format: agent.responseFormat || request.format,
+      speed: agent.speed ?? request.speed,
+      instructions: agent.instructions || request.instructions,
+      signal: request.signal,
+    });
+  }
+
+  /** The persisted agent-speech preferences (used by the generate_speech tool). */
+  getAgentConfig(): TtsAgentConfig {
+    return this.store.getAgentConfig();
+  }
+
+  /**
+   * Merge + normalize an agent-speech settings patch, persist it, and return the stored config.
+   * Absent fields keep their stored value; the config is normalized (unknown formats dropped).
+   */
+  updateAgentConfig(input: unknown): TtsAgentConfig {
+    const current = this.store.getAgentConfig();
+    const patch = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+    const next = normalizeTtsAgentConfig({ ...current, ...patch });
+    return this.store.setAgentConfig(next);
   }
 
   /** Resolve a stored config + its live adapter, or throw a clear error. */

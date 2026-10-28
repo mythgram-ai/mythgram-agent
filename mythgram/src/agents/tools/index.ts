@@ -91,6 +91,7 @@ import { requestChannelConnectionToUserTool } from "./request_channel_connection
 import { disconnectChannelsTool } from "./disconnect_channels.js";
 import { getChannelStatusTool } from "./get_channel_status.js";
 import { sendMessageToCommunicationChannelTool } from "./send_message_to_communication_channel.js";
+import { generateSpeechTool } from "./generate_speech.js";
 
 export { ToolRegistry } from "./registry.js";
 export type {
@@ -111,6 +112,8 @@ export type {
   KnowledgeFile,
   KnowledgeRuntime,
   KnowledgeReadOptions,
+  SpeechRuntime,
+  SpeechSynthesis,
   CustomAgentInfo,
   CustomAgentCreateInput,
   CustomAgentsRuntime,
@@ -237,6 +240,7 @@ export { requestChannelConnectionToUserTool } from "./request_channel_connection
 export { disconnectChannelsTool } from "./disconnect_channels.js";
 export { getChannelStatusTool } from "./get_channel_status.js";
 export { sendMessageToCommunicationChannelTool } from "./send_message_to_communication_channel.js";
+export { generateSpeechTool } from "./generate_speech.js";
 export {
   CHANNEL_MANAGEMENT_TOOL_NAMES,
   isChannelManagementTool,
@@ -373,6 +377,7 @@ export function createToolRegistry(): ToolRegistry {
     disconnectChannelsTool,
     getChannelStatusTool,
     sendMessageToCommunicationChannelTool,
+    generateSpeechTool,
     sendResponsesTool,
   ]);
 }
@@ -469,5 +474,6 @@ export const tools = {
   disconnectChannelsTool,
   getChannelStatusTool,
   sendMessageToCommunicationChannelTool,
+  generateSpeechTool,
   sendResponsesTool,
 };

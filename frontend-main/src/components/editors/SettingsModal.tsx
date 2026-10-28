@@ -412,6 +412,24 @@ export function SettingsModal() {
             </p>
           </section>
 
+          {/* Generated speech */}
+          <section className="space-y-3 border-t border-[var(--border)] pt-5">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--subtle)]">Generated speech</h3>
+            <Field label="Auto-play generated speech">
+              <Select
+                value={settings.autoPlayGeneratedSpeech ?? "yes"}
+                onChange={(e) => setSettings({ autoPlayGeneratedSpeech: e.target.value === "no" ? "no" : "yes" })}
+              >
+                <option value="yes">On — play automatically (default)</option>
+                <option value="no">Off — play manually only</option>
+              </Select>
+            </Field>
+            <p className="text-xs text-[var(--muted)]">
+              When the generate_speech tool produces audio, it plays automatically. Turn this off to
+              keep the audio available for manual playback only.
+            </p>
+          </section>
+
           {/* Context management */}
           <section className="space-y-3 border-t border-[var(--border)] pt-5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--subtle)]">Context management</h3>

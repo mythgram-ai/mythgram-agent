@@ -105,6 +105,8 @@ export interface TeamOrchestratorDeps {
   customAgents?: import("../tools/types.js").CustomAgentsRuntime;
   /** The persistent custom-system-prompts runtime — lets every team agent manage saved system prompts. */
   customSystemPrompts?: import("../tools/types.js").CustomSystemPromptsRuntime;
+  /** Speech runtime — lets every team agent granted generate_speech synthesize audio. */
+  speech?: import("../tools/types.js").SpeechRuntime;
   skills: SkillRuntime;
   todos: TodoRuntime;
   subAgentDefinitions: Awaited<ReturnType<typeof resolveDefaultSubAgents>>;
@@ -497,6 +499,7 @@ export class TeamOrchestrator {
       todos: this.deps.todos,
       memory: this.deps.memory,
       knowledge: this.deps.knowledge,
+      speech: this.deps.speech,
       promptLibrary: this.deps.promptLibrary,
       customAgents: this.deps.customAgents,
       customSystemPrompts: this.deps.customSystemPrompts,

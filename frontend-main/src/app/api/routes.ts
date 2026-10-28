@@ -543,6 +543,18 @@ export const API_ROUTES = {
     path: "/api/tts/speech",
     description: "Synthesize text into speech (returns base64 audio).",
   },
+  ttsAgent: {
+    name: "tts.agent",
+    method: "GET",
+    path: "/api/tts/agent",
+    description: "Read the agent speech settings used by the generate_speech tool.",
+  },
+  ttsAgentUpdate: {
+    name: "tts.agent.update",
+    method: "PUT",
+    path: "/api/tts/agent",
+    description: "Update the agent speech settings (provider pin + voice overrides).",
+  },
   ttsLocalStatus: {
     name: "tts.local.status",
     method: "GET",

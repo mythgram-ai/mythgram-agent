@@ -44,6 +44,7 @@ import { ConnectorManager } from "./agents/connectors/index.js";
 import { McpManager } from "./agents/mcp/index.js";
 import { ChannelManager } from "./channels/index.js";
 import { LocalTtsInstaller, TtsManager } from "./tts/index.js";
+import { createSpeechRuntime } from "./tts/runtime.js";
 import { MythgramDatabase } from "./database/index.js";
 
 function main(): void {
@@ -80,6 +81,9 @@ function main(): void {
     dataDir: path.join(config.workspaceRoot, ".mythgram"),
     python: process.env.LOCAL_TTS_PYTHON?.trim() || undefined,
   });
+  // Speech runtime bridge for the agent's generate_speech tool: it selects a connected provider
+  // automatically (cloud → custom → local) from the SAME TTS configuration the panel manages.
+  const speechRuntime = createSpeechRuntime(tts);
   const agent = new AgentRunner(
     providers,
     tools,
@@ -93,7 +97,7 @@ function main(): void {
   );
   // Chat mode: lightweight conversational assistant with only memory + knowledge + web tools.
   // Streams onto the same event buffer, so resume/replay/persistence work identically.
-  const chatRunner = new ChatRunner(providers, tools, config, memoryAgent);
+  const chatRunner = new ChatRunner(providers, tools, config, memoryAgent, speechRuntime);
   // The multi-agent team runner: drives a whole agent team (head + members) for one chat turn,
   // streaming onto the same event buffer the single agent uses.
   const multiAgent = new MultiAgentRunner(providers, tools, config, mcp, connectors);
@@ -212,6 +216,14 @@ function main(): void {
   multiAgent.setChannelManager(channels);
   ceoAgent.setChannelManager(channels);
   void channels.start().catch(() => undefined);
+
+  // Attach the speech runtime to every agent surface that may run generate_speech: the built-in
+  // Main Agent (and every Custom Agent through the same core runtime), the multi-agent team agents
+  // (head + members), and the CEO-system agents (CEO + leaders + members). Chat mode receives it
+  // through the ChatRunner constructor above.
+  agent.setSpeechRuntime(speechRuntime);
+  multiAgent.setSpeechRuntime(speechRuntime);
+  ceoAgent.setSpeechRuntime(speechRuntime);
 
   const app = express();
   app.use(

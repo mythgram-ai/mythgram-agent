@@ -13,6 +13,8 @@ import { LocalTtsInstallError, type LocalTtsInstaller } from "../tts/installer.j
  *   GET    /api/tts/providers/:id/models       live model list (fetched from provider)
  *   GET    /api/tts/providers/:id/voices       live voice list (optionally ?model=)
  *   POST   /api/tts/speech                     synthesize text → base64 audio
+ *   GET    /api/tts/agent                      agent speech settings (generate_speech)
+ *   PUT    /api/tts/agent                      update agent speech settings
  *   GET    /api/tts/local/status               local-tts install/run status
  *   POST   /api/tts/local/install              install + start local-tts in one click
  *
@@ -139,6 +141,23 @@ export function buildTtsRouter(manager: TtsManager, installer?: LocalTtsInstalle
       res.json({ ok: true, audio });
     } catch (error) {
       err(res, 502, errorCode(error), errorMessage(error));
+    }
+  });
+
+  /** Agent speech settings used by the generate_speech tool (+ the auto-selected provider id). */
+  router.get("/agent", (_req: Request, res: Response) => {
+    const config = manager.getAgentConfig();
+    const auto = manager.selectProvider();
+    res.json({ ok: true, config, auto_provider_id: auto?.id ?? null });
+  });
+
+  /** Update the agent speech settings (provider pin + model/voice/format overrides). */
+  router.put("/agent", (req: Request, res: Response) => {
+    try {
+      const config = manager.updateAgentConfig(req.body ?? {});
+      res.json({ ok: true, config });
+    } catch (error) {
+      err(res, 400, errorCode(error), errorMessage(error));
     }
   });
 

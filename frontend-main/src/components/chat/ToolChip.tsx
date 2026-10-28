@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Archive,
   ArchiveRestore,
+  AudioLines,
   Bot,
   Blocks,
   Braces,
@@ -113,6 +114,7 @@ const ICONS: Record<string, typeof Terminal> = {
   read_image: ImageIcon,
   scan_qr_code: QrCode,
   image_search: ImageIcon,
+  generate_speech: AudioLines,
   call_sub_agent: Bot,
   call_multiple_sub_agents: Bot,
   list_sub_agents: ListTree,
@@ -276,6 +278,7 @@ export function ToolChip({ tool }: { tool: ToolActivity }) {
   if (tool.name === "read_image") return <ReadImageChip tool={tool} />;
   if (tool.name === "scan_qr_code") return <ScanQrCodeChip tool={tool} />;
   if (tool.name === "image_search") return <ImageSearchChip tool={tool} />;
+  if (tool.name === "generate_speech") return <GenerateSpeechChip tool={tool} />;
   if (tool.name === "fatch_web_urls") return <FetchChip tool={tool} />;
   if (tool.name === "web_search") return <WebSearchChip tool={tool} />;
   if (tool.name === "TodoWrite" || tool.name === "read_todos") return <TodoChip tool={tool} />;
@@ -1090,6 +1093,93 @@ function ImageSearchChip({ tool }: { tool: ToolActivity }) {
               </a>
             ))}
           </div>
+        </>
+      )}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ speech */
+
+function GenerateSpeechChip({ tool }: { tool: ToolActivity }) {
+  const { data, error, args, hasResult } = parts(tool);
+  const speech: string = (data?.speech as string) ?? (args.speech as string) ?? "";
+  const outputDirectory: string =
+    (data?.output_directory as string) ?? (args.output_directory as string) ?? "";
+  const filePath: string = (data?.file_path as string) ?? "";
+  const autoPlaySetting = useStore((s) => s.settings.autoPlayGeneratedSpeech);
+  const autoPlay = autoPlaySetting !== "no";
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playedRef = useRef(false);
+
+  const src = filePath
+    ? routeUrl(API_ROUTES.filesPreview, { query: { path: filePath } })
+    : "";
+
+  // A new result (new file) is a fresh playback candidate.
+  useEffect(() => {
+    playedRef.current = false;
+  }, [src]);
+
+  // Auto-play once the generated audio has been saved and loaded, unless the user disabled it.
+  useEffect(() => {
+    if (!autoPlay || !src || playedRef.current) return;
+    const el = audioRef.current;
+    if (!el) return;
+    playedRef.current = true;
+    const attempt = el.play();
+    // Browsers may block autoplay without prior interaction; the manual controls remain.
+    if (attempt && typeof attempt.catch === "function") attempt.catch(() => undefined);
+  }, [autoPlay, src]);
+
+  return (
+    <Shell
+      icon={<AudioLines className="h-3.5 w-3.5" />}
+      label={tool.label}
+      status={tool.status}
+      expandable
+      defaultOpen
+      pills={data?.provider ? <Pill tone="accent">{String(data.provider)}</Pill> : undefined}
+      panel={() => (
+        <>
+          {error?.message && (
+            <div className="text-[var(--danger)]">Speech generation failed: {error.message}</div>
+          )}
+          {speech && (
+            <div>
+              <Label>Speech</Label>
+              <Pre className="mt-1 max-h-40">{speech}</Pre>
+            </div>
+          )}
+          {src && !error && (
+            <div className="space-y-2">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <audio ref={audioRef} controls preload="auto" src={src} className="w-full" />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Pill>
+                  <AudioLines className="h-2.5 w-2.5" />
+                  <span className="font-mono">{filePath}</span>
+                </Pill>
+                {data?.format && <Pill>{String(data.format)}</Pill>}
+                {data?.bytes != null && <Pill>{formatBytes(Number(data.bytes))}</Pill>}
+                {data?.voice && <Pill>voice: {String(data.voice)}</Pill>}
+                {data?.model && <Pill>{String(data.model)}</Pill>}
+              </div>
+              <div className="flex justify-end">
+                <a
+                  href={routeUrl(API_ROUTES.filesDownload, { query: { path: filePath } })}
+                  download={data?.filename ? String(data.filename) : undefined}
+                  className="inline-flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--muted)] transition hover:border-[var(--secondary)] hover:text-[var(--fg)]"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download
+                </a>
+              </div>
+            </div>
+          )}
+          {!src && !error && !hasResult && <div className="text-[var(--muted)]">Generating speech...</div>}
+          {!src && !error && hasResult && outputDirectory && (
+            <div className="text-[var(--muted)]">Saved to {outputDirectory}.</div>
+          )}
         </>
       )}
     />

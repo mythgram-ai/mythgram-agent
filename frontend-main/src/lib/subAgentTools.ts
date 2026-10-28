@@ -71,6 +71,7 @@ export const SUB_AGENT_TOOLS: readonly SubAgentToolMeta[] = [
   { name: "fatch_web_urls", label: "Fetch URL", description: "Fetch and extract clean content from web URLs." },
   { name: "read_image", label: "Read image", description: "Read an image (workspace path or hosted URL) and visually analyze it. Requires a vision model." },
   { name: "scan_qr_code", label: "Scan QR code", description: "Scan and decode QR codes from an image file. Provide the path to the image containing the QR code." },
+  { name: "generate_speech", label: "Generate speech", description: "Generate spoken audio from text and save the generated audio file to the specified output directory." },
   { name: "list_skills", label: "List skills", description: "List the available skills (name, description, and file tree of each skill folder)." },
   { name: "skill_initialize", label: "Initialize skill", description: "Materialize one or more skills onto disk so their files can be read." },
   { name: "create_skill", label: "Create skill", description: "Package a folder into a reusable skill and save it for later use." },

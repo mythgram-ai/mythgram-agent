@@ -13,6 +13,7 @@ import type {
   KnowledgeFile,
   MemoryFile,
   MemoryRuntime,
+  SpeechRuntime,
 } from "./tools/types.js";
 import type { MemoryAgentService } from "./memoryagent/index.js";
 
@@ -46,6 +47,7 @@ export const CHAT_MODE_TOOLS: readonly string[] = [
   "knowledge_delete",
   "web_search",
   "fatch_web_urls",
+  "generate_speech",
 ];
 
 const CHAT_TOOL_SET = new Set<string>(CHAT_MODE_TOOLS);
@@ -103,6 +105,12 @@ You are a helpful conversational AI assistant.
   never invent sources, URLs, or statistics. Cite sources (name + URL) for key claims and
   flag uncertainty honestly.
 
+# Speech
+- Use generate_speech(speech, output_directory) to turn text into spoken audio. The provider
+  is selected automatically from the user's TTS configuration — you only supply the exact text
+  and a workspace output directory (e.g. "audio"), and the saved clip is shown with playback
+  controls in the chat.
+
 # Tools (native function calling only)
 You have exactly these tools. Use real tool calls — never describe a tool call in prose,
 never output JSON/markdown pretending to be a tool call, and never invent tools.
@@ -112,6 +120,7 @@ never output JSON/markdown pretending to be a tool call, and never invent tools.
   knowledge_create(knowledge_path, content), knowledge_edit(knowledge_path, old_str, new_str),
   knowledge_delete(knowledge_path)
 - web_search(query), fatch_web_urls(url, format?, crawl?, maxPages?, maxDepth?, ...)
+- generate_speech(speech, output_directory)
 
 # Output policy
 - When a tool is needed, call it — do not narrate fake results.
@@ -167,6 +176,11 @@ export class ChatRunner {
      * memory-build run exactly like the full agent does.
      */
     private readonly memoryAgent?: MemoryAgentService,
+    /**
+     * Optional speech runtime. When present, the generate_speech tool can synthesize audio with an
+     * automatically selected, connected TTS provider.
+     */
+    private readonly speechRuntime?: SpeechRuntime,
   ) {}
 
   /**
@@ -379,6 +393,7 @@ export class ChatRunner {
               web,
               memory: memoryRuntime,
               knowledge: knowledgeRuntime,
+              speech: this.speechRuntime,
               toolCallId: toolCall.id ?? undefined,
               chatId: request.chatId,
               emit: send,

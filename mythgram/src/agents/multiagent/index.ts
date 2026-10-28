@@ -64,6 +64,7 @@ export class MultiAgentRunner {
   private promptLibrary?: import("../tools/types.js").PromptLibraryRuntime;
   private customAgents?: import("../tools/types.js").CustomAgentsRuntime;
   private customSystemPrompts?: import("../tools/types.js").CustomSystemPromptsRuntime;
+  private speech?: import("../tools/types.js").SpeechRuntime;
 
   /**
    * Attach the persistent prompt library (called once at boot). When set, every team agent
@@ -105,6 +106,15 @@ export class MultiAgentRunner {
    */
   setChannelManager(manager?: import("../../channels/manager.js").ChannelManager): void {
     this.channelManager = manager;
+  }
+
+  /**
+   * Attach the speech runtime (called once at boot). When set, every team agent granted the
+   * generate_speech tool can synthesize audio with an automatically selected, connected TTS
+   * provider.
+   */
+  setSpeechRuntime(runtime?: import("../tools/types.js").SpeechRuntime): void {
+    this.speech = runtime;
   }
 
   async run(
@@ -200,6 +210,7 @@ export class MultiAgentRunner {
         promptLibrary: this.promptLibrary,
         customAgents: this.customAgents,
         customSystemPrompts: this.customSystemPrompts,
+        speech: this.speech,
         skills,
         todos,
         subAgentDefinitions,

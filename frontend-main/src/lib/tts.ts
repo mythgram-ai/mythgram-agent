@@ -4,6 +4,7 @@ import type {
   CustomHeader,
   LocalTtsInstallMethod,
   LocalTtsInstallStatus,
+  TtsAgentConfig,
   TtsAudioResult,
   TtsModel,
   TtsOutputFormat,
@@ -226,6 +227,59 @@ export async function synthesizeTts(input: TtsSpeechInput): Promise<TtsAudioResu
 
 function numOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Defensively normalize the agent speech settings payload. */
+function normalizeAgentConfig(raw: unknown): TtsAgentConfig {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    providerId: str(r.providerId),
+    model: str(r.model),
+    voice: str(r.voice),
+    language: str(r.language),
+    responseFormat: str(r.responseFormat),
+    speed: numOrNull(r.speed),
+    instructions: str(r.instructions),
+  };
+}
+
+export interface TtsAgentPayload {
+  config: TtsAgentConfig;
+  /** Provider id auto-selection would currently pick ("" when none is available). */
+  autoProviderId: string;
+}
+
+/** Read the agent speech settings (used by the generate_speech tool). */
+export async function fetchTtsAgentConfig(signal?: AbortSignal): Promise<TtsAgentPayload> {
+  const data = await requestJson<{ config?: unknown; auto_provider_id?: unknown }>(
+    routeUrl(API_ROUTES.ttsAgent),
+    undefined,
+    signal,
+  );
+  return {
+    config: normalizeAgentConfig(data.config),
+    autoProviderId: str(data.auto_provider_id),
+  };
+}
+
+export interface TtsAgentConfigInput {
+  providerId?: string;
+  model?: string;
+  voice?: string;
+  language?: string;
+  responseFormat?: TtsOutputFormat | "";
+  speed?: number | null;
+  instructions?: string;
+}
+
+/** Update the agent speech settings and return the stored config. */
+export async function updateTtsAgentConfig(input: TtsAgentConfigInput): Promise<TtsAgentConfig> {
+  const data = await requestJson<{ config?: unknown }>(routeUrl(API_ROUTES.ttsAgentUpdate), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return normalizeAgentConfig(data.config);
 }
 
 function normalizeLocalTtsStatus(raw: unknown): LocalTtsInstallStatus {

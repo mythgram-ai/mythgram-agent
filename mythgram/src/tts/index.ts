@@ -17,6 +17,7 @@ export {
 } from "./installer.js";
 export { TtsStore, type TtsProviderPatch } from "./store.js";
 export { buildTtsProvider } from "./registry.js";
+export { createSpeechRuntime } from "./runtime.js";
 export { ttsProviderDefinition, ttsBuiltinDefinitions, TTS_PROVIDER_CATALOG, type TtsProviderDefinition } from "./configuration.js";
 export {
   TTS_PROVIDER_KINDS,
@@ -26,11 +27,13 @@ export {
   isTtsBuiltinKind,
   isTtsOutputFormat,
   normalizeTtsProvider,
+  normalizeTtsAgentConfig,
   toPublicTtsProvider,
   type TtsProviderKind,
   type TtsBuiltinKind,
   type TtsProviderConfig,
   type TtsProviderPublic,
+  type TtsAgentConfig,
   type TtsHeader,
   type TtsVoice,
   type TtsModel,

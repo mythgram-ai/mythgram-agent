@@ -900,6 +900,11 @@ export interface Settings {
    */
   memoryAgentInterval: number;
   /**
+   * Whether generated speech (the generate_speech tool) plays automatically when it is ready.
+   * "yes" (default) auto-plays the audio; "no" keeps it available for manual playback only.
+   */
+  autoPlayGeneratedSpeech: "no" | "yes";
+  /**
    * Manually entered context-window limits keyed by `"<provider>::<model>"` (see
    * `manualLimitKey` in lib/contextMeter). Fallback used only when the provider's
    * model catalog publishes no `context_window` for the pair — without an
@@ -1443,6 +1448,24 @@ export interface TtsProviderDefinition {
   defaultLanguage: string;
   defaultFormat: TtsOutputFormat;
   instructions: string[];
+}
+
+/**
+ * Agent speech preferences configured in the TTS panel and used by the agent's
+ * `generate_speech` tool. A blank `providerId` means "auto" — the backend picks
+ * the best available provider; the other fields override its defaults when set.
+ */
+export interface TtsAgentConfig {
+  /** Provider id to always use, or "" to auto-select the best available provider. */
+  providerId: string;
+  model: string;
+  voice: string;
+  language: string;
+  /** Output container override, or "" for the provider default. */
+  responseFormat: string;
+  /** Speaking-rate override, or null for the provider default. */
+  speed: number | null;
+  instructions: string;
 }
 
 /** One selectable voice returned by a provider. */

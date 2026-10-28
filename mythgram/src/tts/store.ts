@@ -10,11 +10,16 @@ import {
   isTtsOutputFormat,
   normalizeHeaders,
   normalizeStringList,
+  normalizeTtsAgentConfig,
   normalizeTtsProvider,
+  type TtsAgentConfig,
   type TtsBuiltinKind,
   type TtsHeader,
   type TtsProviderConfig,
 } from "./types.js";
+
+/** app_state document key holding the agent-speech preferences. */
+export const TTS_AGENT_STATE_KEY = "ttsAgent";
 
 /** A partial update to a provider config. `undefined` means "leave unchanged". */
 export interface TtsProviderPatch {
@@ -76,6 +81,18 @@ export class TtsStore {
   /** The single config for a built-in provider kind, or null. */
   getByKind(kind: TtsBuiltinKind): TtsProviderConfig | null {
     return this.list().find((c) => c.id === kind) ?? null;
+  }
+
+  /** The persisted agent-speech preferences (normalized; defaults when unset). */
+  getAgentConfig(): TtsAgentConfig {
+    return normalizeTtsAgentConfig(this.appState.get(TTS_AGENT_STATE_KEY));
+  }
+
+  /** Persist the agent-speech preferences (normalized) and return them. */
+  setAgentConfig(config: TtsAgentConfig): TtsAgentConfig {
+    const normalized = normalizeTtsAgentConfig(config);
+    this.appState.set(TTS_AGENT_STATE_KEY, normalized);
+    return normalized;
   }
 
   /**

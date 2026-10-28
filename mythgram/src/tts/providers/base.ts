@@ -195,14 +195,19 @@ export class OpenAICompatibleTtsProvider extends TtsProviderBase {
   }
 
   async listVoices(options: TtsListOptions, model?: string): Promise<TtsVoice[]> {
+    // Manually declared voices (custom providers) are the only source and apply to any model.
     if (this.runtime.manualVoices.length > 0) {
       return this.runtime.manualVoices.map((id) => ({ id, name: id, model }));
     }
     const models = await this.listModels(options);
+    // A specific model is selected: return ONLY the voices it advertises. When the model
+    // advertises none (or is unknown), return an empty list — never leak voices that belong
+    // to other models.
     if (model) {
       const match = models.find((m) => m.id === model);
-      if (match && match.voices.length > 0) return match.voices;
+      return match ? match.voices : [];
     }
+    // No model selected: advertise every voice the provider exposes (de-duplicated).
     const seen = new Set<string>();
     const out: TtsVoice[] = [];
     for (const m of models) {

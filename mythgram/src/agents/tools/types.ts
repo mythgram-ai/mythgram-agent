@@ -712,6 +712,46 @@ export interface SkillRuntime {
   ): Promise<SkillInitializeResult>;
 }
 
+/** Raw audio + metadata produced by one speech synthesis request. */
+export interface SpeechSynthesis {
+  /** Audio bytes, base64-encoded. */
+  base64: string;
+  /** Audio size in bytes. */
+  bytes: number;
+  /** Container format (best-effort, e.g. mp3, wav). */
+  format: string;
+  /** MIME type of the returned audio. */
+  mime: string;
+  /** Suggested file name for the audio. */
+  filename: string;
+  /** Id of the provider that served the request. */
+  providerId: string;
+  /** Human-friendly provider name. */
+  providerName: string;
+  /** Model that served the request. */
+  model: string;
+  /** Voice used for the request. */
+  voice: string;
+}
+
+/**
+ * Runtime bridge injected into the ToolContext so the `generate_speech` tool can convert text
+ * into spoken audio using an automatically selected, connected TTS provider. The provider is
+ * chosen from the SAME configuration the user manages in the TTS panel (cloud providers first,
+ * then custom providers, then local TTS); the LLM never supplies a provider. Present on the
+ * top-level agent surfaces (Main Agent, Custom Agents, team/CEO agents) and chat mode, and
+ * forwarded to sub-agents granted the tool.
+ */
+export interface SpeechRuntime {
+  /** True when at least one usable TTS provider is connected/configured. */
+  available(): boolean;
+  /**
+   * Synthesize speech with the best available provider. Throws with a clear message when no
+   * provider is usable or when the provider fails.
+   */
+  synthesize(input: { text: string; signal?: AbortSignal }): Promise<SpeechSynthesis>;
+}
+
 /** Runtime context handed to a tool on execution. */
 export interface ToolContext {
   /** Absolute path all file operations are sandboxed to. */
@@ -749,6 +789,11 @@ export interface ToolContext {
   /** Knowledge runtime — present for main-agent tool calls and forwarded to sub-agent tool calls so
    * a sub-agent granted the knowledge_* tools can read/maintain the shared knowledge base. */
   knowledge?: KnowledgeRuntime;
+  /** Speech runtime — present for the top-level agent surfaces (Main Agent, Custom Agents,
+   * team/CEO agents) and chat mode, and forwarded to sub-agents. Lets the generate_speech tool
+   * synthesize audio with an automatically selected, connected TTS provider. Absent when the TTS
+   * engine is unavailable, which is why the tool refuses to run. */
+  speech?: SpeechRuntime;
   /** Prompt-library runtime — present ONLY for the top-level surfaces that may manage the user's
    * saved prompts (Main Agent, Custom Agents, team agents, and the CEO system agents). Absent for
    * sub-agents, chat mode, and the memory agent, which is why the prompt-library tools are

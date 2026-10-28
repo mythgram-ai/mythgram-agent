@@ -713,6 +713,7 @@ const defaultSettings: Settings = {
   enableCeoAgents: "no",
   memoryAgentEnabled: "yes",
   memoryAgentInterval: 3,
+  autoPlayGeneratedSpeech: "yes",
   manualContextLimits: {},
   contextManagementMethod: "summarization",
   slidingWindowTruncatePercent: 0.3,

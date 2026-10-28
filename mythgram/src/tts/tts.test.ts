@@ -186,6 +186,156 @@ describe("tts — manager", () => {
   });
 });
 
+describe("tts — voice listing scope", () => {
+  const twoModelResponse = () =>
+    jsonResponse({
+      data: [
+        { id: "m1", name: "Model One", supported_voices: ["alpha", "beta"] },
+        { id: "m2", name: "Model Two", supported_voices: ["gamma"] },
+        { id: "silent", name: "No-voice model" },
+      ],
+    });
+
+  it("returns only the selected model's supported voices", async () => {
+    const { fetchFn } = stubFetch(() => twoModelResponse());
+    const manager = new TtsManager({ appState: testRepo(), openrouterApiKey: "sk", fetchFn });
+    assert.deepEqual((await manager.listVoices("openrouter", "m1")).map((v) => v.id), ["alpha", "beta"]);
+    assert.deepEqual((await manager.listVoices("openrouter", "m2")).map((v) => v.id), ["gamma"]);
+  });
+
+  it("returns an empty list (not other models' voices) when the model advertises none", async () => {
+    const { fetchFn } = stubFetch(() => twoModelResponse());
+    const manager = new TtsManager({ appState: testRepo(), openrouterApiKey: "sk", fetchFn });
+    assert.deepEqual(await manager.listVoices("openrouter", "silent"), []);
+  });
+
+  it("returns an empty list when the model is unknown", async () => {
+    const { fetchFn } = stubFetch(() => twoModelResponse());
+    const manager = new TtsManager({ appState: testRepo(), openrouterApiKey: "sk", fetchFn });
+    assert.deepEqual(await manager.listVoices("openrouter", "does-not-exist"), []);
+  });
+
+  it("aggregates every advertised voice only when no model is selected", async () => {
+    const { fetchFn } = stubFetch(() =>
+      jsonResponse({
+        data: [
+          { id: "m1", supported_voices: ["alpha", "beta"] },
+          { id: "m2", supported_voices: ["beta", "gamma"] },
+        ],
+      }),
+    );
+    const provider = new OpenRouterTtsProvider({ fetchFn });
+    const voices = await provider.listVoices({ apiKey: "sk" });
+    assert.deepEqual(voices.map((v) => v.id).sort(), ["alpha", "beta", "gamma"]);
+  });
+});
+
+describe("tts — automatic provider selection", () => {
+  it("prefers a configured cloud provider that has a usable key", () => {
+    const manager = new TtsManager({ appState: testRepo(), openrouterApiKey: "sk", fetchFn: stubFetch(() => audioResponse([1])).fetchFn });
+    const picked = manager.selectProvider();
+    assert.equal(picked?.id, "openrouter");
+  });
+
+  it("prefers a custom provider over the local provider when no cloud key exists", () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: stubFetch(() => audioResponse([1])).fetchFn });
+    const custom = manager.create({ kind: "custom", name: "My server", baseUrl: "http://localhost:8880/v1" });
+    const picked = manager.selectProvider();
+    assert.equal(picked?.id, custom.id);
+  });
+
+  it("falls back to the local TTS provider when nothing else is usable", () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: stubFetch(() => audioResponse([1])).fetchFn });
+    const picked = manager.selectProvider();
+    assert.equal(picked?.kind, "localtts");
+  });
+
+  it("returns null when every provider is disabled", () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: stubFetch(() => audioResponse([1])).fetchFn });
+    for (const provider of manager.listPublic()) manager.update(provider.id, { enabled: false });
+    assert.equal(manager.selectProvider(), null);
+  });
+
+  it("synthesizeAuto synthesizes with the automatically selected provider", async () => {
+    const { fetchFn, calls } = stubFetch(() => audioResponse([1, 2, 3, 4]));
+    const manager = new TtsManager({ appState: testRepo(), openrouterApiKey: "sk", fetchFn });
+    const result = await manager.synthesizeAuto({ text: "Hello world" });
+    assert.equal(result.providerId, "openrouter");
+    assert.equal(result.providerKind, "openrouter");
+    assert.match(calls[0]!.url, /\/audio\/speech$/);
+  });
+
+  it("synthesizeAuto throws a clear error when no provider is connected", async () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: stubFetch(() => audioResponse([1])).fetchFn });
+    for (const provider of manager.listPublic()) manager.update(provider.id, { enabled: false });
+    await assert.rejects(
+      () => manager.synthesizeAuto({ text: "hi" }),
+      /No text-to-speech provider is connected/,
+    );
+  });
+});
+
+describe("tts — agent speech settings", () => {
+  it("defaults to auto selection with no overrides", () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: stubFetch(() => audioResponse([1])).fetchFn });
+    assert.deepEqual(manager.getAgentConfig(), {
+      providerId: "",
+      model: "",
+      voice: "",
+      language: "",
+      responseFormat: "",
+      speed: null,
+      instructions: "",
+    });
+  });
+
+  it("normalizes and persists a settings patch, dropping unknown formats", () => {
+    const manager = new TtsManager({ appState: testRepo(), fetchFn: stubFetch(() => audioResponse([1])).fetchFn });
+    const next = manager.updateAgentConfig({
+      providerId: "openrouter",
+      model: "m1",
+      voice: "alloy",
+      responseFormat: "MP3",
+      speed: "1.2",
+      bogus_extra: true,
+    });
+    assert.equal(next.providerId, "openrouter");
+    assert.equal(next.model, "m1");
+    assert.equal(next.voice, "alloy");
+    assert.equal(next.responseFormat, "mp3");
+    assert.equal(next.speed, 1.2);
+    assert.deepEqual(manager.getAgentConfig(), next);
+    assert.equal(manager.updateAgentConfig({ responseFormat: "xyz" }).responseFormat, "");
+  });
+
+  it("synthesizeAuto uses the pinned provider and its overrides", async () => {
+    const { fetchFn, calls } = stubFetch(() => audioResponse([1, 2]));
+    const manager = new TtsManager({ appState: testRepo(), openrouterApiKey: "sk", fetchFn });
+    manager.updateAgentConfig({
+      providerId: "openrouter",
+      voice: "verse",
+      speed: 1.1,
+      instructions: "Speak slowly",
+    });
+    const result = await manager.synthesizeAuto({ text: "hi" });
+    assert.equal(result.providerId, "openrouter");
+    const body = JSON.parse(String(calls[0]!.init.body));
+    assert.equal(body.voice, "verse");
+    assert.equal(body.speed, 1.1);
+    assert.equal(body.instructions, "Speak slowly");
+  });
+
+  it("falls back to auto selection when the pinned provider is disabled", async () => {
+    const { fetchFn } = stubFetch(() => audioResponse([1]));
+    const manager = new TtsManager({ appState: testRepo(), openrouterApiKey: "sk", fetchFn });
+    manager.updateAgentConfig({ providerId: "openrouter" });
+    manager.update("openrouter", { enabled: false });
+    assert.equal(manager.selectProvider()?.kind, "localtts");
+    const result = await manager.synthesizeAuto({ text: "hi" });
+    assert.equal(result.providerKind, "localtts");
+  });
+});
+
 describe("tts — KittenML provider", () => {
   it("falls back to the documented models when /models is unavailable", async () => {
     const { fetchFn } = stubFetch(() => jsonResponse({ error: { message: "forbidden" } }, 403));

@@ -37,6 +37,7 @@ export const APP_STATE_KEYS = [
   "profileSessions",
   "channels",
   "tts",
+  "ttsAgent",
 ] as const;
 
 export type AppStateKey = (typeof APP_STATE_KEYS)[number];

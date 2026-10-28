@@ -141,6 +141,49 @@ export interface TtsProviderPublic {
   updatedAt: number;
 }
 
+/**
+ * Agent-driven speech preferences (the `generate_speech` tool). Configured in the
+ * TTS panel. An empty `providerId` means "auto" — the manager picks the best
+ * available provider (cloud → custom → local). The other fields override the
+ * chosen provider's own defaults when non-empty.
+ */
+export interface TtsAgentConfig {
+  /** Provider id to always use, or "" to auto-select the best available provider. */
+  providerId: string;
+  model: string;
+  voice: string;
+  /** BCP-47 language / locale, when the provider needs one. */
+  language: string;
+  /** Output container format override, or "" for the provider default. */
+  responseFormat: string;
+  /** Speaking-rate override, or null for the provider default. */
+  speed: number | null;
+  /** Free-form tone/style guidance forwarded to providers that support it. */
+  instructions: string;
+}
+
+/** Defensively normalize an untrusted agent-speech payload into a TtsAgentConfig. */
+export function normalizeTtsAgentConfig(raw: unknown): TtsAgentConfig {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const responseFormat = str(r.responseFormat ?? r.response_format).trim().toLowerCase();
+  const speedRaw = r.speed;
+  const speed =
+    typeof speedRaw === "number" && Number.isFinite(speedRaw)
+      ? speedRaw
+      : typeof speedRaw === "string" && speedRaw.trim() !== "" && Number.isFinite(Number(speedRaw))
+        ? Number(speedRaw)
+        : null;
+  return {
+    providerId: str(r.providerId ?? r.provider_id).trim().slice(0, 80),
+    model: str(r.model).trim(),
+    voice: str(r.voice).trim(),
+    language: str(r.language ?? r.language_code ?? r.locale).trim(),
+    responseFormat: isTtsOutputFormat(responseFormat) ? responseFormat : "",
+    speed,
+    instructions: str(r.instructions).trim().slice(0, 500),
+  };
+}
+
 /** Untrusted over-the-wire / stored shape. Accepts both snake_case and camelCase. */
 export interface TtsProviderWire {
   id?: unknown;

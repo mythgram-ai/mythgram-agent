@@ -7,7 +7,6 @@ import {
   ExternalLink,
   KeyRound,
   Loader2,
-  Play,
   Plus,
   RefreshCw,
   Server,
@@ -35,11 +34,13 @@ import {
   deleteTtsProvider,
   downloadAudioResult,
   fetchLocalTtsStatus,
+  fetchTtsAgentConfig,
   fetchTtsModels,
   fetchTtsProviders,
   fetchTtsVoices,
   installLocalTts,
   synthesizeTts,
+  updateTtsAgentConfig,
   updateTtsProvider,
   type TtsProviderInput,
   type TtsProvidersPayload,
@@ -169,11 +170,7 @@ export function TtsPanel() {
             onReload={reload}
           />
 
-          <Studio
-            providers={providers}
-            definitionOf={definitionOf}
-            onConfigure={setConfiguringId}
-          />
+          <AgentSpeechSettings providers={providers} />
         </>
       )}
 
@@ -810,77 +807,83 @@ function ProviderCard({
 }
 
 /** The generation studio: provider → model → voice → text → audio. */
-function Studio({
-  providers,
-  definitionOf,
-  onConfigure,
-}: {
-  providers: TtsProvider[];
-  definitionOf: (kind: TtsProvider["kind"]) => TtsProviderDefinition | undefined;
-  onConfigure: (id: string) => void;
-}) {
-  const usable = useMemo(
-    () =>
-      providers.filter((p) => {
-        // local-tts has its own dedicated card above; keep it out of the studio.
-        if (p.kind === "localtts") return false;
-        if (!p.enabled) return false;
-        const def = definitionOf(p.kind);
-        return p.kind === "custom" || !def?.requiresApiKey || p.hasApiKey;
-      }),
-    [providers, definitionOf],
-  );
-
-  const [providerId, setProviderId] = useState("");
-  const [models, setModels] = useState<TtsModel[]>([]);
-  const [voices, setVoices] = useState<TtsVoice[]>([]);
+/** Agent voice settings: the provider + voice the agent uses for `generate_speech`. */
+function AgentSpeechSettings({ providers }: { providers: TtsProvider[] }) {
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [providerId, setProviderId] = useState(() => providers[0]?.id ?? "");
   const [model, setModel] = useState("");
   const [voice, setVoice] = useState("");
   const [language, setLanguage] = useState("");
-  const [text, setText] = useState("");
   const [format, setFormat] = useState<TtsOutputFormat | "">("");
   const [speed, setSpeed] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [models, setModels] = useState<TtsModel[]>([]);
+  const [voices, setVoices] = useState<TtsVoice[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingVoices, setLoadingVoices] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState<TtsAudioResult | null>(null);
-  const [engineError, setEngineError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Default the selection to the first usable provider without an effect.
-  const effectiveProviderId = providerId || usable[0]?.id || "";
-  const provider = usable.find((p) => p.id === effectiveProviderId) ?? null;
-
-  // Derive a playable object URL from the result and revoke it when it changes.
-  const resultUrl = useMemo(
-    () => (result ? URL.createObjectURL(audioResultToBlob(result)) : ""),
-    [result],
-  );
+  // Load the persisted settings once.
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const payload = await fetchTtsAgentConfig();
+        if (cancelled) return;
+        const c = payload.config;
+        setProviderId((prev) => c.providerId || prev);
+        setModel(c.model);
+        setVoice(c.voice);
+        setLanguage(c.language);
+        setFormat((c.responseFormat as TtsOutputFormat) || "");
+        setSpeed(c.speed != null ? String(c.speed) : "");
+        setInstructions(c.instructions);
+      } catch (e) {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
     return () => {
-      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      cancelled = true;
     };
-  }, [resultUrl]);
+  }, []);
 
-  // Load models when the provider changes (fetch = synchronizing with a server).
+  const provider = providers.find((p) => p.id === providerId) ?? null;
+  const isLocal = provider?.kind === "localtts";
+  const pinned = providerId !== "";
+
+  const markDirty = () => setSaved(false);
+
+  // Load the pinned provider's models (skipped for local TTS, which owns its voice).
   useEffect(() => {
-    if (!provider) return;
+    if (!provider || isLocal) return;
     let cancelled = false;
     void (async () => {
       setLoadingModels(true);
-      setEngineError(null);
       try {
         const list = await fetchTtsModels(provider.id);
         if (cancelled) return;
-        setModels(list);
-        setModel((prev) => prev || provider.model || list[0]?.id || "");
-        setLanguage((prev) => prev || provider.language || "");
-      } catch (e) {
-        if (cancelled) return;
-        setModels(provider.models.map((id) => ({ id, name: id, voices: [], languages: [] })));
-        setModel((prev) => prev || provider.model || provider.models[0] || "");
-        setLanguage((prev) => prev || provider.language || "");
-        setEngineError(e instanceof Error ? e.message : String(e));
+        const effective =
+          list.length > 0
+            ? list
+            : provider.models.map((id) => ({ id, name: id, voices: [], languages: [] }));
+        setModels(effective);
+        // Default to a supported model (the provider's saved default, else the first one).
+        setModel((prev) =>
+          prev && effective.some((m) => m.id === prev) ? prev : provider.model || effective[0]?.id || "",
+        );
+      } catch {
+        if (!cancelled) {
+          const fallback = provider.models.map((id) => ({ id, name: id, voices: [], languages: [] }));
+          setModels(fallback);
+          setModel((prev) =>
+            prev && fallback.some((m) => m.id === prev) ? prev : provider.model || fallback[0]?.id || "",
+          );
+        }
       } finally {
         if (!cancelled) setLoadingModels(false);
       }
@@ -888,28 +891,25 @@ function Studio({
     return () => {
       cancelled = true;
     };
-  }, [provider]);
+  }, [provider, isLocal]);
 
-  // Load voices when the model changes.
+  // Load voices for the pinned provider + model.
   useEffect(() => {
-    if (!provider || !model) return;
+    if (!provider || isLocal || !model) return;
     let cancelled = false;
     void (async () => {
       setLoadingVoices(true);
+      const manual = provider.voices.map((id) => ({ id, name: id, model }));
       try {
         const list = await fetchTtsVoices(provider.id, model);
-        if (cancelled) return;
-        const manual = provider.voices.map((id) => ({ id, name: id, model }));
-        const merged = dedupeVoices([...list, ...manual]);
-        setVoices(merged);
-        setVoice((prev) =>
-          prev && merged.some((v) => v.id === prev) ? prev : provider.voice || merged[0]?.id || "",
-        );
+        if (!cancelled) {
+          const merged = dedupeVoices([...list, ...manual]);
+          setVoices(merged);
+          // Only keep a voice the selected model actually supports; otherwise clear it.
+          setVoice((prev) => (prev && merged.some((v) => v.id === prev) ? prev : merged[0]?.id || ""));
+        }
       } catch {
-        if (cancelled) return;
-        const manual = provider.voices.map((id) => ({ id, name: id, model }));
-        setVoices(manual);
-        setVoice((prev) => prev || provider.voice || manual[0]?.id || "");
+        if (!cancelled) setVoices(manual);
       } finally {
         if (!cancelled) setLoadingVoices(false);
       }
@@ -917,196 +917,233 @@ function Studio({
     return () => {
       cancelled = true;
     };
-  }, [provider, model]);
+  }, [provider, isLocal, model]);
 
-  const generate = async () => {
-    if (!provider) return;
-    setGenerating(true);
-    setEngineError(null);
-    setResult(null);
+  const onProviderChange = (id: string) => {
+    const next = providers.find((p) => p.id === id) ?? null;
+    setProviderId(id);
+    setModel(next?.model ?? "");
+    setVoice(next?.voice ?? "");
+    setLanguage(next?.language ?? "");
+    setFormat((next?.responseFormat as TtsOutputFormat) || "");
+    setSpeed("");
+    setInstructions("");
+    setModels([]);
+    setVoices([]);
+    markDirty();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError(null);
     try {
-      const audio = await synthesizeTts({
-        providerId: provider.id,
-        text,
-        model: model || undefined,
-        voice: voice || undefined,
-        language: language.trim() || undefined,
-        format: format || undefined,
-        speed: speed.trim() !== "" && Number.isFinite(Number(speed)) ? Number(speed) : undefined,
-        instructions: instructions.trim() || undefined,
+      await updateTtsAgentConfig({
+        providerId: pinned ? providerId : "",
+        model: pinned && !isLocal ? model : "",
+        voice: pinned && !isLocal ? voice : "",
+        language: pinned && !isLocal ? language.trim() : "",
+        responseFormat: pinned ? format : "",
+        speed:
+          pinned && !isLocal && speed.trim() !== "" && Number.isFinite(Number(speed))
+            ? Number(speed)
+            : null,
+        instructions: pinned && !isLocal ? instructions.trim() : "",
       });
-      setResult(audio);
+      setSaved(true);
     } catch (e) {
-      setEngineError(e instanceof Error ? e.message : String(e));
+      setSaveError(e instanceof Error ? e.message : String(e));
     } finally {
-      setGenerating(false);
+      setSaving(false);
     }
   };
 
-  if (usable.length === 0) {
-    return (
-      <section className="mb-8">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
-          <Play className="h-4 w-4 text-[var(--subtle)]" /> Generate speech
-        </h2>
-        <EmptyState icon={<KeyRound className="h-8 w-8" />}>
-          Add an API key to a cloud provider (or an endpoint for a custom provider) to start generating speech.
-        </EmptyState>
-      </section>
-    );
-  }
-
-  const definition = provider ? definitionOf(provider.kind) : undefined;
-
   return (
-    <section className="mb-4">
+    <section className="mb-6">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
-        <Play className="h-4 w-4 text-[var(--subtle)]" /> Generate speech
+        <Volume2 className="h-4 w-4 text-[var(--subtle)]" /> Agent voice
       </h2>
+      <div
+        className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg)] p-5"
+        style={{ boxShadow: "var(--shadow-chip)" }}
+      >
+        <p className="mb-4 text-[11px] leading-relaxed text-[var(--subtle)]">
+          The provider and voice the agent uses when it speaks (the generate_speech tool).
+        </p>
 
-      <div className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg)] p-5" style={{ boxShadow: "var(--shadow-chip)" }}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Provider">
-            <Select value={effectiveProviderId} onChange={(e) => setProviderId(e.target.value)}>
-              {usable.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field
-            label="Model"
-            hint={loadingModels ? "loading..." : models.length ? `${models.length}` : undefined}
-          >
-            {models.length > 0 ? (
-              <Select value={model} onChange={(e) => setModel(e.target.value)}>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </Select>
-            ) : (
-              <TextInput
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={provider?.model || "model id"}
-              />
-            )}
-          </Field>
-
-          <Field
-            label="Voice"
-            hint={loadingVoices ? "loading..." : voices.length ? `${voices.length}` : undefined}
-          >
-            {voices.length > 0 ? (
-              <Select value={voice} onChange={(e) => setVoice(e.target.value)}>
-                {voices.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                    {v.language ? ` (${v.language})` : ""}
-                  </option>
-                ))}
-              </Select>
-            ) : (
-              <TextInput
-                value={voice}
-                onChange={(e) => setVoice(e.target.value)}
-                placeholder={provider?.voice || "voice id"}
-              />
-            )}
-          </Field>
-
-          <Field label="Format" hint="output container">
-            <Select value={format} onChange={(e) => setFormat(e.target.value as TtsOutputFormat | "")}>
-              <option value="">Provider default</option>
-              {OUTPUT_FORMATS.map((f) => (
-                <option key={f} value={f}>
-                  {f.toUpperCase()}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Language" hint="optional BCP-47">
-            <TextInput
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              placeholder="en-US"
-            />
-          </Field>
-        </div>
-
-        <div className="mt-4">
-          <Field label="Text" hint={`${text.length} chars`}>
-            <TextArea
-              rows={5}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Type or paste the text you want spoken..."
-            />
-          </Field>
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Speed" hint="optional, provider-dependent">
-            <TextInput
-              value={speed}
-              onChange={(e) => setSpeed(e.target.value)}
-              placeholder="1.0"
-              inputMode="decimal"
-            />
-          </Field>
-          <Field label="Instructions" hint="optional tone / style">
-            <TextInput
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Speak warmly and slowly"
-            />
-          </Field>
-        </div>
-
-        {definition && (
-          <p className="mt-3 text-[11px] leading-relaxed text-[var(--subtle)]">{definition.description}</p>
-        )}
-
-        <div className="mt-4 flex items-center gap-2">
-          <Button onClick={() => void generate()} disabled={generating || !text.trim()}>
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            {generating ? "Generating..." : "Generate speech"}
-          </Button>
-          {provider && (
-            <Button variant="ghost" onClick={() => onConfigure(provider.id)}>
-              <Settings2 className="h-4 w-4" /> Configure
-            </Button>
-          )}
-        </div>
-
-        {engineError && (
-          <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+        {loadError && (
+          <div className="mb-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <span className="break-words">{engineError}</span>
+            <span>{loadError}</span>
           </div>
         )}
 
-        {result && resultUrl && (
-          <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] p-4">
-            <div className="mb-2 flex items-center gap-2 text-xs text-[var(--muted)]">
-              <AudioLines className="h-4 w-4" />
-              <span className="truncate">
-                {result.model} · {result.voice || "default"} · {result.format.toUpperCase()} ·{" "}
-                {(result.bytes / 1024).toFixed(0)} KB
-              </span>
+        {!loaded ? (
+          <div className="flex items-center gap-2 py-4 text-xs text-[var(--muted)]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading agent voice settings...
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Provider">
+                <Select value={providerId} onChange={(e) => onProviderChange(e.target.value)}>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.enabled ? "" : " (disabled)"}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              {pinned && !isLocal && (
+                <Field
+                  label="Model"
+                  hint={loadingModels ? "loading..." : models.length ? `${models.length}` : undefined}
+                >
+                  {models.length > 0 ? (
+                    <Select
+                      value={model}
+                      onChange={(e) => {
+                        setModel(e.target.value);
+                        markDirty();
+                      }}
+                    >
+                      {models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <TextInput
+                      value={model}
+                      onChange={(e) => {
+                        setModel(e.target.value);
+                        markDirty();
+                      }}
+                      placeholder={provider?.model || "model id"}
+                    />
+                  )}
+                </Field>
+              )}
+
+              {pinned && !isLocal && (
+                <Field
+                  label="Voice"
+                  hint={loadingVoices ? "loading..." : voices.length ? `${voices.length}` : undefined}
+                >
+                  {voices.length > 0 ? (
+                    <Select
+                      value={voice}
+                      onChange={(e) => {
+                        setVoice(e.target.value);
+                        markDirty();
+                      }}
+                    >
+                      {voices.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                          {v.language ? ` (${v.language})` : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <TextInput
+                      value={voice}
+                      onChange={(e) => {
+                        setVoice(e.target.value);
+                        markDirty();
+                      }}
+                      placeholder={provider?.voice || "voice id"}
+                    />
+                  )}
+                </Field>
+              )}
+
+              {pinned && (
+                <Field label="Format" hint="output container">
+                  <Select
+                    value={format}
+                    onChange={(e) => {
+                      setFormat(e.target.value as TtsOutputFormat | "");
+                      markDirty();
+                    }}
+                  >
+                    <option value="">Provider default</option>
+                    {OUTPUT_FORMATS.map((f) => (
+                      <option key={f} value={f}>
+                        {f.toUpperCase()}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              )}
+
+              {pinned && !isLocal && (
+                <Field label="Language" hint="optional BCP-47">
+                  <TextInput
+                    value={language}
+                    onChange={(e) => {
+                      setLanguage(e.target.value);
+                      markDirty();
+                    }}
+                    placeholder="en-US"
+                  />
+                </Field>
+              )}
+
+              {pinned && !isLocal && (
+                <Field label="Speed" hint="optional, provider-dependent">
+                  <TextInput
+                    value={speed}
+                    onChange={(e) => {
+                      setSpeed(e.target.value);
+                      markDirty();
+                    }}
+                    placeholder="1.0"
+                    inputMode="decimal"
+                  />
+                </Field>
+              )}
+
+              {pinned && !isLocal && (
+                <Field label="Instructions" hint="optional tone / style">
+                  <TextInput
+                    value={instructions}
+                    onChange={(e) => {
+                      setInstructions(e.target.value);
+                      markDirty();
+                    }}
+                    placeholder="Speak warmly and slowly"
+                  />
+                </Field>
+              )}
             </div>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <audio controls src={resultUrl} className="w-full" />
-            <div className="mt-2 flex justify-end">
-              <Button variant="outline" onClick={() => downloadAudioResult(result)}>
-                <Download className="h-4 w-4" /> Download {result.filename}
-              </Button>
-            </div>
+
+            {pinned && isLocal && (
+              <p className="mt-3 text-[11px] leading-relaxed text-[var(--subtle)]">
+                Local TTS chooses its own voice; only the output format is configurable here.
+              </p>
+            )}
+          </>
+        )}
+
+        <div className="mt-4 flex items-center gap-3">
+          <Button onClick={() => void save()} disabled={saving || !loaded}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {saving ? "Saving..." : "Save agent voice"}
+          </Button>
+          {saved && (
+            <span className="flex items-center gap-1 text-xs text-[var(--success)]">
+              <Check className="h-3.5 w-3.5" /> Saved
+            </span>
+          )}
+        </div>
+
+        {saveError && (
+          <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="break-words">{saveError}</span>
           </div>
         )}
       </div>
