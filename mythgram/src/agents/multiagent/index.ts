@@ -65,6 +65,26 @@ export class MultiAgentRunner {
   private customAgents?: import("../tools/types.js").CustomAgentsRuntime;
   private customSystemPrompts?: import("../tools/types.js").CustomSystemPromptsRuntime;
   private speech?: import("../tools/types.js").SpeechRuntime;
+  private askRequests?: import("../../services/askRequestStore.js").AskRequestStore;
+  private userProfiles?: import("../profiles/index.js").UserProfileManager;
+
+  /**
+   * Attach the human-in-the-loop information-request store (ask_for_something) (called once at
+   * boot). When set, every team agent (head/leader + members) granted the ask_for_something tool
+   * can present a form to the user and await their values. When unset, the tool returns a
+   * structured "no runtime" error.
+   */
+  setAskForSomething(store?: import("../../services/askRequestStore.js").AskRequestStore): void {
+    this.askRequests = store;
+  }
+
+  /**
+   * Attach the persistent user-profile manager (called once at boot). When set, the who_im tool
+   * reports the active user profile for every team agent.
+   */
+  setUserProfiles(manager?: import("../profiles/index.js").UserProfileManager): void {
+    this.userProfiles = manager;
+  }
 
   /**
    * Attach the persistent prompt library (called once at boot). When set, every team agent
@@ -222,6 +242,8 @@ export class MultiAgentRunner {
         scheduleStore: this.scheduleStore,
         scheduleScheduler: this.scheduleScheduler,
         channelManager: this.channelManager,
+        askRequests: this.askRequests,
+        userProfiles: this.userProfiles,
         send,
         signal,
         contextLimit: typeof request.contextLimit === "number" ? request.contextLimit : null,

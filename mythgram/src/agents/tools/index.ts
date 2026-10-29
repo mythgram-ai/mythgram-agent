@@ -2,6 +2,9 @@ import { ToolRegistry } from "./registry.js";
 import { fileReadTool } from "./fileRead.js";
 import { fileWriteTool } from "./fileWrite.js";
 import { fileListTool } from "./fileList.js";
+import { readDirectoryTool } from "./readDirectory.js";
+import { whoImTool } from "./whoIm.js";
+import { askForSomethingTool } from "./askForSomething.js";
 import { grepTool } from "./grep.js";
 import { astgrepTool } from "./astgrep.js";
 import { globTool } from "./glob.js";
@@ -107,6 +110,8 @@ export type {
   SkillRuntime,
   TodoItem,
   TodoRuntime,
+  AgentSelfInfo,
+  AgentInfoRuntime,
   MemoryFile,
   MemoryRuntime,
   KnowledgeFile,
@@ -183,6 +188,17 @@ export {
 } from "./list_available_custom_system_prompt.js";
 export { submitPlanTool } from "./submit_plan.js";
 export { askUserTool, ASK_ANSWERED, ASK_TIMEOUT, ASK_CHANNEL_UNAVAILABLE } from "./askuser.js";
+export { readDirectoryTool } from "./readDirectory.js";
+export { whoImTool, createAgentInfoRuntime, setAgentInfoClock } from "./whoIm.js";
+export {
+  askForSomethingTool,
+  buildValues,
+  ASK_FOR_SOMETHING_SUBMITTED,
+  ASK_FOR_SOMETHING_REJECTED,
+  ASK_FOR_SOMETHING_TIMEOUT,
+  ASK_FOR_SOMETHING_CHANNEL_UNAVAILABLE,
+  DEFAULT_ASK_FOR_SOMETHING_TIMEOUT_MS,
+} from "./askForSomething.js";
 export { embedUrlTool } from "./embedUrl.js";
 export { attachFilesTool, formatFileSizeLabel } from "./attachFiles.js";
 export { waitTool, WAIT_MIN_SECONDS, WAIT_MAX_SECONDS } from "./wait.js";
@@ -289,6 +305,7 @@ export function createToolRegistry(): ToolRegistry {
     fileReadTool,
     fileWriteTool,
     fileListTool,
+    readDirectoryTool,
     grepTool,
     astgrepTool,
     globTool,
@@ -303,6 +320,8 @@ export function createToolRegistry(): ToolRegistry {
     fetchWebUrlsTool,
     readImageTool,
     scanQrCodeTool,
+    whoImTool,
+    askForSomethingTool,
     callSubAgentTool,
     callMultipleSubAgentsTool,
     listSubAgentsTool,
@@ -386,6 +405,7 @@ export const tools = {
   fileReadTool,
   fileWriteTool,
   fileListTool,
+  readDirectoryTool,
   grepTool,
   astgrepTool,
   globTool,
@@ -400,6 +420,8 @@ export const tools = {
   fetchWebUrlsTool,
   readImageTool,
   scanQrCodeTool,
+  whoImTool,
+  askForSomethingTool,
   callSubAgentTool,
   callMultipleSubAgentsTool,
   listSubAgentsTool,

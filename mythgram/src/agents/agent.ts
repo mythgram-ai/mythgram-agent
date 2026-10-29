@@ -28,6 +28,7 @@ import { createKnowledgeRuntime } from "./knowledge.js";
 import { createPromptLibraryRuntime } from "./promptLibrary.js";
 import { createCustomAgentsRuntime } from "./customAgents.js";
 import { createCustomSystemPromptsRuntime } from "./customSystemPrompts.js";
+import { activeProfileInfo, createAgentInfoRuntimeFrom } from "./agentInfo.js";
 import type { KnowledgeFile, MemoryFile, MemoryRuntime, TodoItem } from "./tools/types.js";
 import type { MemoryAgentService } from "./memoryagent/index.js";
 import { ALL_MULTI_AGENT_TOOL_NAMES } from "./tools/teamTools.js";
@@ -332,6 +333,30 @@ export class AgentRunner {
   private speechRuntime?: import("./tools/types.js").SpeechRuntime;
 
   /**
+   * Attach the human-in-the-loop information-request store (ask_for_something) (called once at
+   * boot). When set, the ask_for_something tool can present a form to the user and await their
+   * values for the Main Agent and every Custom Agent (both run through this core runtime). The
+   * multi-agent team/CEO runtimes receive it through their own setters. When unset, the tool
+   * returns a structured "no runtime" error.
+   */
+  setAskForSomething(store?: import("../services/askRequestStore.js").AskRequestStore): void {
+    this.askRequests = store;
+  }
+
+  private askRequests?: import("../services/askRequestStore.js").AskRequestStore;
+
+  /**
+   * Attach the persistent user-profile manager (called once at boot). When set, the who_im tool
+   * reports the active user profile (identity this workspace belongs to). Absent = who_im omits the
+   * profile section.
+   */
+  setUserProfiles(manager?: import("./profiles/index.js").UserProfileManager): void {
+    this.userProfiles = manager;
+  }
+
+  private userProfiles?: import("./profiles/index.js").UserProfileManager;
+
+  /**
    * Execute a full autonomous turn: stream reasoning + tokens, run tools natively, and
    * loop (Thought -> Action -> Observation) until the model produces a final answer with
    * no further tool calls. The loop is UNBOUNDED — there is no iteration limit; the agent
@@ -578,6 +603,32 @@ export class AgentRunner {
         },
       });
 
+      // Agent self-description snapshot for the who_im tool. Built once per turn from the request
+      // and the live runtimes; reflects the exact tools advertised this turn.
+      const agentInfoRuntime = createAgentInfoRuntimeFrom({
+        type: request.customAgent ? "custom" : "main",
+        id: request.customAgent?.id,
+        name: request.customAgent?.name,
+        description: request.customAgent?.description,
+        provider: request.provider,
+        model: request.model,
+        visionCapable,
+        workspaceRoot: this.config.workspaceRoot,
+        contextLimit: typeof request.contextLimit === "number" ? request.contextLimit : null,
+        summaryThreshold: request.summaryThreshold ?? this.config.summaryThreshold,
+        contextManagementMethod: request.contextManagementMethod,
+        slidingWindowTruncatePercent: request.slidingWindowTruncatePercent,
+        availableTools: toolSchemas.map((s) => s.function.name),
+        skills: skillRuntime.list().map((s) => ({ name: s.name, description: s.description })),
+        subAgents: subAgentRuntime.available(),
+        mcpServers: mcpRuntime?.active ? mcpRuntime.serverNames() : [],
+        connectors: connectorRuntime.active ? connectorRuntime.connectorNames() : [],
+        userProfile: activeProfileInfo(this.userProfiles),
+        memoryFiles: memoryRuntime.files,
+        knowledgeFiles: knowledgeRuntime.files,
+        todos: todoRuntime.todos,
+      });
+
       const visibleAnswer: string[] = [];
       const visibleReasoning: string[] = [];
       let iteration = 0;
@@ -758,6 +809,9 @@ export class AgentRunner {
                 request.planApprovalTimeoutMs ?? this.config.planApprovalTimeoutMs,
               askQuestions: this.askQuestions,
               questionTimeoutMs: this.config.questionTimeoutMs,
+              askForSomething: this.askRequests,
+              contextLimit: typeof request.contextLimit === "number" ? request.contextLimit : null,
+              agentInfo: agentInfoRuntime,
               model: request.model,
               visionCapable,
               channel: request.channel ?? undefined,

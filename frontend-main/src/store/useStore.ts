@@ -4,6 +4,8 @@ import type {
   AgentTeam,
   AskQuestionInfo,
   AskQuestionStatus,
+  AskSomethingInfo,
+  AskSomethingStatus,
   AttachedFile,
   BrowserPreview,
   ChatMessage,
@@ -336,6 +338,16 @@ interface AppState {
   ) => void;
   setQuestionStatus: (convId: string, msgId: string, toolId: string, status: AskQuestionStatus) => void;
   updateQuestionForTool: (toolId: string, patch: { status?: AskQuestionStatus }) => void;
+
+  // ask_for_something form
+  setAskPending: (
+    convId: string,
+    msgId: string,
+    toolId: string,
+    info: { id: string; chatId: string; items: AskSomethingInfo["items"] },
+  ) => void;
+  setAskStatus: (convId: string, msgId: string, toolId: string, status: AskSomethingStatus) => void;
+  updateAskForTool: (toolId: string, patch: { status?: AskSomethingStatus }) => void;
 
   // Sub-agent live runs
   startSubAgent: (
@@ -1529,6 +1541,54 @@ export const useStore = create<AppState>()(
                         ? {
                             ...t,
                             ask: { ...t.ask, ...patch },
+                            status: patch.status && patch.status !== "pending" ? "ok" : t.status,
+                          }
+                        : t,
+                    ),
+                  }
+                : m,
+            ),
+          })),
+        })),
+
+      setAskPending: (convId, msgId, toolId, info) =>
+        set((s) => ({
+          conversations: patchTool(
+            s.conversations,
+            convId,
+            msgId,
+            toolId,
+            (tool) => ({ ...tool, askInput: { ...info, status: "pending" as const } }),
+            () => ({
+              id: toolId,
+              name: "ask_for_something",
+              label: `Ask for ${info.items.length} item${info.items.length === 1 ? "" : "s"}`,
+              status: "running",
+              askInput: { ...info, status: "pending" as const },
+            }),
+          ),
+        })),
+
+      setAskStatus: (convId, msgId, toolId, status) =>
+        set((s) => ({
+          conversations: patchTool(s.conversations, convId, msgId, toolId, (tool) =>
+            tool.askInput ? { ...tool, askInput: { ...tool.askInput, status } } : tool,
+          ),
+        })),
+
+      updateAskForTool: (toolId, patch) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) => ({
+            ...c,
+            messages: c.messages.map((m) =>
+              m.tools?.some((t) => t.askInput?.id === toolId)
+                ? {
+                    ...m,
+                    tools: m.tools.map((t) =>
+                      t.askInput?.id === toolId
+                        ? {
+                            ...t,
+                            askInput: { ...t.askInput, ...patch },
                             status: patch.status && patch.status !== "pending" ? "ok" : t.status,
                           }
                         : t,

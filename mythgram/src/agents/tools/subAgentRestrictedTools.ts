@@ -54,10 +54,14 @@ export const SUB_AGENT_RESTRICTED_TOOLS: readonly string[] = [
   "delete_skill",
   "submit_plan",
   "ask_question_to_user",
+  "ask_for_something",
   "embed_url",
   "attach_files",
   "TodoWrite",
   "read_todos",
+  // Agent self-description + bulk directory reads — only for main/custom/team/CEO agents.
+  "who_im",
+  "read_directory",
   // Multi-agent team collaboration tools — only for team agents (head/members), never sub-agents.
   "delegate_task_or_send_message",
   "get_team_members_status",

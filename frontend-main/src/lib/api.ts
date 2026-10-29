@@ -116,6 +116,57 @@ export async function submitAnswers(
   }
 }
 
+/** One value the user supplied (or rejected) for an ask_for_something item. */
+export interface AskValuePayload {
+  request: string;
+  value: string;
+  rejected: boolean;
+}
+
+/**
+ * Submit the user's values to a pending ask_for_something request. Returns false when the backend
+ * reports the request is no longer pending (already submitted, timed out, or unknown).
+ */
+export async function submitAskValues(
+  chatId: string,
+  toolCallId: string,
+  values: AskValuePayload[],
+): Promise<boolean> {
+  try {
+    const data = await requestJson<{ ok?: boolean }>(
+      routeUrl(API_ROUTES.chatAskAnswer, { params: { chatId, toolCallId } }),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values }),
+      },
+    );
+    return data.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reject a whole pending ask_for_something request (the "Reject all" action). Returns false when
+ * the backend reports the request is no longer pending.
+ */
+export async function rejectAsk(chatId: string, toolCallId: string): Promise<boolean> {
+  try {
+    const data = await requestJson<{ ok?: boolean }>(
+      routeUrl(API_ROUTES.chatAskAnswer, { params: { chatId, toolCallId } }),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rejected: true }),
+      },
+    );
+    return data.ok === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Submit the user's decision for a submitted plan. Returns false when the backend reports the
  * plan is no longer pending (already decided, timed out, or unknown).

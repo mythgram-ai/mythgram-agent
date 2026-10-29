@@ -94,6 +94,37 @@ export interface AskQuestionInfo {
   status: AskQuestionStatus;
 }
 
+/** One piece of information the agent requested from the user (ask_for_something). */
+export interface AskSomethingItem {
+  /** Explains what information the user needs to provide and why. */
+  request: string;
+  /** Placeholder displayed inside the item's input field. */
+  placeholder: string;
+}
+
+export type AskSomethingStatus = "pending" | "submitted" | "rejected" | "timeout";
+
+/** One user-supplied value, paired with the request it answers. */
+export interface AskSomethingValue {
+  /** The request this value answers (exact text the tool provided). */
+  request: string;
+  /** The value the user typed (empty when the item was rejected). */
+  value: string;
+  /** True when the user rejected this individual item. */
+  rejected: boolean;
+}
+
+/** Information-request state attached to the ask_for_something tool for the form block. */
+export interface AskSomethingInfo {
+  /** The backend tool-call id — used to post the user's values. */
+  id: string;
+  /** Chat session the request belongs to. */
+  chatId: string;
+  /** The items the user is filling in. */
+  items: AskSomethingItem[];
+  status: AskSomethingStatus;
+}
+
 export interface ToolActivity {
   id: string;
   name: string;
@@ -118,6 +149,8 @@ export interface ToolActivity {
   plan?: PlanApprovalInfo;
   /** Human-in-the-loop question-answer block rendered for ask_question_to_user. */
   ask?: AskQuestionInfo;
+  /** Human-in-the-loop information-request form rendered for ask_for_something. */
+  askInput?: AskSomethingInfo;
 }
 
 /** Structured result streamed back for the read_image tool (no image payload — metadata only). */
@@ -1074,6 +1107,8 @@ export interface SSEEventData {
   plan?: string;
   // ask_question_to_user fields
   questions?: Array<{ question?: string; context?: string; options?: string[] }>;
+  // ask_for_something fields
+  items?: Array<{ request?: string; placeholder?: string }>;
   // todo_updated (TodoWrite) fields
   todos?: TodoItem[];
   // memory_updated (memory tool) fields

@@ -239,6 +239,11 @@ export class ConnectorRuntime {
     return [...this.byName.keys()];
   }
 
+  /** Human-readable names of the apps connected this turn. */
+  connectorNames(): string[] {
+    return this.connectorIds.map((id) => getConnector(id)?.name ?? id);
+  }
+
   /** True when `name` is a connector tool available this turn. */
   has(name: string): boolean {
     return this.byName.has((name ?? "").trim());
@@ -314,9 +319,7 @@ export class ConnectorRuntime {
   /** One-line hint appended to an agent's system prompt when connectors are active. */
   hint(): string {
     if (this.connectorIds.length === 0) return "";
-    const names = this.connectorIds
-      .map((id) => getConnector(id)?.name ?? id)
-      .join(", ");
+    const names = this.connectorNames().join(", ");
     return (
       `Connected apps (${names}): you have native ${this.size} app tool(s) available ` +
       `(e.g. ${[...this.byName.keys()].slice(0, 6).join(", ")}${this.size > 6 ? ", ..." : ""}). ` +

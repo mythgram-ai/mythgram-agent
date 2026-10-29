@@ -9,6 +9,7 @@ import { ChatRunner } from "./agents/chat.js";
 import { SessionStore } from "./services/sessionStore.js";
 import { PlanApprovalStore } from "./services/planApprovalStore.js";
 import { QuestionStore } from "./services/questionStore.js";
+import { AskRequestStore } from "./services/askRequestStore.js";
 import { buildChatRouter } from "./api/chat.js";
 import { buildProviderRouter } from "./api/providers.js";
 import { buildFilesRouter } from "./api/files.js";
@@ -58,6 +59,10 @@ function main(): void {
   const store = new SessionStore();
   const planApprovals = new PlanApprovalStore();
   const askQuestions = new QuestionStore();
+  // Human-in-the-loop information requests (ask_for_something): the tool registers a pending form
+  // here and the chat router supplies the user's values. Shared by the Main Agent, every Custom
+  // Agent, and every team/CEO agent.
+  const askRequests = new AskRequestStore();
   // The background memory agent: runs entirely in the backend, triggered after every
   // completed main-agent turn, persisting everything into the local SQLite database.
   const memoryAgent = new MemoryAgentService(providers, tools, config, db);
@@ -225,6 +230,20 @@ function main(): void {
   multiAgent.setSpeechRuntime(speechRuntime);
   ceoAgent.setSpeechRuntime(speechRuntime);
 
+  // Attach the human-in-the-loop information-request store (ask_for_something) to every surface
+  // that exposes the tool: the Main Agent (and every Custom Agent through the same core runtime),
+  // the team agents, and the CEO-system agents. Sub-agents, chat mode, and the memory agent never
+  // receive it, so the tool refuses to run there.
+  agent.setAskForSomething(askRequests);
+  multiAgent.setAskForSomething(askRequests);
+  ceoAgent.setAskForSomething(askRequests);
+
+  // Attach the persistent user-profile manager so the who_im tool can report the active profile on
+  // every surface that exposes it.
+  agent.setUserProfiles(userProfiles);
+  multiAgent.setUserProfiles(userProfiles);
+  ceoAgent.setUserProfiles(userProfiles);
+
   const app = express();
   app.use(
     cors({
@@ -262,6 +281,7 @@ function main(): void {
       config,
       planApprovals,
       askQuestions,
+      askRequests,
       db,
       multiAgent,
       ceoAgent,

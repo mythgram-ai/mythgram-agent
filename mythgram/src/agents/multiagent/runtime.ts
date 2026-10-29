@@ -16,6 +16,7 @@ import type {
 } from "../tools/types.js";
 import { createSubAgentRuntime } from "../subagents.js";
 import { resolveDefaultSubAgents, mergeDefaultSubAgents } from "../sub-agents/index.js";
+import { activeProfileInfo, createAgentInfoRuntimeFrom } from "../agentInfo.js";
 import { allowedTeamAgentTools } from "../tools/teamTools.js";
 import { createScheduleRuntime } from "../tools/scheduleRuntime.js";
 import type { ScheduleStore } from "../../cron/store.js";
@@ -121,6 +122,10 @@ export interface TeamOrchestratorDeps {
   connectorManager?: import("../connectors/manager.js").ConnectorManager;
   /** The messaging-channel manager — lets team agents use the channel_* tools. */
   channelManager?: import("../../channels/manager.js").ChannelManager;
+  /** The human-in-the-loop information-request store (ask_for_something) for every team agent. */
+  askRequests?: import("../../services/askRequestStore.js").AskRequestStore;
+  /** The persistent user-profile manager — lets who_im report the active profile. */
+  userProfiles?: import("../profiles/index.js").UserProfileManager;
   /** Raw SSE emitter onto the turn buffer. */
   send: (event: string, data: Record<string, unknown>) => void;
   signal: AbortSignal;
@@ -514,6 +519,32 @@ export class TeamOrchestrator {
       mcp: this.deps.mcp ?? undefined,
       mcpManager: this.deps.mcpManager,
       channelManager: this.deps.channelManager,
+      askForSomething: this.deps.askRequests,
+      contextLimit: typeof this.deps.contextLimit === "number" ? this.deps.contextLimit : null,
+      agentInfo: createAgentInfoRuntimeFrom({
+        type: actor.context.role === "leader" ? "team_leader" : "team_member",
+        id: actor.context.id,
+        name: actor.context.id,
+        description: actor.context.description,
+        role: actor.context.role,
+        provider: this.deps.providerId,
+        model: this.deps.model,
+        visionCapable: this.visionCapable,
+        workspaceRoot: this.deps.config.workspaceRoot,
+        contextLimit: typeof this.deps.contextLimit === "number" ? this.deps.contextLimit : null,
+        summaryThreshold: this.deps.summaryThreshold,
+        contextManagementMethod: this.deps.contextManagementMethod,
+        slidingWindowTruncatePercent: this.deps.slidingWindowTruncatePercent,
+        availableTools: [...allowed],
+        skills: this.deps.skills.list().map((s) => ({ name: s.name, description: s.description })),
+        subAgents: actor.subAgentRuntime.available(),
+        mcpServers: this.deps.mcp?.active ? this.deps.mcp.serverNames() : [],
+        connectors: this.deps.connectors.active ? this.deps.connectors.connectorNames() : [],
+        userProfile: activeProfileInfo(this.deps.userProfiles),
+        memoryFiles: this.deps.memory.files,
+        knowledgeFiles: this.deps.knowledge.files,
+        todos: this.deps.todos.todos,
+      }),
       model: this.deps.model,
       visionCapable: this.visionCapable,
       availableToolNames: [

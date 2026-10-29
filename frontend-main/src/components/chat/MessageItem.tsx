@@ -6,8 +6,14 @@ import { ToolChip } from "./ToolChip";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { SubmitPlanBlock } from "./SubmitPlanBlock";
 import { AskQuestionBlock } from "./AskQuestionBlock";
+import { AskSomethingBlock } from "./AskSomethingBlock";
 import { TeamRunView } from "./TeamRunView";
 import { SavePromptModal } from "@/components/panels/PromptLibraryPanel";
+
+/** Tools that render as full-width blocks instead of inline chips. */
+function isBlockTool(name: string): boolean {
+  return name === "submit_plan" || name === "ask_question_to_user" || name === "ask_for_something";
+}
 
 function MessageItemImpl({ message }: { message: ChatMessage }) {
   const [showReasoning, setShowReasoning] = useState(false);
@@ -43,13 +49,9 @@ function MessageItemImpl({ message }: { message: ChatMessage }) {
   }
 
   const tools = message.tools ?? [];
-  // submit_plan / ask_question_to_user render as full-width blocks, not inline chips.
-  const blockTools = tools.filter(
-    (t) => t.name === "submit_plan" || t.name === "ask_question_to_user",
-  );
-  const chipTools = tools.filter(
-    (t) => t.name !== "submit_plan" && t.name !== "ask_question_to_user",
-  );
+  // submit_plan / ask_question_to_user / ask_for_something render as full-width blocks, not chips.
+  const blockTools = tools.filter((t) => isBlockTool(t.name));
+  const chipTools = tools.filter((t) => !isBlockTool(t.name));
 
   const hasContent = message.content.trim().length > 0;
   const isTeam = Boolean(message.team);
@@ -99,6 +101,8 @@ function MessageItemImpl({ message }: { message: ChatMessage }) {
         {blockTools.map((tool) =>
           tool.name === "submit_plan" ? (
             <SubmitPlanBlock key={tool.id} tool={tool} />
+          ) : tool.name === "ask_for_something" ? (
+            <AskSomethingBlock key={tool.id} tool={tool} />
           ) : (
             <AskQuestionBlock key={tool.id} tool={tool} />
           ),

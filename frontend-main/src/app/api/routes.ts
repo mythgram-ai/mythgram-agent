@@ -128,6 +128,12 @@ export const API_ROUTES = {
     path: "/api/chat/question/:chatId/:toolCallId",
     description: "Submit the user's answers to the ask_question_to_user tool.",
   },
+  chatAskAnswer: {
+    name: "chat.ask.answer",
+    method: "POST",
+    path: "/api/chat/ask/:chatId/:toolCallId",
+    description: "Submit the user's values (or a rejection) to the ask_for_something tool.",
+  },
   filesTree: {
     name: "files.tree",
     method: "GET",

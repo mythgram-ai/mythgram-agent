@@ -238,6 +238,20 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
       break;
     }
 
+    case "ask_for_something": {
+      const askId = String(data.id ?? uid("tool"));
+      const items = (data.items ?? []).map((it) => ({
+        request: String(it?.request ?? ""),
+        placeholder: String(it?.placeholder ?? ""),
+      }));
+      s.setAskPending(convId, msgId, askId, {
+        id: askId,
+        chatId: String(data.chat_id ?? convId),
+        items,
+      });
+      break;
+    }
+
     case "tool_result": {
       const ok = Boolean(data.ok);
       const id = String(data.id ?? uid("tool"));
@@ -298,6 +312,23 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
         (result?.decision === "answered" || result?.decision === "timeout")
       ) {
         s.setQuestionStatus(convId, msgId, id, result.decision === "answered" ? "answered" : "timeout");
+      }
+      if (
+        name === "ask_for_something" &&
+        (result?.decision === "submitted" ||
+          result?.decision === "rejected" ||
+          result?.decision === "timeout")
+      ) {
+        s.setAskStatus(
+          convId,
+          msgId,
+          id,
+          result.decision === "submitted"
+            ? "submitted"
+            : result.decision === "rejected"
+              ? "rejected"
+              : "timeout",
+        );
       }
       ctx.onFilesChanged?.();
       break;

@@ -227,6 +227,11 @@ export class McpRuntime {
     return [...this.byName.keys()];
   }
 
+  /** Human-readable names of the MCP servers contributing tools this turn. */
+  serverNames(): string[] {
+    return this.serverIds.map((id) => this.manager.get(id)?.name ?? id);
+  }
+
   /** True when `name` is an MCP tool available this turn. */
   has(name: string): boolean {
     return this.byName.has((name ?? "").trim());
@@ -303,9 +308,7 @@ export class McpRuntime {
   /** One-line hint appended to an agent's system prompt when MCP is active. */
   hint(): string {
     if (this.serverIds.length === 0) return "";
-    const names = this.serverIds
-      .map((id) => this.manager.get(id)?.name ?? id)
-      .join(", ");
+    const names = this.serverNames().join(", ");
     return (
       `Connected MCP servers (${names}): you have native ${this.size} MCP tool(s) available ` +
       `(e.g. ${[...this.byName.keys()].slice(0, 6).join(", ")}${this.size > 6 ? ", ..." : ""}). ` +

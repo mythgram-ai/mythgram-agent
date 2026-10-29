@@ -752,6 +752,67 @@ export interface SpeechRuntime {
   synthesize(input: { text: string; signal?: AbortSignal }): Promise<SpeechSynthesis>;
 }
 
+/**
+ * The self-description one agent can report about itself through the `who_im` tool. Every field is
+ * best-effort: a surface only fills the sections it actually knows about. Data is assembled per turn
+ * (or per agent run) from the request, the live runtimes, and the persistent managers, then exposed
+ * immutably to the tool.
+ */
+export interface AgentSelfInfo {
+  /** Core identity: which kind of agent this is, plus its id/name/role when it has one. */
+  agent: {
+    type: "main" | "custom" | "team_leader" | "team_member" | "ceo";
+    id?: string;
+    name?: string;
+    description?: string;
+    role?: string;
+  };
+  /** The model + provider currently serving this agent, and whether it accepts images. */
+  model: {
+    id?: string;
+    provider?: string;
+    vision_capable?: boolean;
+  };
+  /** Context-window facts and the exact set of tools this agent may call. */
+  context: {
+    context_limit: number | null;
+    summary_threshold?: number;
+    context_management_method?: string;
+    sliding_window_truncate_percent?: number;
+    available_tools: string[];
+    tool_count: number;
+  };
+  /** Absolute workspace root all file tools are sandboxed to. */
+  workspace_root: string;
+  /** Enabled skills available to this agent (name + description). */
+  skills?: Array<{ name: string; description: string }>;
+  /** Sub-agents this agent can delegate to (name + description). */
+  sub_agents?: Array<{ name: string; description: string }>;
+  /** Names of the connected + enabled MCP servers. */
+  mcp_servers?: string[];
+  /** Names/ids of the connected application connectors (connected apps). */
+  connectors?: string[];
+  /** The active user profile (identity this workspace belongs to). */
+  user_profile?: { id?: string; name?: string; description?: string };
+  /** A summary of the persistent memory base. */
+  memory?: { file_count: number; paths: string[] };
+  /** A summary of the curated knowledge base. */
+  knowledge?: { file_count: number; paths: string[] };
+  /** A summary of the session todo list. */
+  todos?: { total: number; pending: number; in_progress: number; completed: number };
+  /** ISO timestamp of when this snapshot was produced. */
+  generated_at: string;
+}
+
+/**
+ * Runtime bridge injected into the ToolContext for the surfaces that expose `who_im` (Main Agent,
+ * Custom Agents, and every team/CEO agent). Absent from sub-agents, chat mode, and the memory agent.
+ */
+export interface AgentInfoRuntime {
+  /** Return the agent's current self-description snapshot. Never throws. */
+  describe(): AgentSelfInfo;
+}
+
 /** Runtime context handed to a tool on execution. */
 export interface ToolContext {
   /** Absolute path all file operations are sandboxed to. */
@@ -768,6 +829,25 @@ export interface ToolContext {
   askQuestions?: import("../../services/questionStore.js").QuestionStore;
   /** How long the user's questions wait for answers before auto-continuing. */
   questionTimeoutMs?: number;
+  /**
+   * Human-in-the-loop information-request runtime (ask_for_something) — present for the Main Agent,
+   * Custom Agents, and every team/CEO agent; absent from sub-agents, chat mode, and the memory agent.
+   * Lets the tool present a form and await the user's supplied values.
+   */
+  askForSomething?: import("../../services/askRequestStore.js").AskRequestStore;
+  /** How long an ask_for_something form waits for the user before auto-continuing (ms). */
+  askForSomethingTimeoutMs?: number;
+  /**
+   * The effective context-window limit (tokens) of the model serving this turn, when known.
+   * Used by read_directory to decide whether a directory's combined content fits the available
+   * context budget. Null/undefined = unknown (a conservative default budget is applied).
+   */
+  contextLimit?: number | null;
+  /**
+   * Agent self-description runtime (who_im) — present for the Main Agent, Custom Agents, and every
+   * team/CEO agent; absent from sub-agents, chat mode, and the memory agent.
+   */
+  agentInfo?: AgentInfoRuntime;
   /** Timeout (ms) applied to shell commands. */
   shellTimeoutMs: number;
   /** Abort signal so long running tools stop when the turn is cancelled. */

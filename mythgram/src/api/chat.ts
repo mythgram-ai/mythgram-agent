@@ -5,6 +5,7 @@ import { SessionEventBuffer } from "../services/eventBuffer.js";
 import type { SessionStore, StoredMessage } from "../services/sessionStore.js";
 import type { PlanApprovalStore } from "../services/planApprovalStore.js";
 import type { QuestionStore } from "../services/questionStore.js";
+import type { AskRequestStore } from "../services/askRequestStore.js";
 import type { SkillDefinition, SkillFileDefinition, SubAgentDefinition } from "../agents/tools/types.js";
 import { normalizeEffort } from "../agents/providers/reasoning.js";
 import { normalizeTodos } from "../agents/todos.js";
@@ -412,6 +413,7 @@ export function buildChatRouter(
   config: AppConfig,
   planApprovals: PlanApprovalStore,
   askQuestions: QuestionStore,
+  askRequests: AskRequestStore,
   db: MythgramDatabase,
   multiAgent: MultiAgentRunner,
   ceoAgent: CeoAgentRunner,
@@ -568,6 +570,49 @@ export function buildChatRouter(
     }
 
     const supplied = askQuestions.submitAnswers(chatId, toolCallId, answers);
+    res.json({ ok: supplied });
+  });
+
+  /**
+   * Supply the user's values for a pending ask_for_something request, or reject the whole request.
+   *   body: { values: [{ request: string, value: string, rejected?: boolean }] }
+   *       | { rejected: true }
+   * A no-op (ok:false) is returned when no matching pending request exists (already submitted,
+   * timed out, or aborted).
+   */
+  router.post("/ask/:chatId/:toolCallId", (req: Request, res: Response) => {
+    const chatId = String(req.params.chatId);
+    const toolCallId = String(req.params.toolCallId);
+    const body = (req.body ?? {}) as { values?: unknown; rejected?: unknown };
+
+    // Reject-all is a distinct outcome: no values are supplied and the request is closed.
+    if (body.rejected === true && body.values === undefined) {
+      const rejected = askRequests.reject(chatId, toolCallId);
+      res.json({ ok: rejected });
+      return;
+    }
+
+    if (!Array.isArray(body.values)) {
+      res
+        .status(400)
+        .json({ error: "values must be an array of { request, value, rejected? } objects, or rejected: true." });
+      return;
+    }
+
+    const values = body.values
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+      .map((item) => ({
+        request: typeof item.request === "string" ? item.request : "",
+        value: typeof item.value === "string" ? item.value : "",
+        rejected: item.rejected === true,
+      }));
+
+    if (values.length === 0) {
+      res.status(400).json({ error: "At least one value entry is required." });
+      return;
+    }
+
+    const supplied = askRequests.submit(chatId, toolCallId, values);
     res.json({ ok: supplied });
   });
 
