@@ -97,6 +97,8 @@ import { sendMessageToCommunicationChannelTool } from "./send_message_to_communi
 import { generateSpeechTool } from "./generate_speech.js";
 import { archiveFilesTool } from "./archive_files.js";
 import { extractArchiveTool } from "./extract_archive.js";
+import { fetchTextFromImageTool } from "./fetch_text_from_image.js";
+import { githubRepositorySearchTool } from "./github_repository_search.js";
 
 export { ToolRegistry } from "./registry.js";
 export type {
@@ -261,6 +263,8 @@ export { sendMessageToCommunicationChannelTool } from "./send_message_to_communi
 export { generateSpeechTool } from "./generate_speech.js";
 export { archiveFilesTool } from "./archive_files.js";
 export { extractArchiveTool } from "./extract_archive.js";
+export { fetchTextFromImageTool } from "./fetch_text_from_image.js";
+export { githubRepositorySearchTool } from "./github_repository_search.js";
 export {
   ARCHIVE_FORMATS,
   FORMAT_EXTENSION,
@@ -409,6 +413,8 @@ export function createToolRegistry(): ToolRegistry {
     generateSpeechTool,
     archiveFilesTool,
     extractArchiveTool,
+    fetchTextFromImageTool,
+    githubRepositorySearchTool,
     sendResponsesTool,
   ]);
 }
@@ -511,5 +517,7 @@ export const tools = {
   generateSpeechTool,
   archiveFilesTool,
   extractArchiveTool,
+  fetchTextFromImageTool,
+  githubRepositorySearchTool,
   sendResponsesTool,
 };
