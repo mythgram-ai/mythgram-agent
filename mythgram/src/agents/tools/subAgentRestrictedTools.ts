@@ -62,6 +62,9 @@ export const SUB_AGENT_RESTRICTED_TOOLS: readonly string[] = [
   // Agent self-description + bulk directory reads — only for main/custom/team/CEO agents.
   "who_im",
   "read_directory",
+  // Archive creation/extraction — only for main/custom/team/CEO agents, never sub-agents.
+  "archive_files",
+  "extract_archive",
   // Multi-agent team collaboration tools — only for team agents (head/members), never sub-agents.
   "delegate_task_or_send_message",
   "get_team_members_status",

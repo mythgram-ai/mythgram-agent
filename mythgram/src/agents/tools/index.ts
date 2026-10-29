@@ -95,6 +95,8 @@ import { disconnectChannelsTool } from "./disconnect_channels.js";
 import { getChannelStatusTool } from "./get_channel_status.js";
 import { sendMessageToCommunicationChannelTool } from "./send_message_to_communication_channel.js";
 import { generateSpeechTool } from "./generate_speech.js";
+import { archiveFilesTool } from "./archive_files.js";
+import { extractArchiveTool } from "./extract_archive.js";
 
 export { ToolRegistry } from "./registry.js";
 export type {
@@ -257,6 +259,14 @@ export { disconnectChannelsTool } from "./disconnect_channels.js";
 export { getChannelStatusTool } from "./get_channel_status.js";
 export { sendMessageToCommunicationChannelTool } from "./send_message_to_communication_channel.js";
 export { generateSpeechTool } from "./generate_speech.js";
+export { archiveFilesTool } from "./archive_files.js";
+export { extractArchiveTool } from "./extract_archive.js";
+export {
+  ARCHIVE_FORMATS,
+  FORMAT_EXTENSION,
+  PASSWORD_FORMATS,
+  type ArchiveFormat,
+} from "./archiveSupport.js";
 export {
   CHANNEL_MANAGEMENT_TOOL_NAMES,
   isChannelManagementTool,
@@ -397,6 +407,8 @@ export function createToolRegistry(): ToolRegistry {
     getChannelStatusTool,
     sendMessageToCommunicationChannelTool,
     generateSpeechTool,
+    archiveFilesTool,
+    extractArchiveTool,
     sendResponsesTool,
   ]);
 }
@@ -497,5 +509,7 @@ export const tools = {
   getChannelStatusTool,
   sendMessageToCommunicationChannelTool,
   generateSpeechTool,
+  archiveFilesTool,
+  extractArchiveTool,
   sendResponsesTool,
 };
