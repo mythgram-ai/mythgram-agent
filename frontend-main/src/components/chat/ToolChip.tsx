@@ -105,6 +105,7 @@ const ICONS: Record<string, typeof Terminal> = {
   grep: Search,
   astgrep: Braces,
   glob: FolderTree,
+  lsp: Braces,
   str_replace: Pencil,
   apply_multiple_edits: PencilLine,
   apply_patch: FileDiff,
@@ -280,6 +281,7 @@ export function ToolChip({ tool }: { tool: ToolActivity }) {
   if (tool.name === "grep") return <GrepChip tool={tool} />;
   if (tool.name === "astgrep") return <AstGrepChip tool={tool} />;
   if (tool.name === "glob") return <GlobChip tool={tool} />;
+  if (tool.name === "lsp") return <LspChip tool={tool} />;
   if (tool.name === "str_replace") return <StrReplaceChip tool={tool} />;
   if (tool.name === "apply_multiple_edits") return <ApplyEditsChip tool={tool} />;
   if (tool.name === "apply_patch") return <ApplyPatchChip tool={tool} />;
@@ -810,6 +812,192 @@ function GlobChip({ tool }: { tool: ToolActivity }) {
           {typeof data?.message === "string" && data.message && (
             <div className="text-[var(--muted)]">{data.message}</div>
           )}
+        </>
+      )}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ lsp */
+
+const LSP_OPERATION_LABELS: Record<string, string> = {
+  goToDefinition: "Go to definition",
+  findReferences: "Find references",
+  hover: "Hover",
+  documentSymbol: "Document symbols",
+  workspaceSymbol: "Workspace symbols",
+  goToImplementation: "Go to implementation",
+  prepareCallHierarchy: "Call hierarchy",
+  incomingCalls: "Incoming calls",
+  outgoingCalls: "Outgoing calls",
+};
+
+function LspLocationRow({ location }: { location: any }) {
+  return (
+    <div className="flex items-start gap-1.5 font-mono text-[11px]">
+      <span className="flex shrink-0 items-center gap-0.5 text-[var(--muted)]">
+        <FileText className="h-2.5 w-2.5" />
+        {location.path}
+      </span>
+      <span className="flex shrink-0 items-center gap-0.5 text-[var(--muted)]">
+        <Hash className="h-2.5 w-2.5" />
+        {location.line}:{location.character}
+      </span>
+      {location.preview != null && (
+        <span className="whitespace-pre-wrap break-all text-[var(--fg)]">{location.preview}</span>
+      )}
+    </div>
+  );
+}
+
+function LspSymbolRow({ symbol }: { symbol: any }) {
+  return (
+    <div
+      className="flex items-start gap-1.5 font-mono text-[11px]"
+      style={{ paddingLeft: `${(symbol.depth ?? 0) * 12}px` }}
+    >
+      <Pill tone="accent">{symbol.kind}</Pill>
+      <span className="font-medium text-[var(--fg)]">{symbol.name}</span>
+      {symbol.detail && <span className="text-[var(--muted)]">— {symbol.detail}</span>}
+      {symbol.path && (
+        <span className="ml-auto flex shrink-0 items-center gap-0.5 text-[var(--muted)]">
+          <FileText className="h-2.5 w-2.5" />
+          {symbol.path}:{symbol.line}:{symbol.character}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function LspHierarchyRow({ item }: { item: any }) {
+  return (
+    <div className="flex items-start gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] p-1.5 font-mono text-[11px]">
+      <Pill tone="accent">{item.kind}</Pill>
+      <span className="font-medium text-[var(--fg)]">{item.name}</span>
+      {item.detail && <span className="text-[var(--muted)]">— {item.detail}</span>}
+      <span className="ml-auto flex shrink-0 items-center gap-0.5 text-[var(--muted)]">
+        <FileText className="h-2.5 w-2.5" />
+        {item.path}:{item.line}:{item.character}
+      </span>
+    </div>
+  );
+}
+
+function LspCallRow({ call }: { call: any }) {
+  return (
+    <div className="flex items-start gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] p-1.5 font-mono text-[11px]">
+      <Pill tone={call.direction === "incoming" ? "accent" : "default"}>{call.direction}</Pill>
+      <Pill>{call.kind}</Pill>
+      <span className="font-medium text-[var(--fg)]">{call.name}</span>
+      {call.detail && <span className="text-[var(--muted)]">— {call.detail}</span>}
+      <span className="ml-auto flex shrink-0 items-center gap-0.5 text-[var(--muted)]">
+        <FileText className="h-2.5 w-2.5" />
+        {call.path}:{call.line}:{call.character}
+      </span>
+    </div>
+  );
+}
+
+function LspChip({ tool }: { tool: ToolActivity }) {
+  const { data, error, args, hasResult } = parts(tool);
+  const operation: string = data?.operation ?? args.operation ?? "lsp";
+  const filePath: string = data?.file_path ?? args.filePath ?? tool.filePath ?? "";
+  const line = data?.line ?? args.line;
+  const character = data?.character ?? args.character;
+  const server = (data?.server ?? {}) as { id?: string; name?: string; command?: string };
+  const languageId = typeof data?.language_id === "string" ? data.language_id : "";
+  const query = typeof data?.query === "string" ? data.query : "";
+  const locations: any[] = Array.isArray(data?.locations) ? data.locations : [];
+  const symbols: any[] = Array.isArray(data?.symbols) ? data.symbols : [];
+  const hierarchy: any[] = Array.isArray(data?.hierarchy) ? data.hierarchy : [];
+  const calls: any[] = Array.isArray(data?.calls) ? data.calls : [];
+  const contents = typeof data?.contents === "string" ? data.contents : "";
+  const count =
+    typeof data?.count === "number"
+      ? data.count
+      : locations.length + symbols.length + hierarchy.length + calls.length;
+  const position = line != null && character != null ? `${line}:${character}` : "";
+
+  return (
+    <Shell
+      icon={<Braces className="h-3.5 w-3.5" />}
+      label={tool.label || `LSP ${operation}`}
+      status={tool.status}
+      expandable={hasResult || Boolean(args.operation)}
+      pills={
+        <>
+          <Pill tone="accent">{LSP_OPERATION_LABELS[operation] ?? operation}</Pill>
+          {count > 0 && <Pill>{count} result(s)</Pill>}
+          {data?.truncated && <Pill tone="warn">truncated</Pill>}
+        </>
+      }
+      panel={() => (
+        <>
+          {error?.message && <div className="text-[var(--danger)]">LSP failed: {error.message}</div>}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {filePath && (
+              <Pill>
+                <FileText className="h-2.5 w-2.5" />
+                <span className="font-mono">{filePath}</span>
+              </Pill>
+            )}
+            {position && <Pill>line {position}</Pill>}
+            {query && (
+              <Pill>
+                query: <span className="font-mono">{query}</span>
+              </Pill>
+            )}
+            {server.name && <Pill tone="accent">{server.name}</Pill>}
+            {languageId && <Pill tone="off">{languageId}</Pill>}
+          </div>
+          {contents && (
+            <div>
+              <Label>Hover</Label>
+              <Pre className="mt-1">{contents}</Pre>
+            </div>
+          )}
+          {locations.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <Label>Locations</Label>
+              {locations.map((loc, i) => (
+                <LspLocationRow key={i} location={loc} />
+              ))}
+            </div>
+          )}
+          {symbols.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <Label>Symbols</Label>
+              {symbols.map((symbol, i) => (
+                <LspSymbolRow key={i} symbol={symbol} />
+              ))}
+            </div>
+          )}
+          {hierarchy.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <Label>Call hierarchy</Label>
+              {hierarchy.map((item, i) => (
+                <LspHierarchyRow key={i} item={item} />
+              ))}
+            </div>
+          )}
+          {calls.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <Label>Calls</Label>
+              {calls.map((call, i) => (
+                <LspCallRow key={i} call={call} />
+              ))}
+            </div>
+          )}
+          {!error &&
+            !contents &&
+            locations.length === 0 &&
+            symbols.length === 0 &&
+            hierarchy.length === 0 &&
+            calls.length === 0 && (
+              <div className="text-[var(--muted)]">
+                {hasResult ? "No results." : "Querying the language server..."}
+              </div>
+            )}
         </>
       )}
     />

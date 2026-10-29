@@ -38,6 +38,9 @@
  *      organize_slides, get_available_slides_template, present_slides,
  *      ask_user_to_choose_slides_template, read_slides_template, manage_slides,
  *      save_slides_as_template
+ *  - Language-server intelligence (long-lived server processes) — only for
+ *    main/custom/team/CEO agents, never sub-agents:
+ *      lsp
  *
  * This list is the ONE source of truth. It is reused by:
  *  - subagents.ts (SUB_AGENT_EXCLUDED_TOOLS)         — runtime enforcement for every sub-agent run
@@ -66,6 +69,8 @@ export const SUB_AGENT_RESTRICTED_TOOLS: readonly string[] = [
   // Agent self-description + bulk directory reads — only for main/custom/team/CEO agents.
   "who_im",
   "read_directory",
+  // Language-server intelligence — only for main/custom/team/CEO agents, never sub-agents.
+  "lsp",
   // Archive creation/extraction — only for main/custom/team/CEO agents, never sub-agents.
   "archive_files",
   "extract_archive",

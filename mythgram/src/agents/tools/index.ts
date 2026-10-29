@@ -8,6 +8,7 @@ import { askForSomethingTool } from "./askForSomething.js";
 import { grepTool } from "./grep.js";
 import { astgrepTool } from "./astgrep.js";
 import { globTool } from "./glob.js";
+import { lspTool } from "./lsp.js";
 import { strReplaceTool } from "./strReplace.js";
 import { applyMultipleEditsTool } from "./applyMultipleEdits.js";
 import { applyPatchTool } from "./applyPatch.js";
@@ -155,6 +156,7 @@ export { readImageTool, SUPPORTED_IMAGE_EXTENSIONS } from "./readImage.js";
 export { scanQrCodeTool, SUPPORTED_QR_EXTENSIONS, MAX_QR_IMAGE_BYTES } from "./scanQrCode.js";
 export { grepTool, MAX_GREP_MATCHES, MAX_GREP_LINE_CHARS, includeToRegExp } from "./grep.js";
 export { globTool, MAX_GLOB_MATCHES } from "./glob.js";
+export { lspTool, LSP_OPERATIONS, OPERATION_VALUES } from "./lsp.js";
 export {
   astgrepTool,
   ASTGREP_LANGUAGES,
@@ -337,6 +339,7 @@ export function createToolRegistry(): ToolRegistry {
     grepTool,
     astgrepTool,
     globTool,
+    lspTool,
     strReplaceTool,
     applyMultipleEditsTool,
     applyPatchTool,
@@ -448,6 +451,7 @@ export const tools = {
   grepTool,
   astgrepTool,
   globTool,
+  lspTool,
   strReplaceTool,
   applyMultipleEditsTool,
   applyPatchTool,
