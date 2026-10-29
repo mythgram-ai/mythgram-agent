@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { MessageCircle, Brain, Library, Bot, Sparkles, Users, Boxes, FileText, Crown, ListChecks, CalendarClock, Plug, Server, MessagesSquare, Search, ChevronsLeft, ChevronsRight, Bookmark, WandSparkles, Volume2 } from "lucide-react";
+import { MessageCircle, Brain, Library, Bot, Sparkles, Users, Boxes, FileText, Crown, ListChecks, CalendarClock, Plug, Server, MessagesSquare, Search, ChevronsLeft, ChevronsRight, Bookmark, WandSparkles, Volume2, Presentation } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore, type Section } from "@/store/useStore";
 import { findActiveProfile, isUsableAvatar, profileInitials } from "@/lib/userProfiles";
@@ -11,6 +11,7 @@ const NAV: Array<{ id: Section; label: string; Icon: typeof MessageCircle }> = [
   { id: "systemprompts", label: "Custom system prompts", Icon: FileText },
   { id: "taskmodes", label: "Task modes", Icon: ListChecks },
   { id: "prompts", label: "Prompt library", Icon: Bookmark },
+  { id: "slides", label: "Slides", Icon: Presentation },
   { id: "promptagent", label: "Prompt agent", Icon: WandSparkles },
   { id: "schedules", label: "Schedules", Icon: CalendarClock },
   { id: "memory", label: "Memory", Icon: Brain },

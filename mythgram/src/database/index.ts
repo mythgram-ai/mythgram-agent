@@ -14,6 +14,7 @@ import { SchedulesRepo } from "./repositories/schedulesRepo.js";
 import { ScheduleRunsRepo } from "./repositories/scheduleRunsRepo.js";
 import { ChannelChatsRepo } from "./repositories/channelChatsRepo.js";
 import { ChannelMessagesRepo } from "./repositories/channelMessagesRepo.js";
+import { SlidesRepo } from "./repositories/slidesRepo.js";
 
 export {
   createChatSessionId,
@@ -23,6 +24,7 @@ export {
   createUserProfileId,
   createScheduleId,
   createScheduleRunId,
+  createSlideProjectId,
   isSafeSessionId,
 } from "./ids.js";
 import { createChatSessionId as createChatSessionIdFn, isSafeSessionId as isSafeSessionIdFn } from "./ids.js";
@@ -44,6 +46,8 @@ export type {
   StoredMemoryAgentEvent,
 } from "./repositories/memoryAgentRunsRepo.js";
 export type { ChannelChatRow } from "./repositories/channelChatsRepo.js";
+export type { SlideRow, SlideTemplateRow } from "./repositories/slidesRepo.js";
+export { SlidesRepo } from "./repositories/slidesRepo.js";
 
 /**
  * The application's persistence facade. Everything the system produces — main-agent
@@ -64,6 +68,7 @@ export class MythgramDatabase {
   readonly scheduleRuns: ScheduleRunsRepo;
   readonly channelChats: ChannelChatsRepo;
   readonly channelMessages: ChannelMessagesRepo;
+  readonly slides: SlidesRepo;
   readonly queue: DatabaseWriteQueue;
 
   private readonly maintenance: DatabaseMaintenance;
@@ -84,6 +89,7 @@ export class MythgramDatabase {
     this.scheduleRuns = new ScheduleRunsRepo(db);
     this.channelChats = new ChannelChatsRepo(db);
     this.channelMessages = new ChannelMessagesRepo(db);
+    this.slides = new SlidesRepo(db);
     this.queue = new DatabaseWriteQueue(db);
     this.maintenance = new DatabaseMaintenance(db);
   }

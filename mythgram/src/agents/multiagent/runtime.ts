@@ -108,6 +108,8 @@ export interface TeamOrchestratorDeps {
   customSystemPrompts?: import("../tools/types.js").CustomSystemPromptsRuntime;
   /** Speech runtime — lets every team agent granted generate_speech synthesize audio. */
   speech?: import("../tools/types.js").SpeechRuntime;
+  /** Slides runtime — lets every team agent create, read, present, and manage HTML slides. */
+  slides?: import("../../slides/runtime.js").SlidesRuntime;
   skills: SkillRuntime;
   todos: TodoRuntime;
   subAgentDefinitions: Awaited<ReturnType<typeof resolveDefaultSubAgents>>;
@@ -505,6 +507,7 @@ export class TeamOrchestrator {
       memory: this.deps.memory,
       knowledge: this.deps.knowledge,
       speech: this.deps.speech,
+      slides: this.deps.slides,
       promptLibrary: this.deps.promptLibrary,
       customAgents: this.deps.customAgents,
       customSystemPrompts: this.deps.customSystemPrompts,

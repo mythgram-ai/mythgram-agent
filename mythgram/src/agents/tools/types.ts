@@ -874,6 +874,10 @@ export interface ToolContext {
    * synthesize audio with an automatically selected, connected TTS provider. Absent when the TTS
    * engine is unavailable, which is why the tool refuses to run. */
   speech?: SpeechRuntime;
+  /** Slides runtime — present for the Main Agent, every Custom Agent, and every team/CEO agent.
+   * Lets the slide tools create, read, present, and manage HTML slide projects and templates.
+   * Absent for sub-agents, chat mode, and the memory agent. */
+  slides?: import("../../slides/runtime.js").SlidesRuntime;
   /** Prompt-library runtime — present ONLY for the top-level surfaces that may manage the user's
    * saved prompts (Main Agent, Custom Agents, team agents, and the CEO system agents). Absent for
    * sub-agents, chat mode, and the memory agent, which is why the prompt-library tools are

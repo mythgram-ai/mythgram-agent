@@ -42,6 +42,9 @@ export const CUSTOM_SYSTEM_PROMPT_ID_LENGTH = 20;
 /** Schedule runs carry a 12-character alphanumeric ID. */
 export const SCHEDULE_RUN_ID_LENGTH = 12;
 
+/** Slide projects and user-created slide templates carry a 16-character alphanumeric ID. */
+export const SLIDE_PROJECT_ID_LENGTH = 16;
+
 /** Generate a cryptographically random ID of `length` characters from the 62-char alphabet. */
 export function randomId(length: number): string {
   const bytes = crypto.randomBytes(length);
@@ -118,6 +121,15 @@ export function createScheduleRunId(): string {
  */
 export function createPromptLibraryId(): string {
   return randomId(PROMPT_LIBRARY_ID_LENGTH);
+}
+
+/**
+ * Create a new 16-character slide-project ID (all numbers + all letters). Each slide
+ * project created by organize_slides carries its own id. The same shape is used for
+ * user-created slide templates, keeping template and project ids copy-pasteable.
+ */
+export function createSlideProjectId(): string {
+  return randomId(SLIDE_PROJECT_ID_LENGTH);
 }
 
 /**

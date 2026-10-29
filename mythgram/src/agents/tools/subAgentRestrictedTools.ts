@@ -34,6 +34,10 @@
  *      list_available_custom_system_prompt
  *  - Agent-driven custom-agent management tools (only for main/custom/team/CEO agents):
  *      create_agent, list_available_agents, delete_agent
+ *  - Slide tools (only for main/custom/team/CEO agents):
+ *      organize_slides, get_available_slides_template, present_slides,
+ *      ask_user_to_choose_slides_template, read_slides_template, manage_slides,
+ *      save_slides_as_template
  *
  * This list is the ONE source of truth. It is reused by:
  *  - subagents.ts (SUB_AGENT_EXCLUDED_TOOLS)         — runtime enforcement for every sub-agent run
@@ -110,6 +114,14 @@ export const SUB_AGENT_RESTRICTED_TOOLS: readonly string[] = [
   "create_agent",
   "list_available_agents",
   "delete_agent",
+  // Slide tools — only for main/custom/team/CEO agents, never sub-agents.
+  "organize_slides",
+  "get_available_slides_template",
+  "present_slides",
+  "ask_user_to_choose_slides_template",
+  "read_slides_template",
+  "manage_slides",
+  "save_slides_as_template",
 ];
 
 /** Fast membership test for the restricted set. */

@@ -14,7 +14,7 @@ import type Database from "better-sqlite3";
  * - Schema version is tracked in `user_version` for forward migrations.
  */
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const DDL = `
 CREATE TABLE IF NOT EXISTS sessions (
@@ -202,6 +202,33 @@ CREATE TABLE IF NOT EXISTS channel_chats (
 
 CREATE INDEX IF NOT EXISTS idx_channel_chats_channel ON channel_chats (channel_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_channel_chats_user ON channel_chats (channel_id, user_key);
+
+-- Slide projects: HTML slide decks organized by the agent. Slides are stored as a
+-- JSON array of { slide_number, html, file_path?, title? } so a project is always a
+-- self-contained, re-orderable deck even if the source HTML files later change.
+CREATE TABLE IF NOT EXISTS slide_projects (
+  id          TEXT PRIMARY KEY,                -- 16-char alphanumeric slide-project id
+  name        TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  slides      TEXT NOT NULL DEFAULT '[]',
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_slide_projects_updated ON slide_projects (updated_at DESC);
+
+-- Reusable slide templates. Built-in templates live in code; this table stores only
+-- user-created templates (saved from an existing project via save_slides_as_template).
+CREATE TABLE IF NOT EXISTS slide_templates (
+  id          TEXT PRIMARY KEY,                -- 16-char alphanumeric (or user) template id
+  name        TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  slides      TEXT NOT NULL DEFAULT '[]',
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_slide_templates_updated ON slide_templates (updated_at DESC);
 
 -- Provider-format transcript (OpenAI wire shape) per channel chat, mirroring messages.
 CREATE TABLE IF NOT EXISTS channel_messages (

@@ -7,6 +7,8 @@ import type {
   AskSomethingInfo,
   AskSomethingStatus,
   AttachedFile,
+  SlidesTemplateChoiceInfo,
+  SlidesTemplateChoiceStatus,
   BrowserPreview,
   ChatMessage,
   Conversation,
@@ -54,6 +56,7 @@ import type {
 } from "@/types";
 import { uid, newSessionId } from "@/utils/id";
 import type { Schedule } from "@/lib/schedules";
+import type { SlideProject } from "@/lib/slides";
 import type { BackendBootPayload } from "@/lib/backendState";
 import { forkSessionData } from "@/lib/backendState";
 import { CUSTOM_PROVIDER_PREFIX } from "@/lib/providers";
@@ -118,6 +121,7 @@ export type Section =
   | "systemprompts"
   | "taskmodes"
   | "prompts"
+  | "slides"
   | "promptagent"
   | "schedules"
   | "connectors"
@@ -239,6 +243,13 @@ interface AppState {
   workspacePath: string;
   preview: BrowserPreview;
   attachedFiles: AttachedFile[];
+  /** Slide deck presented by the present_slides tool (transient viewer state). */
+  slidesPresentation: {
+    open: boolean;
+    projects: SlideProject[];
+    activeProjectId: string | null;
+    slideIndex: number;
+  };
 
   // Background memory agent (all data lives in the backend SQLite database; this is
   // purely the ephemeral view used to WATCH the agent's stream + sessions).
@@ -348,6 +359,39 @@ interface AppState {
   ) => void;
   setAskStatus: (convId: string, msgId: string, toolId: string, status: AskSomethingStatus) => void;
   updateAskForTool: (toolId: string, patch: { status?: AskSomethingStatus }) => void;
+
+  // ask_user_to_choose_slides_template picker
+  setSlidesChoicePending: (
+    convId: string,
+    msgId: string,
+    toolId: string,
+    info: Omit<SlidesTemplateChoiceInfo, "status">,
+  ) => void;
+  setSlidesChoiceStatus: (
+    convId: string,
+    msgId: string,
+    toolId: string,
+    status: SlidesTemplateChoiceStatus,
+    selectedTemplateId?: string,
+  ) => void;
+  updateSlidesChoiceForTool: (
+    toolId: string,
+    patch: { status?: SlidesTemplateChoiceStatus; selectedTemplateId?: string },
+  ) => void;
+
+  // present_slides tool block (renders the deck inline in the conversation)
+  setSlidesPresented: (
+    convId: string,
+    msgId: string,
+    toolId: string,
+    projects: SlideProject[],
+  ) => void;
+
+  // Slide presentation overlay (Slides panel preview)
+  setSlidesPresentation: (projects: SlideProject[], activeProjectId?: string) => void;
+  closeSlidesPresentation: () => void;
+  setSlidesPresentationSlide: (index: number) => void;
+  setSlidesPresentationProject: (projectId: string) => void;
 
   // Sub-agent live runs
   startSubAgent: (
@@ -981,6 +1025,12 @@ export const useStore = create<AppState>()(
       workspacePath: "",
       preview: { url: "", open: false },
       attachedFiles: [],
+      slidesPresentation: {
+        open: false,
+        projects: [],
+        activeProjectId: null,
+        slideIndex: 0,
+      },
 
       memoryAgentOpen: false,
       memoryAgentSessionsOpen: false,
@@ -1597,6 +1647,126 @@ export const useStore = create<AppState>()(
                 : m,
             ),
           })),
+        })),
+
+      setSlidesChoicePending: (convId, msgId, toolId, info) =>
+        set((s) => ({
+          conversations: patchTool(
+            s.conversations,
+            convId,
+            msgId,
+            toolId,
+            (tool) => ({
+              ...tool,
+              slidesChoice: { ...info, status: "pending" as const },
+            }),
+            () => ({
+              id: toolId,
+              name: "ask_user_to_choose_slides_template",
+              label: "Choose a slide template",
+              status: "running",
+              slidesChoice: { ...info, status: "pending" as const },
+            }),
+          ),
+        })),
+
+      setSlidesChoiceStatus: (convId, msgId, toolId, status, selectedTemplateId) =>
+        set((s) => ({
+          conversations: patchTool(s.conversations, convId, msgId, toolId, (tool) =>
+            tool.slidesChoice
+              ? {
+                  ...tool,
+                  status: status === "pending" ? tool.status : "ok",
+                  slidesChoice: {
+                    ...tool.slidesChoice,
+                    status,
+                    selectedTemplateId: selectedTemplateId ?? tool.slidesChoice.selectedTemplateId,
+                  },
+                }
+              : tool,
+          ),
+        })),
+
+      updateSlidesChoiceForTool: (toolId, patch) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) => ({
+            ...c,
+            messages: c.messages.map((m) =>
+              m.tools?.some((t) => t.slidesChoice?.id === toolId)
+                ? {
+                    ...m,
+                    tools: m.tools.map((t) =>
+                      t.slidesChoice?.id === toolId
+                        ? {
+                            ...t,
+                            status:
+                              patch.status && patch.status !== "pending" ? "ok" : t.status,
+                            slidesChoice: {
+                              ...t.slidesChoice,
+                              ...patch,
+                              selectedTemplateId:
+                                patch.selectedTemplateId ?? t.slidesChoice.selectedTemplateId,
+                            },
+                          }
+                        : t,
+                    ),
+                  }
+                : m,
+            ),
+          })),
+        })),
+
+      setSlidesPresented: (convId, msgId, toolId, projects) =>
+        set((s) => ({
+          conversations: patchTool(
+            s.conversations,
+            convId,
+            msgId,
+            toolId,
+            (tool) => ({ ...tool, slidesPresent: projects }),
+            () => ({
+              id: toolId,
+              name: "present_slides",
+              label: "Present slides",
+              status: "running",
+              slidesPresent: projects,
+            }),
+          ),
+        })),
+
+      setSlidesPresentation: (projects, activeProjectId) =>
+        set(() => ({
+          slidesPresentation: {
+            open: projects.length > 0,
+            projects,
+            activeProjectId: activeProjectId ?? projects[0]?.id ?? null,
+            slideIndex: 0,
+          },
+        })),
+
+      closeSlidesPresentation: () =>
+        set(() => ({
+          slidesPresentation: { open: false, projects: [], activeProjectId: null, slideIndex: 0 },
+        })),
+
+      setSlidesPresentationSlide: (index) =>
+        set((s) => {
+          const active =
+            s.slidesPresentation.projects.find(
+              (project) => project.id === s.slidesPresentation.activeProjectId,
+            ) ?? s.slidesPresentation.projects[0];
+          const max = Math.max(0, (active?.slides.length ?? 1) - 1);
+          const next = Math.min(max, Math.max(0, Math.floor(index)));
+          return { slidesPresentation: { ...s.slidesPresentation, slideIndex: next } };
+        }),
+
+      setSlidesPresentationProject: (projectId) =>
+        set((s) => ({
+          slidesPresentation: {
+            ...s.slidesPresentation,
+            activeProjectId: projectId,
+            slideIndex: 0,
+          },
         })),
 
       startSubAgent: (convId, msgId, toolId, run) =>

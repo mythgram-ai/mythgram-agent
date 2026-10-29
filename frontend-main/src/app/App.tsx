@@ -14,6 +14,8 @@ import { CustomAgentsPanel } from "@/components/panels/CustomAgentsPanel";
 import { MainAgentPromptsPanel } from "@/components/panels/MainAgentPromptsPanel";
 import { TaskModesPanel } from "@/components/panels/TaskModesPanel";
 import { PromptLibraryPanel } from "@/components/panels/PromptLibraryPanel";
+import { SlidesPanel } from "@/components/panels/SlidesPanel";
+import { SlidesPresenter } from "@/components/overlays/SlidesPresenter";
 import { PromptAgentPanel } from "@/components/panels/PromptAgentPanel";
 import { SchedulesPanel } from "@/components/panels/SchedulesPanel";
 import { ConnectorsPanel } from "@/components/panels/ConnectorsPanel";
@@ -172,6 +174,7 @@ export function App() {
               {section === "systemprompts" && <MainAgentPromptsPanel />}
               {section === "taskmodes" && <TaskModesPanel />}
               {section === "prompts" && <PromptLibraryPanel />}
+              {section === "slides" && <SlidesPanel />}
               {section === "promptagent" && <PromptAgentPanel />}
               {section === "schedules" && <SchedulesPanel />}
               {section === "connectors" && <ConnectorsPanel />}
@@ -195,6 +198,7 @@ export function App() {
       <MemoryAgentSessionsPanel />
       <SummaryHandoffPanel />
       <TeamMonitorPanel />
+      <SlidesPresenter />
     </div>
   );
 }

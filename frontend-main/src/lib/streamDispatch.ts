@@ -12,6 +12,7 @@ import { normalizeConnectors } from "@/lib/connectors";
 import { normalizePromptLibrary } from "@/lib/promptLibrary";
 import { normalizeMainAgentPrompts } from "@/lib/mainAgentPrompts";
 import { normalizeCustomAgents } from "@/lib/customAgents";
+import { normalizeSlideProject, normalizeTemplateSummaries } from "@/lib/slides";
 import type { StreamBatcher } from "@/lib/streamBatcher";
 import type {
   AttachedFile,
@@ -252,6 +253,43 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
       break;
     }
 
+    case "slides_template_choice": {
+      const choiceId = String(data.id ?? uid("tool"));
+      const templates = normalizeTemplateSummaries(data.templates).map((template) => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        slide_count: template.slide_count,
+        builtin: template.builtin,
+      }));
+      s.setSlidesChoicePending(convId, msgId, choiceId, {
+        id: choiceId,
+        chatId: String(data.chat_id ?? convId),
+        templates,
+        timeoutMs: typeof data.timeout_ms === "number" ? data.timeout_ms : 120_000,
+      });
+      break;
+    }
+
+    case "slides_present": {
+      const projects = Array.isArray(data.projects)
+        ? data.projects
+            .map((project) => normalizeSlideProject(project))
+            .filter((project): project is NonNullable<typeof project> => project !== null)
+        : [];
+      const toolId =
+        typeof data.tool_call_id === "string" && data.tool_call_id.length > 0
+          ? data.tool_call_id
+          : "";
+      if (projects.length > 0 && toolId) s.setSlidesPresented(convId, msgId, toolId, projects);
+      break;
+    }
+
+    case "slides_templates_updated":
+      // The Slides panel refetches when opened; templates saved by the agent are also
+      // reflected on the next panel load. No store slice is needed for this event.
+      break;
+
     case "tool_result": {
       const ok = Boolean(data.ok);
       const id = String(data.id ?? uid("tool"));
@@ -329,6 +367,22 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
               ? "rejected"
               : "timeout",
         );
+      }
+      if (name === "ask_user_to_choose_slides_template" && result?.decision) {
+        if (result.decision === "selected") {
+          const selected = payload?.template as { id?: unknown } | undefined;
+          s.setSlidesChoiceStatus(
+            convId,
+            msgId,
+            id,
+            "selected",
+            typeof selected?.id === "string" ? selected.id : undefined,
+          );
+        } else if (result.decision === "timeout") {
+          s.setSlidesChoiceStatus(convId, msgId, id, "timeout");
+        } else if (result.decision === "channel_unavailable") {
+          s.setSlidesChoiceStatus(convId, msgId, id, "channel_unavailable");
+        }
       }
       ctx.onFilesChanged?.();
       break;

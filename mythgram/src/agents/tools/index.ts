@@ -99,6 +99,13 @@ import { archiveFilesTool } from "./archive_files.js";
 import { extractArchiveTool } from "./extract_archive.js";
 import { fetchTextFromImageTool } from "./fetch_text_from_image.js";
 import { githubRepositorySearchTool } from "./github_repository_search.js";
+import { organizeSlidesTool } from "./organize_slides.js";
+import { getAvailableSlidesTemplateTool } from "./get_available_slides_template.js";
+import { presentSlidesTool } from "./present_slides.js";
+import { askUserToChooseSlidesTemplateTool } from "./ask_user_to_choose_slides_template.js";
+import { readSlidesTemplateTool } from "./read_slides_template.js";
+import { manageSlidesTool } from "./manage_slides.js";
+import { saveSlidesAsTemplateTool } from "./save_slides_as_template.js";
 
 export { ToolRegistry } from "./registry.js";
 export type {
@@ -265,6 +272,13 @@ export { archiveFilesTool } from "./archive_files.js";
 export { extractArchiveTool } from "./extract_archive.js";
 export { fetchTextFromImageTool } from "./fetch_text_from_image.js";
 export { githubRepositorySearchTool } from "./github_repository_search.js";
+export { organizeSlidesTool } from "./organize_slides.js";
+export { getAvailableSlidesTemplateTool } from "./get_available_slides_template.js";
+export { presentSlidesTool } from "./present_slides.js";
+export { askUserToChooseSlidesTemplateTool } from "./ask_user_to_choose_slides_template.js";
+export { readSlidesTemplateTool } from "./read_slides_template.js";
+export { manageSlidesTool } from "./manage_slides.js";
+export { saveSlidesAsTemplateTool } from "./save_slides_as_template.js";
 export {
   ARCHIVE_FORMATS,
   FORMAT_EXTENSION,
@@ -415,6 +429,13 @@ export function createToolRegistry(): ToolRegistry {
     extractArchiveTool,
     fetchTextFromImageTool,
     githubRepositorySearchTool,
+    organizeSlidesTool,
+    getAvailableSlidesTemplateTool,
+    presentSlidesTool,
+    askUserToChooseSlidesTemplateTool,
+    readSlidesTemplateTool,
+    manageSlidesTool,
+    saveSlidesAsTemplateTool,
     sendResponsesTool,
   ]);
 }
@@ -519,5 +540,12 @@ export const tools = {
   extractArchiveTool,
   fetchTextFromImageTool,
   githubRepositorySearchTool,
+  organizeSlidesTool,
+  getAvailableSlidesTemplateTool,
+  presentSlidesTool,
+  askUserToChooseSlidesTemplateTool,
+  readSlidesTemplateTool,
+  manageSlidesTool,
+  saveSlidesAsTemplateTool,
   sendResponsesTool,
 };

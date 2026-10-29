@@ -1,3 +1,5 @@
+import type { SlideProject } from "@/lib/slides";
+
 export interface ProviderMeta {
   id: string;
   label: string;
@@ -125,6 +127,32 @@ export interface AskSomethingInfo {
   status: AskSomethingStatus;
 }
 
+/** One template option shown by the slide-template picker. */
+export interface SlidesTemplateChoiceOption {
+  id: string;
+  name: string;
+  description: string;
+  slide_count: number;
+  builtin: boolean;
+}
+
+export type SlidesTemplateChoiceStatus = "pending" | "selected" | "timeout" | "channel_unavailable";
+
+/** Interactive template-picker state attached to ask_user_to_choose_slides_template. */
+export interface SlidesTemplateChoiceInfo {
+  /** Backend tool-call id — used to post the user's selection. */
+  id: string;
+  /** Chat session the choice belongs to. */
+  chatId: string;
+  /** All templates the user can choose from. */
+  templates: SlidesTemplateChoiceOption[];
+  status: SlidesTemplateChoiceStatus;
+  /** The template the user selected, when known. */
+  selectedTemplateId?: string;
+  /** Total time the backend waits for the user (ms). */
+  timeoutMs?: number;
+}
+
 export interface ToolActivity {
   id: string;
   name: string;
@@ -151,6 +179,10 @@ export interface ToolActivity {
   ask?: AskQuestionInfo;
   /** Human-in-the-loop information-request form rendered for ask_for_something. */
   askInput?: AskSomethingInfo;
+  /** Interactive template picker rendered for ask_user_to_choose_slides_template. */
+  slidesChoice?: SlidesTemplateChoiceInfo;
+  /** Slide decks rendered inline by the present_slides tool block. */
+  slidesPresent?: SlideProject[];
 }
 
 /** Structured result streamed back for the read_image tool (no image payload — metadata only). */
@@ -1109,6 +1141,16 @@ export interface SSEEventData {
   questions?: Array<{ question?: string; context?: string; options?: string[] }>;
   // ask_for_something fields
   items?: Array<{ request?: string; placeholder?: string }>;
+  // slides_template_choice fields
+  /** Template options shown by the interactive slide-template picker. */
+  templates?: Array<Record<string, unknown>>;
+  /** How long the backend waits for a template choice (ms). */
+  timeout_ms?: number;
+  // slides_present fields
+  /** Tool call whose inline block should render the presented decks. */
+  tool_call_id?: string;
+  /** Complete slide projects to render in the present_slides tool block. */
+  projects?: unknown[];
   // todo_updated (TodoWrite) fields
   todos?: TodoItem[];
   // memory_updated (memory tool) fields

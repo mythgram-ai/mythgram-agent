@@ -106,6 +106,7 @@ const SECTION_INDEX: Array<{ section: Section; label: string; keywords: string; 
   { section: "systemprompts", label: "Custom system prompts", keywords: "system prompt instructions main agent template", hint: "Go to system prompts" },
   { section: "taskmodes", label: "Task modes", keywords: "task modes plan default custom prompt mode", hint: "Go to task modes" },
   { section: "prompts", label: "Prompt library", keywords: "prompt library saved prompts reusable templates snippets", hint: "Go to prompt library" },
+  { section: "slides", label: "Slides", keywords: "slides slide deck presentation templates html 16:9 powerpoint pitch", hint: "Go to slides" },
   { section: "schedules", label: "Schedules", keywords: "schedules cron recurring automation tasks background", hint: "Go to schedules" },
   { section: "connectors", label: "Connectors", keywords: "connectors github slack notion gmail outlook composio apps integration", hint: "Go to connectors" },
   { section: "mcp", label: "MCP servers", keywords: "mcp model context protocol servers tools oauth remote local", hint: "Go to MCP" },

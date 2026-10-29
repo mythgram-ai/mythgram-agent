@@ -333,6 +333,20 @@ export class AgentRunner {
   private speechRuntime?: import("./tools/types.js").SpeechRuntime;
 
   /**
+   * Attach the slides runtime (called once at boot). When set, the slide tools
+   * (organize_slides / get_available_slides_template / present_slides /
+   * ask_user_to_choose_slides_template / read_slides_template / manage_slides /
+   * save_slides_as_template) work for the Main Agent and every Custom Agent (both run
+   * through this core runtime). When unset, the tools return a structured "unavailable"
+   * error and never touch storage.
+   */
+  setSlides(runtime?: import("../slides/runtime.js").SlidesRuntime): void {
+    this.slidesRuntime = runtime;
+  }
+
+  private slidesRuntime?: import("../slides/runtime.js").SlidesRuntime;
+
+  /**
    * Attach the human-in-the-loop information-request store (ask_for_something) (called once at
    * boot). When set, the ask_for_something tool can present a form to the user and await their
    * values for the Main Agent and every Custom Agent (both run through this core runtime). The
@@ -797,6 +811,7 @@ export class AgentRunner {
               memory: memoryRuntime,
               knowledge: knowledgeRuntime,
               speech: this.speechRuntime,
+              slides: this.slidesRuntime,
               promptLibrary: promptLibraryRuntime,
               customAgents: customAgentsRuntime,
               customSystemPrompts: customSystemPromptsRuntime,

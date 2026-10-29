@@ -32,6 +32,8 @@ import {
   MessagesSquare,
   PackagePlus,
   Paperclip,
+  Presentation,
+  LayoutTemplate,
   Pencil,
   PencilLine,
   Plug,
@@ -146,6 +148,12 @@ const ICONS: Record<string, typeof Terminal> = {
   knowledge_search: Search,
   embed_url: Link2,
   attach_files: Paperclip,
+  organize_slides: LayoutTemplate,
+  get_available_slides_template: LayoutTemplate,
+  read_slides_template: LayoutTemplate,
+  present_slides: Presentation,
+  manage_slides: LayoutTemplate,
+  save_slides_as_template: Presentation,
   sliding_window_truncated: History,
 };
 

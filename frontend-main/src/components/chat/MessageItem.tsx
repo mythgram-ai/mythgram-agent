@@ -7,12 +7,20 @@ import { ThinkingIndicator } from "./ThinkingIndicator";
 import { SubmitPlanBlock } from "./SubmitPlanBlock";
 import { AskQuestionBlock } from "./AskQuestionBlock";
 import { AskSomethingBlock } from "./AskSomethingBlock";
+import { AskSlidesTemplateBlock } from "./AskSlidesTemplateBlock";
+import { PresentSlidesBlock } from "./PresentSlidesBlock";
 import { TeamRunView } from "./TeamRunView";
 import { SavePromptModal } from "@/components/panels/PromptLibraryPanel";
 
 /** Tools that render as full-width blocks instead of inline chips. */
 function isBlockTool(name: string): boolean {
-  return name === "submit_plan" || name === "ask_question_to_user" || name === "ask_for_something";
+  return (
+    name === "submit_plan" ||
+    name === "ask_question_to_user" ||
+    name === "ask_for_something" ||
+    name === "ask_user_to_choose_slides_template" ||
+    name === "present_slides"
+  );
 }
 
 function MessageItemImpl({ message }: { message: ChatMessage }) {
@@ -103,6 +111,10 @@ function MessageItemImpl({ message }: { message: ChatMessage }) {
             <SubmitPlanBlock key={tool.id} tool={tool} />
           ) : tool.name === "ask_for_something" ? (
             <AskSomethingBlock key={tool.id} tool={tool} />
+          ) : tool.name === "ask_user_to_choose_slides_template" ? (
+            <AskSlidesTemplateBlock key={tool.id} tool={tool} />
+          ) : tool.name === "present_slides" ? (
+            <PresentSlidesBlock key={tool.id} tool={tool} />
           ) : (
             <AskQuestionBlock key={tool.id} tool={tool} />
           ),

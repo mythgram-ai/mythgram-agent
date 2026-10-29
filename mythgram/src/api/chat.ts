@@ -6,6 +6,7 @@ import type { SessionStore, StoredMessage } from "../services/sessionStore.js";
 import type { PlanApprovalStore } from "../services/planApprovalStore.js";
 import type { QuestionStore } from "../services/questionStore.js";
 import type { AskRequestStore } from "../services/askRequestStore.js";
+import type { SlidesTemplateChoiceStore } from "../slides/choiceStore.js";
 import type { SkillDefinition, SkillFileDefinition, SubAgentDefinition } from "../agents/tools/types.js";
 import { normalizeEffort } from "../agents/providers/reasoning.js";
 import { normalizeTodos } from "../agents/todos.js";
@@ -414,6 +415,7 @@ export function buildChatRouter(
   planApprovals: PlanApprovalStore,
   askQuestions: QuestionStore,
   askRequests: AskRequestStore,
+  slidesTemplateChoices: SlidesTemplateChoiceStore,
   db: MythgramDatabase,
   multiAgent: MultiAgentRunner,
   ceoAgent: CeoAgentRunner,
@@ -613,6 +615,26 @@ export function buildChatRouter(
     }
 
     const supplied = askRequests.submit(chatId, toolCallId, values);
+    res.json({ ok: supplied });
+  });
+
+  /**
+   * Supply the user's chosen slide template for a pending ask_user_to_choose_slides_template
+   * request.
+   *   body: { template_id: string }
+   * A no-op (ok:false) is returned when no matching pending choice exists (already selected,
+   * timed out, or aborted).
+   */
+  router.post("/slides-template/:chatId/:toolCallId", (req: Request, res: Response) => {
+    const chatId = String(req.params.chatId);
+    const toolCallId = String(req.params.toolCallId);
+    const body = (req.body ?? {}) as { template_id?: unknown };
+    const templateId = typeof body.template_id === "string" ? body.template_id.trim() : "";
+    if (!templateId) {
+      res.status(400).json({ error: "A non-empty template_id is required." });
+      return;
+    }
+    const supplied = slidesTemplateChoices.select(chatId, toolCallId, templateId);
     res.json({ ok: supplied });
   });
 

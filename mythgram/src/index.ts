@@ -30,6 +30,7 @@ import { buildChannelsRouter } from "./api/channels.js";
 import { buildTtsRouter } from "./api/tts.js";
 import { buildSummaryRouter } from "./api/summaries.js";
 import { buildPromptAgentRouter } from "./api/promptagent.js";
+import { buildSlidesRouter } from "./api/slides.js";
 import { ScheduleStore } from "./cron/store.js";
 import { ScheduleRunner } from "./cron/runner.js";
 import { ScheduleScheduler } from "./cron/scheduler.js";
@@ -40,6 +41,9 @@ import { CustomAgentManager, CustomAgentRunner } from "./agents/customagent/inde
 import { UserProfileManager } from "./agents/profiles/index.js";
 import { MainAgentPromptManager } from "./agents/mainagentprompt/index.js";
 import { PromptLibraryManager } from "./prompt-library.js";
+import { SlidesManager } from "./slides/engine.js";
+import { SlidesTemplateChoiceStore } from "./slides/choiceStore.js";
+import { createSlidesRuntime } from "./slides/runtime.js";
 import { PromptAgentRunner } from "./agents/promptagent/index.js";
 import { ConnectorManager } from "./agents/connectors/index.js";
 import { McpManager } from "./agents/mcp/index.js";
@@ -137,6 +141,12 @@ function main(): void {
   // description + prompt text), persisted in the SQLite app_state repository.
   // The frontend syncs the same document, so prompts survive restarts.
   const promptLibrary = new PromptLibraryManager(db.appState);
+  // Slides: HTML slide projects + reusable templates live in their own SQLite tables, and the
+  // interactive template picker is coordinated in memory. The same runtime is attached to the
+  // Main Agent, every Custom Agent, and every team/CEO agent.
+  const slidesManager = new SlidesManager(db.slides);
+  const slidesTemplateChoices = new SlidesTemplateChoiceStore();
+  const slidesRuntime = createSlidesRuntime(slidesManager, slidesTemplateChoices);
   // Attach the persistent prompt library to every agent surface that may manage it: the built-in
   // Main Agent (and, through the same core runtime, every Custom Agent), the multi-agent team
   // agents (head + members), and the CEO-system agents (CEO + leaders + members). Sub-agents,
@@ -144,6 +154,11 @@ function main(): void {
   agent.setPromptLibrary(promptLibrary);
   multiAgent.setPromptLibrary(promptLibrary);
   ceoAgent.setPromptLibrary(promptLibrary);
+
+  // Attach the slides runtime to every agent surface allowed to create/manage slides.
+  agent.setSlides(slidesRuntime);
+  multiAgent.setSlides(slidesRuntime);
+  ceoAgent.setSlides(slidesRuntime);
   // Prompt creation agent: a focused prompt-writing assistant with its own small
   // tool surface (file tools + skills + prompt-library tools). It reuses the same
   // persistent prompt library so "save to library" works everywhere.
@@ -273,6 +288,7 @@ function main(): void {
   app.use("/api/profiles", buildUserProfilesRouter(userProfiles));
   app.use("/api/main-agent-prompts", buildMainAgentPromptsRouter(mainAgentPrompts, config));
   app.use("/api/prompt-library", buildPromptLibraryRouter(promptLibrary));
+  app.use("/api/slides", buildSlidesRouter(slidesManager));
   app.use(
     "/api/chat",
     buildChatRouter(
@@ -282,6 +298,7 @@ function main(): void {
       planApprovals,
       askQuestions,
       askRequests,
+      slidesTemplateChoices,
       db,
       multiAgent,
       ceoAgent,
