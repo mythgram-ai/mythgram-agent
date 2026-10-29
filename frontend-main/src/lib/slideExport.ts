@@ -121,8 +121,11 @@ function mountSlideForExport(html: string): { host: HTMLElement; cleanup: () => 
     .join("\n");
   const scopedCss = scopeSlideCss(css, ".slide-export-root");
 
+  // The stage is a zero-size, clipped fixed layer: the full-size slide is mounted inside
+  // it, but it can never widen the page, create a scrollbar, or shift the app's layout.
   const stage = document.createElement("div");
-  stage.style.cssText = "position:fixed;left:-20000px;top:0;pointer-events:none;";
+  stage.style.cssText =
+    "position:fixed;left:0;top:0;width:0;height:0;overflow:hidden;pointer-events:none;z-index:-1;";
 
   const host = document.createElement("div");
   host.className = "slide-export-root";
@@ -172,21 +175,82 @@ function mountSlideForExport(html: string): { host: HTMLElement; cleanup: () => 
 }
 
 /**
- * Rewrite root selectors from a standalone slide document (`:root`, `html`,
- * `body`) so they target the offscreen export wrapper instead of the app.
+ * Scope EVERY selector in the slide's stylesheet to the offscreen export wrapper.
+ *
+ * This is critical: a standalone slide document contains global selectors (`*`,
+ * `h1`, `p`, `.card`, `.grid`, ...). Injecting them unscoped would temporarily
+ * restyle the whole app during export and cause visible layout glitches.
  */
 function scopeSlideCss(css: string, scope: string): string {
   if (!css.trim()) return "";
-  return css
-    .replace(/:root\b/g, scope)
-    .replace(
-      /(^|[,{}>+~])(\s*)(html|body)(?=\s*[,{.#:[>+~])/gm,
-      (_match, prefix: string, space: string) => `${prefix}${space}${scope}`,
-    )
-    .replace(
-      /(^|[,{}>+~])(\s*)(html|body)(?=\s+)/gm,
-      (_match, prefix: string, space: string) => `${prefix}${space}${scope}`,
-    );
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(css);
+    scopeCssRules(sheet.cssRules, scope);
+    return Array.from(sheet.cssRules)
+      .map((rule) => rule.cssText)
+      .join("\n");
+  } catch {
+    // Older engines without constructable stylesheets: keep exports functional while
+    // still rewriting the root selectors. Modern browsers always take the CSSOM path.
+    return css.replace(/:root\b/g, scope);
+  }
+}
+
+function scopeCssRules(rules: CSSRuleList, scope: string): void {
+  for (const rule of Array.from(rules)) {
+    if (rule instanceof CSSStyleRule) {
+      rule.selectorText = splitSelectorList(rule.selectorText)
+        .map((selector) => scopeSelector(selector, scope))
+        .join(", ");
+      continue;
+    }
+    const grouping = rule as CSSRule & { cssRules?: CSSRuleList };
+    if (grouping.cssRules) scopeCssRules(grouping.cssRules, scope);
+  }
+}
+
+function scopeSelector(selector: string, scope: string): string {
+  let next = selector.trim();
+  if (!next) return next;
+  next = next.replace(/:root\b/g, scope);
+  next = next.replace(
+    /(^|[\s>+~])(html|body)(?=$|[\s>+~.#:[,])/g,
+    (_match, prefix: string) => `${prefix}${scope}`,
+  );
+  if (next !== scope && !next.startsWith(`${scope}`)) next = `${scope} ${next}`;
+  return next;
+}
+
+/** Split a selector list on top-level commas (commas inside :is(), :not(), etc. survive). */
+function splitSelectorList(selectorText: string): string[] {
+  const out: string[] = [];
+  let current = "";
+  let depth = 0;
+  let quote: string | null = null;
+  for (let index = 0; index < selectorText.length; index += 1) {
+    const char = selectorText[index]!;
+    if (quote) {
+      current += char;
+      if (char === quote && selectorText[index - 1] !== "\\") quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "(" || char === "[") depth += 1;
+    else if (char === ")" || char === "]") depth = Math.max(0, depth - 1);
+    if (char === "," && depth === 0) {
+      if (current.trim()) out.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  if (current.trim()) out.push(current.trim());
+  return out;
 }
 
 function safeBaseName(name: string): string {
