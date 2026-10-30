@@ -24,6 +24,23 @@ import {
 const API = "https://api.telegram.org";
 const FILE_API = "https://api.telegram.org/file";
 const MESSAGE_LIMIT = 4096;
+const POLL_BACKOFF_MS = 5000;
+
+/**
+ * A non-OK answer from Telegram's `getUpdates`. `retryAfterMs` mirrors the server's
+ * `parameters.retry_after` (rate limiting); `fatal` marks a rejected token (HTTP 401),
+ * which no amount of retrying can recover from.
+ */
+export class TelegramPollError extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterMs: number | null = null,
+    readonly fatal = false,
+  ) {
+    super(message);
+    this.name = "TelegramPollError";
+  }
+}
 
 export interface TelegramVerifyResult {
   botId: string;
@@ -56,6 +73,11 @@ export interface TelegramProviderOptions {
   workspaceRoot: string;
   onMessage: (incoming: ChannelIncoming) => void;
   onError: (message: string) => void;
+  /**
+   * Called when polling fails fatally (a rejected token). Retrying cannot help, so
+   * the provider stops and the channel is marked down immediately.
+   */
+  onFatalError?: (message: string) => void;
 }
 
 interface TelegramUpdate {
@@ -76,6 +98,8 @@ export class TelegramProvider implements ChannelSender {
   private stopped = false;
   private offset = 0;
   private botUsername = "";
+  /** Aborted by stop() so an in-flight backoff sleep ends promptly. */
+  private readonly stopController = new AbortController();
 
   constructor(private readonly opts: TelegramProviderOptions) {}
 
@@ -97,16 +121,32 @@ export class TelegramProvider implements ChannelSender {
         }
       } catch (error) {
         if (this.stopped) break;
-        this.opts.onError(
-          `Telegram poll failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        await sleep(5000);
+        const message = error instanceof Error ? error.message : String(error);
+        const fatal = error instanceof TelegramPollError && error.fatal;
+        // A rejected token cannot be fixed by retrying — report it now (marks the
+        // channel down via onFatalError when wired) and stop the poll loop.
+        if (fatal && this.opts.onFatalError) {
+          this.opts.onFatalError(`Telegram poll failed: ${message}`);
+        } else {
+          this.opts.onError(`Telegram poll failed: ${message}`);
+        }
+        if (fatal) {
+          this.stopped = true;
+          break;
+        }
+        // Honour the server's rate-limit hint, otherwise fall back to a short backoff.
+        const delayMs =
+          error instanceof TelegramPollError && error.retryAfterMs !== null
+            ? error.retryAfterMs
+            : POLL_BACKOFF_MS;
+        await sleep(delayMs, this.stopController.signal);
       }
     }
   }
 
   stop(): void {
     this.stopped = true;
+    this.stopController.abort();
   }
 
   async sendMessage(target: ChannelTarget, text: string): Promise<void> {
@@ -161,9 +201,22 @@ export class TelegramProvider implements ChannelSender {
       );
       const body = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
+        description?: string;
         result?: TelegramUpdate[];
+        parameters?: { retry_after?: number };
       };
-      if (!res.ok || body.ok !== true || !Array.isArray(body.result)) return [];
+      if (!res.ok || body.ok !== true || !Array.isArray(body.result)) {
+        const detail =
+          typeof body.description === "string" && body.description.trim()
+            ? body.description.trim()
+            : `HTTP ${res.status}`;
+        const retryAfter = body.parameters?.retry_after;
+        throw new TelegramPollError(
+          detail,
+          typeof retryAfter === "number" && retryAfter > 0 ? retryAfter * 1000 : null,
+          res.status === 401,
+        );
+      }
       return body.result;
     } catch (error) {
       if (this.stopped) return [];

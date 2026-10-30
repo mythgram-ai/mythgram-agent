@@ -303,6 +303,9 @@ export class ChannelManager {
               incoming,
             ),
           onError,
+          // A rejected token is permanent: mark the channel down at once instead of
+          // waiting for the sustained-failure threshold (the provider then stops).
+          onFatalError: (message) => this.reportFailure(id, message, true),
         });
         this.live.set(id, {
           connectionId: id,
@@ -550,12 +553,13 @@ export class ChannelManager {
     return found.id;
   }
 
-  private reportFailure(id: string, message: string): void {
+  private reportFailure(id: string, message: string, fatal = false): void {
     const count = (this.failures.get(id) ?? 0) + 1;
     this.failures.set(id, count);
     // Only mark the connection down on sustained failure (3+) so transient network
-    // blips never flip the dashboard status.
-    if (count >= 3) {
+    // blips never flip the dashboard status. Fatal failures (a rejected token that
+    // retrying cannot recover) are surfaced immediately.
+    if (fatal || count >= 3) {
       this.store.markStatus(id, "error", { lastError: message.slice(0, 300) });
     }
   }
