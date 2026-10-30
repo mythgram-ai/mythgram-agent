@@ -621,6 +621,18 @@ export const API_ROUTES = {
     path: "/api/tts/local/install",
     description: "Install and start local-tts in one click (pypi / release / docker).",
   },
+  acpInfo: {
+    name: "acp.info",
+    method: "GET",
+    path: "/api/acp",
+    description: "ACP status, configuration, and connection instructions.",
+  },
+  acpConfigUpdate: {
+    name: "acp.config.update",
+    method: "PUT",
+    path: "/api/acp/config",
+    description: "Persist the ACP configuration document.",
+  },
   promptAgentStream: {
     name: "promptAgent.stream",
     method: "POST",

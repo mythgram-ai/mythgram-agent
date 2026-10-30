@@ -111,6 +111,7 @@ const SECTION_INDEX: Array<{ section: Section; label: string; keywords: string; 
   { section: "connectors", label: "Connectors", keywords: "connectors github slack notion gmail outlook composio apps integration", hint: "Go to connectors" },
   { section: "mcp", label: "MCP servers", keywords: "mcp model context protocol servers tools oauth remote local", hint: "Go to MCP" },
   { section: "channels", label: "Channels", keywords: "channels telegram discord slack whatsapp messaging bot chat adapters", hint: "Go to channels" },
+  { section: "acp", label: "ACP", keywords: "acp agent client protocol zed editor external client gateway stdio integration", hint: "Go to ACP" },
   { section: "profiles", label: "Profiles", keywords: "profiles account user identity avatar", hint: "Go to profiles" },
 ];
 

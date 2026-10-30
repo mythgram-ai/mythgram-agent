@@ -128,6 +128,7 @@ export type Section =
   | "mcp"
   | "channels"
   | "tts"
+  | "acp"
   | "profiles";
 
 /** Connection state surfaced to the user. Slow ≠ offline; only a lost connection is "offline". */

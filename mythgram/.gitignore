@@ -5,4 +5,5 @@ dist/
 *.log
 .mythgram/
 uploads/
+.acp-endpoint.json
 .DS_Store

@@ -31,6 +31,8 @@ import { buildTtsRouter } from "./api/tts.js";
 import { buildSummaryRouter } from "./api/summaries.js";
 import { buildPromptAgentRouter } from "./api/promptagent.js";
 import { buildSlidesRouter } from "./api/slides.js";
+import { buildAcpRouter } from "./acp/api.js";
+import { writeAcpEndpoint } from "./acp/endpoint.js";
 import { ScheduleStore } from "./cron/store.js";
 import { ScheduleRunner } from "./cron/runner.js";
 import { ScheduleScheduler } from "./cron/scheduler.js";
@@ -324,11 +326,29 @@ function main(): void {
   app.use("/api/summaries", buildSummaryRouter());
   app.use("/api/prompt-agent", buildPromptAgentRouter(promptAgent, store, config));
 
+  // Agent Client Protocol (ACP): lets any ACP client (e.g. Zed) drive this agent as
+  // an ACP-compatible subprocess. The ACP panel in the console persists the config;
+  // the stdio bridge (`src/acp/index.ts`) resolves each turn from `/api/acp/turn` and
+  // runs it through the SAME runtimes as the web console.
+  app.use(
+    "/api/acp",
+    buildAcpRouter({
+      db,
+      appConfig: config,
+      providers,
+      mainAgentPrompts,
+      tts,
+    }),
+  );
+
   const server = app.listen(config.port, () => {
     // eslint-disable-next-line no-console
     console.log(`[mythgram] listening on http://localhost:${config.port}`);
     // eslint-disable-next-line no-console
     console.log(`[mythgram] workspace: ${config.workspaceRoot}`);
+    // Publish the listening URL so the ACP stdio bridge can discover it with no
+    // environment variable or CLI argument (see src/acp/endpoint.ts).
+    writeAcpEndpoint(config.port);
   });
 
   const shutdown = () => {

@@ -44,6 +44,8 @@ function contextLabel(section: Section, counts: Record<string, number>): string 
       return `${counts.channels} channel${counts.channels === 1 ? "" : "s"}`;
     case "tts":
       return "Speech studio";
+    case "acp":
+      return "External clients";
     case "profiles":
       return `${counts.profiles} profile${counts.profiles === 1 ? "" : "s"}`;
     default:

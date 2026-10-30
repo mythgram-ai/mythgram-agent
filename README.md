@@ -26,6 +26,8 @@ The browser-based console, **frontend-main**, brings chat and workspace manageme
 
 - **Automation and messaging:** Persistent schedules run in the backend; Telegram, Discord, and Slack channel providers can route messages through an agent. WhatsApp appears in the codebase as a placeholder, not a supported ready-to-use channel.
 
+- **Agent Client Protocol (ACP):** Any ACP client (for example the Zed editor) can drive Mythgram as an ACP-compatible agent over stdio. Configure which runtime ACP sessions use — the Default Agent, a Custom Agent, an agent team, or a CEO system — in the console's **ACP** panel, then copy the generated connection command.
+
 - **Other workspace controls:** User profiles, global search, file/preview panels, and text-to-speech provider settings.
 
 - **Separate local TTS helper:** `packages/local-tts/` contains a standalone Piper TTS service and web UI; it is not required to run the main application.
@@ -183,7 +185,23 @@ The backend exposes `GET /health` and REST/SSE APIs under `/api/`. The main rout
 
 - `/api/schedules`, `/api/channels`, and `/api/tts` — scheduled tasks, messaging channels, and speech.
 
+- `/api/acp` — Agent Client Protocol status/configuration and the resolved turn used by the stdio bridge.
+
 For the authoritative route implementations, see `mythgram/src/index.ts` and `mythgram/src/api/`.
+
+## Agent Client Protocol (ACP)
+
+Mythgram can act as an [Agent Client Protocol](https://agentclientprotocol.com) agent, so any ACP client (such as the Zed editor) can use it. ACP clients launch a local agent over stdio; Mythgram ships a small stdio bridge (`mythgram/src/acp/`) that speaks ACP and runs each turn through the running backend — reusing the exact same runtimes as the web console (Default Agent, Custom Agents, agent teams, CEO systems, both context-management methods, the background memory agent, connectors, MCP servers, TTS and workspace).
+
+Open the **ACP** panel in the console to:
+
+- Enable/disable the gateway and choose the active runtime (Default Agent, Chat mode, a Custom Agent, a team, or a CEO agent).
+- Optionally override the LLM provider/model/keys, context management, and memory-agent schedule (empty fields inherit the app **Settings**, including the provider and TTS connections you already configured).
+- Read the connection instructions and copy the launch command / client configuration.
+
+The panel generates a connection using the `npx` command (no base URL is passed as an argument — the bridge discovers the backend automatically from `mythgram/.acp-endpoint.json`, written on boot). The backend must be running.
+
+> ACP clients spawn the bridge as a subprocess, so the ACP panel's command should be run where this Mythgram installation lives. The bridge is an ACP **agent** (server); no authentication is required because it is launched locally.
 
 ## Standalone local TTS helper
 
