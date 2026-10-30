@@ -104,10 +104,14 @@ export class ScheduleScheduler {
 
   /**
    * Boot recovery: stale `running` flags are already cleared by the database
-   * layer; here every enabled schedule gets a fresh, correct `nextRunAt`
-   * (repairs rows saved by older versions or edited while down), expired
-   * one-time/windowed schedules are retired, and overdue schedules are
-   * catch-up executed exactly once when inside the catch-up window.
+   * layer; here enabled schedules whose `nextRunAt` is missing or already due
+   * get a fresh, correct value, expired one-time/windowed schedules are
+   * retired, and overdue schedules are catch-up executed exactly once when
+   * inside the catch-up window. A stored next run that is still in the future
+   * is preserved: for interval schedules with no window start the calculator
+   * anchors on `now`, so recomputing on every boot would push the next fire a
+   * full interval out and a backend restarting faster than the interval would
+   * never fire.
    */
   recover(): void {
     const now = this.now();
@@ -120,10 +124,15 @@ export class ScheduleScheduler {
         continue;
       }
       if (!schedule.enabled) continue;
-      const next = getNextRun(toRecurrence(schedule), now);
       const stored = schedule.nextRunAt;
-      if (next !== stored) {
-        this.refreshNextRun(schedule.id, next);
+      // Keep a future next run untouched; only recompute when it is absent or
+      // already due (repairs rows saved by older versions and advances stale
+      // ones without shifting a still-pending interval fire).
+      if (stored === null || stored <= now) {
+        const next = getNextRun(toRecurrence(schedule), now);
+        if (next !== stored) {
+          this.refreshNextRun(schedule.id, next);
+        }
       }
       // Overdue: the stored next run lies in the past (backend was down or
       // asleep). Catch up with a single execution when recent, else the fresh

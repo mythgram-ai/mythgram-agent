@@ -232,6 +232,35 @@ describe("scheduler lifecycle", () => {
     h.db.schedules.releaseRun(created.id);
   });
 
+  it("restart recovery preserves a pending interval next run instead of pushing it out", () => {
+    // An interval schedule with no window start anchors its next run on `now`.
+    const created = h.store.create({ name: "keep", prompt: "p", kind: "interval", intervalMinutes: 60 });
+    const stored = h.store.get(created.id)!.nextRunAt;
+    assert.ok(stored !== null);
+    // Restart five minutes before the pending fire (still in the future).
+    const restartAt = stored - 5 * 60_000;
+    const scheduler2 = new ScheduleScheduler({
+      db: h.db,
+      store: h.store,
+      runner: {
+        execute: async (): Promise<ExecuteOutcome> => {
+          h.calls.push({ scheduleId: created.id, trigger: "auto" });
+          return { runId: "unexpected", ok: true, output: "" };
+        },
+      } as unknown as ScheduleRunner,
+      now: () => restartAt,
+    });
+    (scheduler2 as unknown as { started: boolean }).started = true;
+    try {
+      scheduler2.recover();
+      // The pending future run is kept untouched and nothing fires early.
+      assert.equal(h.store.get(created.id)!.nextRunAt, stored);
+      assert.equal(h.calls.length, 0);
+    } finally {
+      scheduler2.stop();
+    }
+  });
+
   it("restart recovery catch-ups an overdue schedule exactly once", async () => {
     // A recurring schedule whose next run went stale while the backend was down.
     const created = h.store.create({ name: "rec", prompt: "p", kind: "interval", intervalMinutes: 60 });
