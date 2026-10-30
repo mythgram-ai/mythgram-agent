@@ -91,7 +91,7 @@ export interface RunResult {
   code: number | null;
   /** Signal that terminated the process, if any. */
   signal: NodeJS.Signals | null;
-  /** Raw stdout bytes (bounded). */
+  /** Raw stdout bytes (bounded). Empty when stdout was streamed via `stdoutFd`. */
   stdout: Buffer;
   /** Decoded, bounded stderr text. */
   stderr: string;
@@ -108,18 +108,32 @@ const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
  * Run an external program without a shell, capturing bounded stdout/stderr. Resolves for both
  * success and failure; only a synchronous spawn failure or a `spawn` error event populates
  * `spawnError`. The process is killed on timeout or when the turn is aborted.
+ *
+ * `stdout` is normally buffered and capped at MAX_OUTPUT_BYTES because it is a short tool message.
+ * When a caller needs the *data* the program produces (e.g. the decompressed output of a single
+ * .bz2/.xz/.zst/.lz4 file), it must pass `stdoutFd` so stdout is written straight to that open file
+ * descriptor instead of being buffered — otherwise output larger than the cap is silently dropped.
  */
 export function runCommand(
   bin: string,
   args: string[],
-  opts: { cwd?: string; timeoutMs: number; signal?: AbortSignal },
+  opts: {
+    cwd?: string;
+    timeoutMs: number;
+    signal?: AbortSignal;
+    /**
+     * Open file descriptor that receives the program's stdout directly. When set, `RunResult.stdout`
+     * stays empty and the caller owns the descriptor (open before the call, close after it resolves).
+     */
+    stdoutFd?: number;
+  },
 ): Promise<RunResult> {
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
       child = spawn(bin, args, {
         cwd: opts.cwd,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["ignore", opts.stdoutFd ?? "pipe", "pipe"],
         windowsHide: true,
       });
     } catch (error) {

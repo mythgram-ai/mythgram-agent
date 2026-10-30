@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { z } from "zod";
@@ -14,6 +15,7 @@ import {
   runCommand,
   stripArchiveExtension,
   summarizeDirectory,
+  type RunResult,
 } from "./archiveSupport.js";
 
 const schema = z
@@ -306,6 +308,30 @@ async function extractWith7z(
 }
 
 /**
+ * Run a decompressor with its stdout written straight into `tmpAbs` through an open descriptor.
+ * The file's contents ARE the tool's output, so they must not go through the bounded stdout buffer
+ * (MAX_OUTPUT_BYTES), which would silently truncate large results.
+ */
+async function runDecompressorToFile(
+  program: string,
+  archiveAbs: string,
+  tmpAbs: string,
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+): Promise<RunResult> {
+  const fd = fs.openSync(tmpAbs, "w");
+  try {
+    return await runCommand(program, ["-dc", archiveAbs], { timeoutMs, signal, stdoutFd: fd });
+  } finally {
+    try {
+      fs.closeSync(fd);
+    } catch {
+      // descriptor already closed — nothing to do
+    }
+  }
+}
+
+/**
  * Decompress a single compressed file (.gz/.bz2/.xz/.zst/.lz4). gzip is handled with Node's built-in
  * zlib; the other compressors use their system programs. The output is written next to the archive
  * as `<stem>` (the archive name with its compression extension removed).
@@ -356,19 +382,42 @@ async function extractSingle(
   if (!executableExists(program)) {
     return failure("tool_not_installed", `Decompressing .${compression} files requires the '${program}' program, but it is not installed.`);
   }
-  const result = await runCommand(program, ["-dc", archiveAbs], { timeoutMs, signal: ctx.signal });
+
+  // Decompress into a temp file and rename into place only on success: stdout may be larger than the
+  // runCommand buffer, and a failed/aborted run must not leave a short file (or clobber an existing
+  // one) at the final path. The temp name mirrors the atomic-write pattern used elsewhere.
+  const tmpAbs = `${outAbs}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+  const cleanupTmp = (): Promise<void> => fsp.rm(tmpAbs, { force: true }).catch(() => undefined);
+
+  let result: RunResult;
+  try {
+    result = await runDecompressorToFile(program, archiveAbs, tmpAbs, timeoutMs, ctx.signal);
+  } catch (error) {
+    await cleanupTmp();
+    return failure(
+      "extraction_failed",
+      `Could not open the output file: ${error instanceof Error ? error.message : String(error)}.`,
+    );
+  }
+
   const interrupted = interruption(ctx, result.timedOut, archiveRel);
-  if (interrupted) return interrupted;
+  if (interrupted) {
+    await cleanupTmp();
+    return interrupted;
+  }
   if (result.spawnError) {
+    await cleanupTmp();
     return failure("tool_not_installed", `Could not run "${program}": ${result.spawnError}`);
   }
   if (result.code !== 0) {
+    await cleanupTmp();
     return failure("extraction_failed", `Failed to decompress the file: ${result.stderr.trim() || `${program} exited with code ${result.code}`}.`);
   }
   try {
-    await fsp.writeFile(outAbs, result.stdout);
+    await fsp.rename(tmpAbs, outAbs);
     return done();
   } catch (error) {
+    await cleanupTmp();
     return failure("extraction_failed", `Could not write the decompressed file: ${error instanceof Error ? error.message : String(error)}.`);
   }
 }

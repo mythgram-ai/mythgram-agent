@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { gzipSync } from "node:zlib";
 import { extractArchiveTool } from "./extract_archive.js";
 import { archiveFilesTool } from "./archive_files.js";
@@ -174,6 +175,37 @@ describe("extract_archive tool", () => {
     assert.equal((result.data as { output_directory: string }).output_directory.split(path.sep).join("/"), "single");
     assert.equal(await fs.readFile(path.join(workspace, "single/hello.txt"), "utf8"), "hello gzip\n");
   });
+
+  const hasBzip2 = executableExists("bzip2");
+  const hasXz = executableExists("xz");
+
+  for (const [program, ext] of [
+    ["bzip2", "bz2"],
+    ["xz", "xz"],
+  ] as const) {
+    const available = program === "bzip2" ? hasBzip2 : hasXz;
+    it(`fully decompresses a single .${ext} file larger than the output buffer cap`, { skip: !available }, async () => {
+      // 5 MiB > runCommand's 4 MiB MAX_OUTPUT_BYTES: the old buffered path silently truncated it.
+      const content = Buffer.alloc(5 * 1024 * 1024 + 123, 0x61);
+      const compressed = spawnSync(program, ["-c"], { input: content });
+      assert.equal(compressed.status, 0, compressed.stderr?.toString("utf8"));
+      await writeFile(`large/data.bin.${ext}`, compressed.stdout);
+
+      const result = await extract({ archive_path: `large/data.bin.${ext}`, password: null });
+      assert.equal(result.ok, true);
+      const data = result.data as { total_bytes: number };
+      assert.equal(data.total_bytes, content.length);
+
+      const written = await fs.readFile(path.join(workspace, `large/data.bin`));
+      assert.equal(written.length, content.length);
+      assert.deepEqual(written, content);
+
+      const leftover = (await fs.readdir(path.join(workspace, "large"))).filter((name) =>
+        name.endsWith(".tmp"),
+      );
+      assert.deepEqual(leftover, []);
+    });
+  }
 
   it("extracts an archive that was not created by archive_files", { skip: !(hasZip && hasUnzip) }, async () => {
     const foreign = createZipBuffer([
