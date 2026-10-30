@@ -1,50 +1,60 @@
-# Production Dockerfile for React + Python fullstack (shadcn variant)
-# Uses prebuilt base image for faster builds
+# Production image for Mythgram: a TypeScript/Express backend (mythgram/) and a
+# React/Vite frontend (frontend-main/) served from a single container.
+#
+# The backend owns the API on :8787 and the SQLite workspace state. The frontend
+# is built to static assets and served by Vite's preview server on :4173, which
+# proxies same-origin /api/* requests to the backend (see frontend-main/vite.config.ts).
+#
+# Build the base image first (see Dockerfile.base), then:
+#   docker build -t mythgram .
+#
+# BASE_IMAGE defaults to the local base tag; point it at your registry image if
+# you publish the base image instead.
 
-# Build stage for frontend - uses base image with node_modules pre-installed
-ARG BASE_IMAGE=node:20-slim
+ARG BASE_IMAGE=mythgram-base:latest
+
+# --- Frontend build: produce the static production bundle -------------------
 FROM ${BASE_IMAGE} AS frontend-builder
-
-WORKDIR /app/frontend
-
-# Copy frontend package files
-COPY frontend/package*.json ./
-
-# Install/update dependencies
-# If base image has node_modules, npm install only adds new packages (fast)
-# If no node_modules, does full install (slower but still works)
-RUN npm install
-
-# Copy frontend source code
-COPY frontend/ ./
-
-# Build the Vite frontend
-ENV NODE_ENV=production
+WORKDIR /app/frontend-main
+COPY frontend-main/package.json frontend-main/package-lock.json frontend-main/.npmrc ./
+COPY frontend-main/index.html frontend-main/vite.config.ts ./
+COPY frontend-main/tsconfig.json frontend-main/tsconfig.app.json frontend-main/tsconfig.node.json ./
+COPY frontend-main/src ./src
 RUN npm run build
 
-# Production image - Python backend serving static frontend
-FROM python:3.14-slim AS runner
+# --- Backend build: type-check the TypeScript sources -----------------------
+FROM ${BASE_IMAGE} AS backend-builder
+WORKDIR /app/mythgram
+COPY mythgram/package.json mythgram/tsconfig.json ./
+COPY mythgram/src ./src
+RUN npm run build
 
+# --- Runtime ----------------------------------------------------------------
+FROM ${BASE_IMAGE} AS runner
+
+# Backend source (node_modules come from the base image).
+COPY mythgram/package.json mythgram/tsconfig.json ./mythgram/
+COPY mythgram/src ./mythgram/src
+
+# Vite config used by the preview server, plus the built frontend assets.
+COPY frontend-main/package.json frontend-main/vite.config.ts ./frontend-main/
+COPY --from=frontend-builder /app/frontend-main/dist ./frontend-main/dist
+
+# Writable workspace for the agent's file tools and the SQLite database.
+RUN mkdir -p /app/workspace && chown -R node:node /app
+
+USER node
 WORKDIR /app
 
-# Install Python dependencies
-COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+ENV NODE_ENV=production \
+    PORT=8787 \
+    WORKSPACE_ROOT=/app/workspace \
+    MYTHGRAM_API_URL=http://localhost:8787 \
+    VITE_PORT=4173
 
-# Copy backend source
-COPY backend/src ./src
+# 4173 = web console (frontend), 8787 = backend API.
+EXPOSE 4173 8787
 
-# Copy built frontend to serve as static files
-COPY --from=frontend-builder /app/frontend/dist ./static
-
-# Create non-root user for security
-RUN addgroup --system --gid 1001 appgroup && \
-    adduser --system --uid 1001 appuser && \
-    chown -R appuser:appgroup /app
-
-USER appuser
-
-EXPOSE 8000
-ENV PORT=8000
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the backend and the frontend preview server together, forwarding stop
+# signals to both processes.
+CMD ["sh", "-c", "trap 'kill 0' TERM INT; npm --prefix /app/mythgram start & npm --prefix /app/frontend-main run preview -- --host 0.0.0.0 --port 4173 & wait"]
