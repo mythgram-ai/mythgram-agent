@@ -1,0 +1,43 @@
+#!/usr/bin/env sh
+# Runs typecheck/lint only for the subprojects touched by this commit.
+# Subprojects with missing dependencies are skipped so partial checkouts still commit.
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+changed() {
+  echo "$staged" | grep -q "$1"
+}
+
+installed() {
+  [ -d "$1/node_modules" ]
+}
+
+if changed '^mythgram/'; then
+  if installed mythgram; then
+    echo "husky > typecheck mythgram"
+    npm --prefix mythgram run typecheck || exit 1
+  else
+    echo "husky > skip mythgram typecheck (run: npm --prefix mythgram install)"
+  fi
+fi
+
+if changed '^frontend-main/'; then
+  if installed frontend-main; then
+    echo "husky > typecheck frontend-main"
+    npm --prefix frontend-main run typecheck || exit 1
+    echo "husky > lint frontend-main"
+    npm --prefix frontend-main run lint || exit 1
+  else
+    echo "husky > skip frontend-main checks (run: npm --prefix frontend-main install)"
+  fi
+fi
+
+if changed '^packages/local-tts/web-ui/'; then
+  if installed packages/local-tts/web-ui; then
+    echo "husky > lint local-tts web-ui"
+    npm --prefix packages/local-tts/web-ui run lint || exit 1
+  else
+    echo "husky > skip local-tts web-ui lint (run: npm --prefix packages/local-tts/web-ui install)"
+  fi
+fi
