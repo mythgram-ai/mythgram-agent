@@ -34,3 +34,6 @@ logs/
 # Voice models & download cache (large binaries)
 packages/local-tts/backend/data/
 packages/local-tts/.local-tts-*.log
+
+# Agent workspace runtime state (SQLite DB + .mythgram app data)
+packages/mythgram/workspace/

@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "mythgram/**"
+      - "packages/mythgram/**"
       - ".github/workflows/backend-deployment.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - "mythgram/**"
+      - "packages/mythgram/**"
       - ".github/workflows/backend-deployment.yml"
   workflow_dispatch:
 
@@ -72,14 +72,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mythgram/package-lock.json
+          cache-dependency-path: packages/mythgram/package-lock.json
 
       - name: Install dependencies
-        working-directory: mythgram
+        working-directory: packages/mythgram
         run: npm ci
 
       - name: Build backend
-        working-directory: mythgram
+        working-directory: packages/mythgram
         run: npm run build
 
       - name: Mark deployment successful

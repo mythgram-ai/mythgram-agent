@@ -3,11 +3,11 @@ name: Build backend production
 on:
   push:
     paths:
-      - "mythgram/**"
+      - "packages/mythgram/**"
       - ".github/workflows/backend-production.yml"
   pull_request:
     paths:
-      - "mythgram/**"
+      - "packages/mythgram/**"
       - ".github/workflows/backend-production.yml"
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mythgram
+        working-directory: packages/mythgram
 
     steps:
       - name: Check out repository
@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mythgram/package-lock.json
+          cache-dependency-path: packages/mythgram/package-lock.json
 
       - name: Install dependencies
         run: npm ci

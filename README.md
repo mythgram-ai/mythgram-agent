@@ -36,13 +36,13 @@ The browser-based console, **frontend-main**, brings chat and workspace manageme
 
 ```
 .
-├── mythgram/          # TypeScript/Express agent backend and SQLite persistence
-├── frontend-main/     # React 19 + Vite web console
-├── packages/
-│   └── local-tts/     # Standalone Python/Piper TTS service and web UI
-├── start.sh           # Starts the main backend and frontend in development mode
-├── stop.sh            # Stops processes listening on the default development ports
-└── .github/workflows/ # Backend/frontend build and deployment-status workflows
+├── packages/            # Monorepo packages
+│   ├── mythgram/        # TypeScript/Express agent backend and SQLite persistence
+│   ├── frontend-main/   # React 19 + Vite web console
+│   └── local-tts/       # Standalone Python/Piper TTS service and web UI
+├── start.sh             # Starts the main backend and frontend in development mode
+├── stop.sh              # Stops processes listening on the default development ports
+└── .github/workflows/   # Backend/frontend build and deployment-status workflows
 ```
 
 The backend owns the agent runtime, API, scheduler, channel services, integrations, and database. The frontend calls same-origin `/api/*` paths; Vite proxies those requests to the backend, including long-lived server-sent event (SSE) streams.
@@ -80,7 +80,7 @@ For a reproducible install using the committed lockfiles, open two terminals fro
 Terminal 1 — backend:
 
 ```bash
-cd mythgram
+cd packages/mythgram
 npm ci
 npm run dev
 ```
@@ -88,12 +88,12 @@ npm run dev
 Terminal 2 — frontend:
 
 ```bash
-cd frontend-main
+cd packages/frontend-main
 npm ci
 MYTHGRAM_API_URL=http://localhost:8787 npm run dev
 ```
 
-Then visit [http://localhost:5173](http://localhost:5173). The frontend needs the backend to be available; it is not a standalone app. To run the built frontend locally after building it, use `npm run preview` in `frontend-main/` (default preview port `4173`); the backend must still be running.
+Then visit [http://localhost:5173](http://localhost:5173). The frontend needs the backend to be available; it is not a standalone app. To run the built frontend locally after building it, use `npm run preview` in `packages/frontend-main/` (default preview port `4173`); the backend must still be running.
 
 On Windows, run the backend and frontend commands in separate terminals. The root shell scripts are Bash scripts; `stop.sh` also relies on `fuser`.
 
@@ -101,10 +101,10 @@ On Windows, run the backend and frontend commands in separate terminals. The roo
 
 ### Backend
 
-`mythgram/.env.example` documents backend settings. Copy it to `mythgram/.env` and adjust only what you need:
+`packages/mythgram/.env.example` documents backend settings. Copy it to `packages/mythgram/.env` and adjust only what you need:
 
 ```bash
-cp mythgram/.env.example mythgram/.env
+cp packages/mythgram/.env.example packages/mythgram/.env
 ```
 
 The backend loads `.env` from its process working directory. Main settings include:
@@ -124,13 +124,13 @@ The backend loads `.env` from its process working directory. Main settings inclu
 | `SUMMARY_THRESHOLD` | `0.9` | Context utilization fraction that triggers summarization. |
 | `SLIDING_WINDOW_TRUNCATE_PERCENT` | `0.3` | Fraction of context to free when sliding-window truncation runs. |
 
-Optional integration/fallback keys include `TAVILY_API_KEY`, `EXA_API_KEY`, `SERPAPI_API_KEY`, `FIRECRAWL_API_KEY`, `COMPOSIO_API_KEY`, `OPENROUTER_API_KEY`, and `KITTENML_API_KEY`. See `mythgram/.env.example` for additional controls. Model-provider credentials are generally managed through the frontend Settings rather than required in this environment file.
+Optional integration/fallback keys include `TAVILY_API_KEY`, `EXA_API_KEY`, `SERPAPI_API_KEY`, `FIRECRAWL_API_KEY`, `COMPOSIO_API_KEY`, `OPENROUTER_API_KEY`, and `KITTENML_API_KEY`. See `packages/mythgram/.env.example` for additional controls. Model-provider credentials are generally managed through the frontend Settings rather than required in this environment file.
 
-**Workspace and database location:** the backend uses the current working directory when `WORKSPACE_ROOT` is unset. The root `start.sh` changes into `mythgram/` before starting it, so the default database is `mythgram/.mythgram/mythgram.db`. Set `WORKSPACE_ROOT` to choose a different workspace; the application creates its `.mythgram/` directory and SQLite database automatically. Protect this directory: it contains persisted application state and conversation data.
+**Workspace and database location:** the backend uses the current working directory when `WORKSPACE_ROOT` is unset. The root `start.sh` changes into `packages/mythgram/` before starting it, so the default database is `packages/mythgram/.mythgram/mythgram.db`. Set `WORKSPACE_ROOT` to choose a different workspace; the application creates its `.mythgram/` directory and SQLite database automatically. Protect this directory: it contains persisted application state and conversation data.
 
 ### Frontend
 
-`frontend-main/.env.example` lists:
+`packages/frontend-main/.env.example` lists:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -143,7 +143,7 @@ These values are read by `vite.config.ts` from the process environment. Export t
 
 Run commands from the relevant package directory.
 
-### Backend (`mythgram/`)
+### Backend (`packages/mythgram/`)
 
 ```bash
 npm run dev        # Watch mode, using tsx
@@ -153,7 +153,7 @@ npm run typecheck  # Type check without emitting
 npm test           # Backend test suite
 ```
 
-### Frontend (`frontend-main/`)
+### Frontend (`packages/frontend-main/`)
 
 ```bash
 npm run dev        # Vite development server
@@ -187,11 +187,11 @@ The backend exposes `GET /health` and REST/SSE APIs under `/api/`. The main rout
 
 - `/api/acp` — Agent Client Protocol status/configuration and the resolved turn used by the stdio bridge.
 
-For the authoritative route implementations, see `mythgram/src/index.ts` and `mythgram/src/api/`.
+For the authoritative route implementations, see `packages/mythgram/src/index.ts` and `packages/mythgram/src/api/`.
 
 ## Agent Client Protocol (ACP)
 
-Mythgram can act as an [Agent Client Protocol](https://agentclientprotocol.com) agent, so any ACP client (such as the Zed editor) can use it. ACP clients launch a local agent over stdio; Mythgram ships a small stdio bridge (`mythgram/src/acp/`) that speaks ACP and runs each turn through the running backend — reusing the exact same runtimes as the web console (Default Agent, Custom Agents, agent teams, CEO systems, both context-management methods, the background memory agent, connectors, MCP servers, TTS and workspace).
+Mythgram can act as an [Agent Client Protocol](https://agentclientprotocol.com) agent, so any ACP client (such as the Zed editor) can use it. ACP clients launch a local agent over stdio; Mythgram ships a small stdio bridge (`packages/mythgram/src/acp/`) that speaks ACP and runs each turn through the running backend — reusing the exact same runtimes as the web console (Default Agent, Custom Agents, agent teams, CEO systems, both context-management methods, the background memory agent, connectors, MCP servers, TTS and workspace).
 
 Open the **ACP** panel in the console to:
 
@@ -199,7 +199,7 @@ Open the **ACP** panel in the console to:
 - Optionally override the LLM provider/model/keys, context management, and memory-agent schedule (empty fields inherit the app **Settings**, including the provider and TTS connections you already configured).
 - Read the connection instructions and copy the launch command / client configuration.
 
-The panel generates a connection using the `npx` command (no base URL is passed as an argument — the bridge discovers the backend automatically from `mythgram/.acp-endpoint.json`, written on boot). The backend must be running.
+The panel generates a connection using the `npx` command (no base URL is passed as an argument — the bridge discovers the backend automatically from `packages/mythgram/.acp-endpoint.json`, written on boot). The backend must be running.
 
 > ACP clients spawn the bridge as a subprocess, so the ACP panel's command should be run where this Mythgram installation lives. The bridge is an ACP **agent** (server); no authentication is required because it is launched locally.
 
@@ -215,7 +215,7 @@ The script prepares a Python virtual environment, installs the local UI dependen
 
 ## Deployment and security considerations
 
-- The root `Dockerfile` and `Dockerfile.base` are stale scaffolding: they refer to `frontend/` and `backend/` paths and a Python/FastAPI application that do not match the current `frontend-main/` and `mythgram/` projects. They are not a working container deployment recipe for the current application.
+- The root `Dockerfile` and `Dockerfile.base` are stale scaffolding: they refer to `frontend/` and `backend/` paths and a Python/FastAPI application that do not match the current `packages/frontend-main/` and `packages/mythgram/` projects. They are not a working container deployment recipe for the current application.
 
 - The default backend CORS configuration is permissive, and the API has no built-in authentication. Restrict network access and CORS, and place the service behind a trusted authenticated proxy before any shared or public deployment.
 

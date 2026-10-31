@@ -8,13 +8,13 @@
   },
   "scripts": {
     "prepare": "husky",
-    "typecheck:mythgram": "npm --prefix mythgram run typecheck",
-    "typecheck:frontend": "npm --prefix frontend-main run typecheck",
-    "lint:frontend": "npm --prefix frontend-main run lint",
+    "typecheck:mythgram": "npm --prefix packages/mythgram run typecheck",
+    "typecheck:frontend": "npm --prefix packages/frontend-main run typecheck",
+    "lint:frontend": "npm --prefix packages/frontend-main run lint",
     "lint:webui": "npm --prefix packages/local-tts/web-ui run lint",
-    "test:mythgram": "npm --prefix mythgram test",
-    "build:mythgram": "npm --prefix mythgram run build",
-    "build:frontend": "npm --prefix frontend-main run build"
+    "test:mythgram": "npm --prefix packages/mythgram test",
+    "build:mythgram": "npm --prefix packages/mythgram run build",
+    "build:frontend": "npm --prefix packages/frontend-main run build"
   },
   "devDependencies": {
     "husky": "^9.1.7"

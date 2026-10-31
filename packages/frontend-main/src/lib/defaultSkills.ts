@@ -2,7 +2,7 @@ import type { Skill } from "@/types";
 
 /**
  * The canonical set of pre-installed (default) skills, mirroring the built-in skill
- * folders in mythgram/src/agents/skills. Each skill's full entry file (SKILL.md) is
+ * folders in packages/mythgram/src/agents/skills. Each skill's full entry file (SKILL.md) is
  * embedded so the defaults are fully functional in the browser and appear in the
  * Skills manager. Users can override or disable a default by creating their own skill
  * with the same (case-insensitive) name — which then wins and is not duplicated.

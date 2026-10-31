@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "frontend-main/**"
+      - "packages/frontend-main/**"
       - ".github/workflows/frontend-deployment.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - "frontend-main/**"
+      - "packages/frontend-main/**"
       - ".github/workflows/frontend-deployment.yml"
   workflow_dispatch:
 
@@ -72,14 +72,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend-main/package-lock.json
+          cache-dependency-path: packages/frontend-main/package-lock.json
 
       - name: Install dependencies
-        working-directory: frontend-main
+        working-directory: packages/frontend-main
         run: npm ci
 
       - name: Build frontend
-        working-directory: frontend-main
+        working-directory: packages/frontend-main
         run: npm run build
 
       - name: Mark deployment successful

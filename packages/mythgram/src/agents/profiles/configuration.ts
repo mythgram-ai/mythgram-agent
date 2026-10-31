@@ -37,7 +37,7 @@ export const MAX_PROFILE_AVATAR_CHARS = 1_500_000;
 
 /**
  * Logo automatically routed to the built-in default profile: "Foxy", the curated
- * fox logo from the frontend gallery (frontend-main/src/lib/profileLogosA.ts),
+ * fox logo from the frontend gallery (packages/frontend-main/src/lib/profileLogosA.ts),
  * stored as a base64 SVG data URL. Byte-identical to what the frontend assigns,
  * so both sides agree on the default look without any extra fetch.
  */

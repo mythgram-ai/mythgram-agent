@@ -45,7 +45,7 @@ export function toCustomProviderConfig(
 
 /**
  * Static fallback list of every provider the mythgram backend supports, mirroring
- * `mythgram/src/agents/providers/registry.ts`. The Settings modal fetches the live
+ * `packages/mythgram/src/agents/providers/registry.ts`. The Settings modal fetches the live
  * list from the backend, but falls back to this so the dropdown is always populated
  * (e.g. before the first fetch resolves or if the backend is unreachable).
  */

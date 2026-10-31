@@ -1,9 +1,9 @@
-# Production image for Mythgram: a TypeScript/Express backend (mythgram/) and a
-# React/Vite frontend (frontend-main/) served from a single container.
+# Production image for Mythgram: a TypeScript/Express backend (packages/mythgram/) and a
+# React/Vite frontend (packages/frontend-main/) served from a single container.
 #
 # The backend owns the API on :8787 and the SQLite workspace state. The frontend
 # is built to static assets and served by Vite's preview server on :4173, which
-# proxies same-origin /api/* requests to the backend (see frontend-main/vite.config.ts).
+# proxies same-origin /api/* requests to the backend (see packages/frontend-main/vite.config.ts).
 #
 # Build the base image first (see Dockerfile.base), then:
 #   docker build -t mythgram .
@@ -16,28 +16,28 @@ ARG BASE_IMAGE=mythgram-base:latest
 # --- Frontend build: produce the static production bundle -------------------
 FROM ${BASE_IMAGE} AS frontend-builder
 WORKDIR /app/frontend-main
-COPY frontend-main/package.json frontend-main/package-lock.json frontend-main/.npmrc ./
-COPY frontend-main/index.html frontend-main/vite.config.ts ./
-COPY frontend-main/tsconfig.json frontend-main/tsconfig.app.json frontend-main/tsconfig.node.json ./
-COPY frontend-main/src ./src
+COPY packages/frontend-main/package.json packages/frontend-main/package-lock.json packages/frontend-main/.npmrc ./
+COPY packages/frontend-main/index.html packages/frontend-main/vite.config.ts ./
+COPY packages/frontend-main/tsconfig.json packages/frontend-main/tsconfig.app.json packages/frontend-main/tsconfig.node.json ./
+COPY packages/frontend-main/src ./src
 RUN npm run build
 
 # --- Backend build: type-check the TypeScript sources -----------------------
 FROM ${BASE_IMAGE} AS backend-builder
 WORKDIR /app/mythgram
-COPY mythgram/package.json mythgram/tsconfig.json ./
-COPY mythgram/src ./src
+COPY packages/mythgram/package.json packages/mythgram/tsconfig.json ./
+COPY packages/mythgram/src ./src
 RUN npm run build
 
 # --- Runtime ----------------------------------------------------------------
 FROM ${BASE_IMAGE} AS runner
 
 # Backend source (node_modules come from the base image).
-COPY mythgram/package.json mythgram/tsconfig.json ./mythgram/
-COPY mythgram/src ./mythgram/src
+COPY packages/mythgram/package.json packages/mythgram/tsconfig.json ./mythgram/
+COPY packages/mythgram/src ./mythgram/src
 
 # Vite config used by the preview server, plus the built frontend assets.
-COPY frontend-main/package.json frontend-main/vite.config.ts ./frontend-main/
+COPY packages/frontend-main/package.json packages/frontend-main/vite.config.ts ./frontend-main/
 COPY --from=frontend-builder /app/frontend-main/dist ./frontend-main/dist
 
 # Writable workspace for the agent's file tools and the SQLite database.

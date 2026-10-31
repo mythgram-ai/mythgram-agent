@@ -6,7 +6,7 @@ import type Database from "better-sqlite3";
  * Slides are stored as a JSON array (never as separate rows) because a deck is a
  * single ordered unit: reordering/deleting a slide must update the whole project
  * atomically. Built-in templates are NOT stored here — they live in code (see
- * mythgram/src/slides/defaultTemplates.ts); this table only holds user templates
+ * packages/mythgram/src/slides/defaultTemplates.ts); this table only holds user templates
  * saved with save_slides_as_template.
  */
 export interface SlideRow {

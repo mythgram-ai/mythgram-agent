@@ -14,14 +14,14 @@ RUN apt-get update \
 # Backend dependencies (mythgram): runtime deps plus tsx/typescript used to run
 # and type-check the TypeScript entry point.
 WORKDIR /app/mythgram
-COPY mythgram/package.json mythgram/package-lock.json ./
+COPY packages/mythgram/package.json packages/mythgram/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 # Frontend dependencies (frontend-main): includes the build-time devDependencies
 # (vite, typescript) needed to produce the production bundle. .npmrc enables
 # legacy peer resolution required by the current TypeScript toolchain.
 WORKDIR /app/frontend-main
-COPY frontend-main/package.json frontend-main/package-lock.json frontend-main/.npmrc ./
+COPY packages/frontend-main/package.json packages/frontend-main/package-lock.json packages/frontend-main/.npmrc ./
 RUN npm ci --no-audit --no-fund
 
 # The base image now holds node_modules for both packages under /app.

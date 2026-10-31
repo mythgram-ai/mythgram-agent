@@ -2,8 +2,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_DIR="$SCRIPT_DIR/mythgram"
-FRONTEND_DIR="$SCRIPT_DIR/frontend-main"
+BACKEND_DIR="$SCRIPT_DIR/packages/mythgram"
+FRONTEND_DIR="$SCRIPT_DIR/packages/frontend-main"
 
 cleanup() {
   echo ""
@@ -36,7 +36,7 @@ FRONTEND_PID=$!
 echo ""
 echo "Backend  → http://localhost:8787  (health: http://localhost:8787/health)"
 echo "Frontend → http://localhost:5173  (proxies /api → backend, reads from the local SQLite DB)"
-echo "Database → mythgram/workspace/.mythgram/mythgram.db (SQLite, WAL mode — auto-created)"
+echo "Database → packages/mythgram/workspace/.mythgram/mythgram.db (SQLite, WAL mode — auto-created)"
 echo ""
 echo "Press Ctrl+C to stop both."
 echo ""

@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** Absolute path of the discovery file (mythgram/.acp-endpoint.json). */
+/** Absolute path of the discovery file (packages/mythgram/.acp-endpoint.json). */
 export const ACP_ENDPOINT_FILE = path.resolve(HERE, "..", "..", ".acp-endpoint.json");
 
 /** Default backend URL when the discovery file is unavailable. */

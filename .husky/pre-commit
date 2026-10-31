@@ -13,23 +13,23 @@ installed() {
   [ -d "$1/node_modules" ]
 }
 
-if changed '^mythgram/'; then
-  if installed mythgram; then
+if changed '^packages/mythgram/'; then
+  if installed packages/mythgram; then
     echo "husky > typecheck mythgram"
-    npm --prefix mythgram run typecheck || exit 1
+    npm --prefix packages/mythgram run typecheck || exit 1
   else
-    echo "husky > skip mythgram typecheck (run: npm --prefix mythgram install)"
+    echo "husky > skip mythgram typecheck (run: npm --prefix packages/mythgram install)"
   fi
 fi
 
-if changed '^frontend-main/'; then
-  if installed frontend-main; then
+if changed '^packages/frontend-main/'; then
+  if installed packages/frontend-main; then
     echo "husky > typecheck frontend-main"
-    npm --prefix frontend-main run typecheck || exit 1
+    npm --prefix packages/frontend-main run typecheck || exit 1
     echo "husky > lint frontend-main"
-    npm --prefix frontend-main run lint || exit 1
+    npm --prefix packages/frontend-main run lint || exit 1
   else
-    echo "husky > skip frontend-main checks (run: npm --prefix frontend-main install)"
+    echo "husky > skip frontend-main checks (run: npm --prefix packages/frontend-main install)"
   fi
 fi
 
