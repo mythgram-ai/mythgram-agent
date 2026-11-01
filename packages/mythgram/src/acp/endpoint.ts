@@ -1,21 +1,33 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { MYTHGRAM_DATA_DIR_NAME } from "../config.js";
 
 /**
  * Tiny discovery file that lets the standalone ACP stdio bridge find the running
  * Mythgram backend without any environment variable or CLI argument.
  *
- * On boot the backend writes `<mythgram>/.acp-endpoint.json` with the URL it is
- * listening on. The bridge (launched by the editor via `npx`) imports this module
- * and reads the same file — so ACP connections keep working even when the backend
- * runs on a non-default port, with no base URL passed as an argument.
+ * On boot the backend writes `<mythgram>/.mythgram/.acp-endpoint.json` with the URL it is
+ * listening on. The bridge (launched by the editor via `npx`) imports this module and reads
+ * the same file — so ACP connections keep working even when the backend runs on a non-default
+ * port, with no base URL passed as an argument.
+ *
+ * The path is derived from THIS module's location (never the cwd), so the backend and the
+ * bridge — two separate processes started from different working directories — always agree
+ * on it. The file lives inside the ".mythgram" data folder to keep the package root clean.
  */
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** Absolute path of the discovery file (packages/mythgram/.acp-endpoint.json). */
-export const ACP_ENDPOINT_FILE = path.resolve(HERE, "..", "..", ".acp-endpoint.json");
+/** Mythgram package root (one level above src/). */
+const PACKAGE_ROOT = path.resolve(HERE, "..", "..");
+
+/** Absolute path of the discovery file (packages/mythgram/.mythgram/.acp-endpoint.json). */
+export const ACP_ENDPOINT_FILE = path.join(
+  PACKAGE_ROOT,
+  MYTHGRAM_DATA_DIR_NAME,
+  ".acp-endpoint.json",
+);
 
 /** Default backend URL when the discovery file is unavailable. */
 export const DEFAULT_ACP_BACKEND_URL = "http://127.0.0.1:8787";
@@ -34,6 +46,8 @@ export function writeAcpEndpoint(port: number): void {
       port,
       updatedAt: Date.now(),
     };
+    // The ".mythgram" folder may not exist yet the first time (e.g. a fresh checkout).
+    fs.mkdirSync(path.dirname(ACP_ENDPOINT_FILE), { recursive: true });
     fs.writeFileSync(ACP_ENDPOINT_FILE, JSON.stringify(payload));
   } catch {
     // Discovery is a convenience; a failure must never affect startup.
