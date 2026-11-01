@@ -1,31 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { MYTHGRAM_DATA_DIR_NAME } from "../config.js";
+import { config, resolveDataRootOverride } from "../config.js";
 
 /**
  * Tiny discovery file that lets the standalone ACP stdio bridge find the running
  * Mythgram backend without any environment variable or CLI argument.
  *
- * On boot the backend writes `<mythgram>/.mythgram/.acp-endpoint.json` with the URL it is
+ * On boot the backend writes `<workspace>/.mythgram/.acp-endpoint.json` with the URL it is
  * listening on. The bridge (launched by the editor via `npx`) imports this module and reads
  * the same file — so ACP connections keep working even when the backend runs on a non-default
  * port, with no base URL passed as an argument.
  *
- * The path is derived from THIS module's location (never the cwd), so the backend and the
- * bridge — two separate processes started from different working directories — always agree
- * on it. The file lives inside the ".mythgram" data folder to keep the package root clean.
+ * The path is derived from the workspace (cwd / WORKSPACE_ROOT / MYTHGRAM_DATA_DIR) rather
+ * than the package install location, so the discovery file lives in the same ".mythgram"
+ * folder the backend creates where the user ran `mythgram`, and the two processes always
+ * agree on it.
  */
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-
-/** Mythgram package root (one level above src/). */
-const PACKAGE_ROOT = path.resolve(HERE, "..", "..");
-
-/** Absolute path of the discovery file (packages/mythgram/.mythgram/.acp-endpoint.json). */
+/** Absolute path of the discovery file (<workspace>/.mythgram/.acp-endpoint.json). */
 export const ACP_ENDPOINT_FILE = path.join(
-  PACKAGE_ROOT,
-  MYTHGRAM_DATA_DIR_NAME,
+  resolveDataRootOverride(config.workspaceRoot),
   ".acp-endpoint.json",
 );
 

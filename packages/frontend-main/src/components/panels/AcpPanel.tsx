@@ -633,8 +633,9 @@ function ConnectionGuide({ info }: { info: AcpInfo }) {
       </div>
 
       <p className="mt-3 text-[11px] text-[var(--subtle)]">
-        The bridge is a local stdio process launched via <code>npx</code>. It needs the Mythgram
-        package (tsx) available; the exact command above already points at this installation.
+        The bridge is a local stdio process launched via <code>npx</code>. It runs the published{" "}
+        <code>mythgram</code> package, which speaks ACP automatically when an editor pipes its
+        stdio — the exact command above already works as-is.
       </p>
     </section>
   );

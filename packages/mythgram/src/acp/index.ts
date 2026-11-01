@@ -1,3 +1,5 @@
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { AcpBackendClient } from "./client.js";
 import { resolveAcpBackendUrl } from "./endpoint.js";
 import { AcpAgentServer } from "./server.js";
@@ -12,16 +14,28 @@ import { AcpAgentServer } from "./server.js";
  * is used exactly as configured in the app.
  *
  * Launch it with:
- *   npx --yes tsx <mythgram>/src/acp/index.ts
+ *   npx --yes mythgram acp
+ * or simply `npx --yes mythgram` when stdin is a pipe (which is how editors spawn it).
  *
  * Only stdout carries protocol messages; diagnostics go to stderr.
  */
 
-function main(): void {
+export function runAcp(): void {
   const baseUrl = resolveAcpBackendUrl();
   process.stderr.write(`[mythgram-acp] connecting to backend ${baseUrl}\n`);
   const server = new AcpAgentServer(new AcpBackendClient(baseUrl));
   server.start();
 }
 
-main();
+/** True when this module is the process entrypoint (direct `node dist/acp/index.js`). */
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return pathToFileURL(path.resolve(entry)).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) runAcp();

@@ -3,51 +3,60 @@
  * Background deamon (supervisor) for the Mythgram application.
  *
  * Keeps the application running forever on the user's computer: it starts the
- * mythgram backend (Express + SQLite) and the frontend-main UI (Vite) as
- * supervised child processes, restarts them on crash with backoff, health
- * checks the backend, and writes everything to log files.
+ * unified mythgram server (Express API + the bundled web console) as a supervised
+ * child process, restarts it on crash with backoff, health checks it, and writes
+ * everything to log files.
  *
  * NOTE: the folder is intentionally named `deamon` (project convention).
  *
- * Usage (from the mythgram package):
- *   npx tsx src/deamon/daemon.ts start [--foreground]  start (daemonized by default)
- *   npx tsx src/deamon/daemon.ts stop                  stop the supervisor + app
- *   npx tsx src/deamon/daemon.ts restart               restart
- *   npx tsx src/deamon/daemon.ts status                human-readable status
- *   npx tsx src/deamon/daemon.ts logs [--lines N]      tail the log files
- *   npx tsx src/deamon/daemon.ts install               install autostart + start now
- *   npx tsx src/deamon/daemon.ts uninstall             stop + remove autostart
+ * Usage (from the mythgram CLI):
+ *   mythgram                 start the app through this deamon (driven by the CLI)
+ *   node <mythgram>/dist/deamon/daemon.js start [--foreground]
+ *   node <mythgram>/dist/deamon/daemon.js stop
+ *   node <mythgram>/dist/deamon/daemon.js restart
+ *   node <mythgram>/dist/deamon/daemon.js status
+ *   node <mythgram>/dist/deamon/daemon.js logs [--lines N]
+ *   node <mythgram>/dist/deamon/daemon.js install
+ *   node <mythgram>/dist/deamon/daemon.js uninstall
  *
- * Data dir: $MYTHGRAM_DEAMON_DIR or <mythgram>/.mythgram/deamon — next to the
- * SQLite database, so everything is in one place.
- *   supervisor.pid   supervisor process id
- *   supervisor.log   supervisor's own log
- *   backend.log      mythgram backend output
- *   frontend.log     frontend-main output
+ * Workspace + data dir: the app runs in the directory where `mythgram` was started
+ * (or MYTHGRAM_WORKSPACE). Its ".mythgram" data dir — SQLite DB, logs, supervisor
+ * state — is created there, so a single command keeps everything in one place.
+ *   <workspace>/.mythgram/deamon/supervisor.pid
+ *   <workspace>/.mythgram/deamon/supervisor.log
+ *   <workspace>/.mythgram/deamon/app.log
+ *   <workspace>/.mythgram/mythgram.db
  */
 import { spawn, execSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const BACKEND_DIR = path.resolve(HERE, "..", "..");
-const REPO_ROOT = path.resolve(BACKEND_DIR, "..");
-const FRONTEND_DIR = path.join(REPO_ROOT, "frontend-main");
-const DAEMON_TS = path.join(HERE, "daemon.ts");
+/** Mythgram package root (one level above dist/ or src/). */
+const PACKAGE_DIR = path.resolve(HERE, "..", "..");
+const SELF_ENTRY = fileURLToPath(import.meta.url);
+const RUNNING_FROM_TS = SELF_ENTRY.endsWith(".ts");
+/** Compiled app entry (preferred) and the TypeScript source fallback for dev checkouts. */
+const APP_ENTRY = path.join(PACKAGE_DIR, "dist", "index.js");
+const APP_SRC_ENTRY = path.join(PACKAGE_DIR, "src", "index.ts");
+
+/**
+ * Directory `mythgram` was started in. This becomes the agent workspace, and its
+ * ".mythgram" folder holds all runtime state.
+ */
+const WORKSPACE = process.env.MYTHGRAM_WORKSPACE?.trim() || process.cwd();
 
 const DEAMON_DIR =
   process.env.MYTHGRAM_DEAMON_DIR?.trim() ||
-  path.join(BACKEND_DIR, ".mythgram", "deamon");
+  path.join(WORKSPACE, ".mythgram", "deamon");
 const PID_FILE = path.join(DEAMON_DIR, "supervisor.pid");
 const SUPERVISOR_LOG = path.join(DEAMON_DIR, "supervisor.log");
-const BACKEND_LOG = path.join(DEAMON_DIR, "backend.log");
-const FRONTEND_LOG = path.join(DEAMON_DIR, "frontend.log");
+const APP_LOG = path.join(DEAMON_DIR, "app.log");
 
 const BACKEND_PORT = Number(process.env.PORT ?? 8787);
-const FRONTEND_PORT = Number(process.env.VITE_PORT ?? 5173);
 const SERVICE_NAME = "mythgram";
 
 const RESTART_BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
@@ -95,10 +104,7 @@ function removePid(): void {
 }
 
 function resolveTsx(): string {
-  const candidates = [
-    path.join(BACKEND_DIR, "node_modules", ".bin", "tsx"),
-    path.join(FRONTEND_DIR, "node_modules", ".bin", "tsx"),
-  ];
+  const candidates = [path.join(PACKAGE_DIR, "node_modules", ".bin", "tsx")];
   for (const bin of candidates) {
     try {
       fs.accessSync(bin, fs.constants.X_OK);
@@ -108,6 +114,14 @@ function resolveTsx(): string {
     }
   }
   return "tsx";
+}
+
+/** Absolute command + args used to launch the unified app (node dist, or tsx src in dev). */
+function appCommand(): { command: string; args: string[] } {
+  if (fs.existsSync(APP_ENTRY)) {
+    return { command: process.execPath, args: [APP_ENTRY] };
+  }
+  return { command: resolveTsx(), args: [APP_SRC_ENTRY] };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -129,29 +143,27 @@ function httpGetOk(url: string, timeoutMs = 5000): Promise<boolean> {
 }
 
 interface Supervised {
-  name: "backend" | "frontend";
   child: ChildProcess | null;
   restarts: number;
   lastStart: number;
   consecutiveHealthFails: number;
-  logFile: string;
 }
 
 function spawnApp(s: Supervised, shuttingDown: () => boolean): void {
-  const cwd = s.name === "backend" ? BACKEND_DIR : FRONTEND_DIR;
-  const args = s.name === "backend" ? ["run", "start"] : ["run", "dev"];
   ensureDir(DEAMON_DIR);
-  const out = fs.createWriteStream(s.logFile, { flags: "a" });
-  const child = spawn("npm", args, {
-    cwd,
-    env: { ...process.env },
+  ensureDir(path.join(WORKSPACE, ".mythgram"));
+  const { command, args } = appCommand();
+  const out = fs.createWriteStream(APP_LOG, { flags: "a" });
+  const child = spawn(command, args, {
+    cwd: WORKSPACE,
+    env: { ...process.env, MYTHGRAM_WORKSPACE: WORKSPACE },
     stdio: ["ignore", "pipe", "pipe"],
   });
   s.child = child;
   s.lastStart = Date.now();
   child.stdout?.pipe(out);
   child.stderr?.pipe(out);
-  logLine(`[deamon] ${s.name} started (pid ${child.pid})`);
+  logLine(`[deamon] app started (pid ${child.pid}) in ${WORKSPACE}`);
   child.on("exit", (code, signal) => {
     s.child = null;
     if (shuttingDown()) return;
@@ -162,7 +174,7 @@ function spawnApp(s: Supervised, shuttingDown: () => boolean): void {
       30000;
     s.restarts += 1;
     logLine(
-      `[deamon] ${s.name} exited (code ${code}, signal ${signal}). Restarting in ${backoff}ms (attempt ${s.restarts}).`,
+      `[deamon] app exited (code ${code}, signal ${signal}). Restarting in ${backoff}ms (attempt ${s.restarts}).`,
     );
     setTimeout(() => {
       if (!shuttingDown()) spawnApp(s, shuttingDown);
@@ -170,52 +182,40 @@ function spawnApp(s: Supervised, shuttingDown: () => boolean): void {
   });
 }
 
-async function supervise(): Promise<void> {
+export async function supervise(): Promise<void> {
   ensureDir(DEAMON_DIR);
   if (readPid() !== null && readPid() !== process.pid) {
     logLine("[deamon] another supervisor is already running. Exiting.");
     process.exit(1);
   }
   writePid(process.pid);
-  logLine(`[deamon] supervisor started (pid ${process.pid}). Backend: ${BACKEND_DIR}, frontend: ${FRONTEND_DIR}`);
+  logLine(
+    `[deamon] supervisor started (pid ${process.pid}). Workspace: ${WORKSPACE}, package: ${PACKAGE_DIR}`,
+  );
 
   let down = false;
   const isDown = () => down;
-  const backend: Supervised = {
-    name: "backend",
+  const app: Supervised = {
     child: null,
     restarts: 0,
     lastStart: 0,
     consecutiveHealthFails: 0,
-    logFile: BACKEND_LOG,
-  };
-  const frontend: Supervised = {
-    name: "frontend",
-    child: null,
-    restarts: 0,
-    lastStart: 0,
-    consecutiveHealthFails: 0,
-    logFile: FRONTEND_LOG,
   };
 
   const shutdown = (signal: string) => {
     if (down) return;
     down = true;
-    logLine(`[deamon] supervisor received ${signal}. Stopping children...`);
-    for (const s of [backend, frontend]) {
-      try {
-        s.child?.kill("SIGTERM");
-      } catch {
-        // ignore
-      }
+    logLine(`[deamon] supervisor received ${signal}. Stopping the app...`);
+    try {
+      app.child?.kill("SIGTERM");
+    } catch {
+      // ignore
     }
     setTimeout(() => {
-      for (const s of [backend, frontend]) {
-        try {
-          if (s.child && !s.child.killed) s.child.kill("SIGKILL");
-        } catch {
-          // ignore
-        }
+      try {
+        if (app.child && !app.child.killed) app.child.kill("SIGKILL");
+      } catch {
+        // ignore
       }
       removePid();
       logLine("[deamon] supervisor stopped.");
@@ -225,41 +225,28 @@ async function supervise(): Promise<void> {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
-  spawnApp(backend, isDown);
-  spawnApp(frontend, isDown);
+  spawnApp(app, isDown);
 
   const healthTimer = setInterval(() => {
     if (down) return;
     void (async () => {
-      const backendOk = await httpGetOk(`http://localhost:${BACKEND_PORT}/health`);
-      if (backendOk) {
-        backend.consecutiveHealthFails = 0;
-      } else {
-        backend.consecutiveHealthFails += 1;
-        logLine(
-          `[deamon] backend health check failed (${backend.consecutiveHealthFails}/${HEALTH_FAIL_LIMIT}).`,
-        );
-        if (backend.consecutiveHealthFails >= HEALTH_FAIL_LIMIT && backend.child) {
-          logLine("[deamon] backend unhealthy — restarting it.");
-          try {
-            backend.child.kill("SIGTERM");
-          } catch {
-            // exit handler restarts it
-          }
-          backend.consecutiveHealthFails = 0;
-        }
+      const ok = await httpGetOk(`http://localhost:${BACKEND_PORT}/health`);
+      if (ok) {
+        app.consecutiveHealthFails = 0;
+        return;
       }
-      const frontendOk = await httpGetOk(`http://localhost:${FRONTEND_PORT}/`);
-      if (frontendOk) {
-        frontend.consecutiveHealthFails = 0;
-      } else {
-        frontend.consecutiveHealthFails += 1;
-        if (frontend.consecutiveHealthFails >= HEALTH_FAIL_LIMIT) {
-          logLine(
-            `[deamon] frontend not responding on :${FRONTEND_PORT} (${frontend.consecutiveHealthFails} checks). Leaving it to Vite; restart with 'restart' if needed.`,
-          );
-          frontend.consecutiveHealthFails = 0;
+      app.consecutiveHealthFails += 1;
+      logLine(
+        `[deamon] health check failed (${app.consecutiveHealthFails}/${HEALTH_FAIL_LIMIT}).`,
+      );
+      if (app.consecutiveHealthFails >= HEALTH_FAIL_LIMIT && app.child) {
+        logLine("[deamon] app unhealthy — restarting it.");
+        try {
+          app.child.kill("SIGTERM");
+        } catch {
+          // exit handler restarts it
         }
+        app.consecutiveHealthFails = 0;
       }
     })();
   }, HEALTH_INTERVAL_MS);
@@ -270,7 +257,7 @@ async function supervise(): Promise<void> {
   });
 }
 
-function cmdStart(foreground: boolean): void {
+export function cmdStart(foreground: boolean): void {
   ensureDir(DEAMON_DIR);
   const existing = readPid();
   if (existing !== null) {
@@ -281,10 +268,10 @@ function cmdStart(foreground: boolean): void {
     void supervise();
     return;
   }
-  const tsx = resolveTsx();
-  const child = spawn(tsx, [DAEMON_TS, "start", "--foreground"], {
-    cwd: REPO_ROOT,
-    env: { ...process.env },
+  const command = RUNNING_FROM_TS ? resolveTsx() : process.execPath;
+  const child = spawn(command, [SELF_ENTRY, "start", "--foreground"], {
+    cwd: WORKSPACE,
+    env: { ...process.env, MYTHGRAM_WORKSPACE: WORKSPACE },
     detached: true,
     stdio: "ignore",
   });
@@ -306,7 +293,7 @@ function cmdStart(foreground: boolean): void {
   wait();
 }
 
-async function cmdStop(): Promise<void> {
+export async function cmdStop(): Promise<void> {
   const pid = readPid();
   if (pid === null) {
     process.stdout.write("[deamon] not running (no pid file).\n");
@@ -351,27 +338,24 @@ async function cmdStop(): Promise<void> {
   process.stdout.write("[deamon] force-stopped.\n");
 }
 
-async function cmdStatus(): Promise<void> {
+export async function cmdStatus(): Promise<void> {
   const pid = readPid();
   if (pid === null) {
     process.stdout.write("[deamon] supervisor: NOT RUNNING\n");
   } else {
     process.stdout.write(`[deamon] supervisor: RUNNING (pid ${pid})\n`);
   }
-  const backendOk = await httpGetOk(`http://localhost:${BACKEND_PORT}/health`);
+  const ok = await httpGetOk(`http://localhost:${BACKEND_PORT}/health`);
   process.stdout.write(
-    `[deamon] backend :${BACKEND_PORT}: ${backendOk ? "HEALTHY" : "DOWN"}\n`,
+    `[deamon] app :${BACKEND_PORT}: ${ok ? "HEALTHY" : "DOWN"}\n`,
   );
-  const frontendOk = await httpGetOk(`http://localhost:${FRONTEND_PORT}/`);
-  process.stdout.write(
-    `[deamon] frontend :${FRONTEND_PORT}: ${frontendOk ? "UP" : "DOWN"}\n`,
-  );
-  process.stdout.write(`[deamon] logs: ${SUPERVISOR_LOG}, ${BACKEND_LOG}, ${FRONTEND_LOG}\n`);
-  if (pid === null || !backendOk) process.exitCode = 1;
+  process.stdout.write(`[deamon] workspace: ${WORKSPACE}\n`);
+  process.stdout.write(`[deamon] logs: ${SUPERVISOR_LOG}, ${APP_LOG}\n`);
+  if (pid === null || !ok) process.exitCode = 1;
 }
 
-function cmdLogs(lines: number): void {
-  for (const file of [SUPERVISOR_LOG, BACKEND_LOG, FRONTEND_LOG]) {
+export function cmdLogs(lines: number): void {
+  for (const file of [SUPERVISOR_LOG, APP_LOG]) {
     process.stdout.write(`\n===== ${file} (last ${lines} lines) =====\n`);
     try {
       const content = fs.readFileSync(file, "utf8").split("\n");
@@ -403,22 +387,23 @@ function systemdUnitPath(): string {
   return path.join(os.homedir(), ".config", "systemd", "user", `${SERVICE_NAME}.service`);
 }
 
-function cmdInstall(): void {
+export function cmdInstall(): void {
   ensureDir(DEAMON_DIR);
-  const tsx = resolveTsx();
-  const tsxAbs = path.isAbsolute(tsx) ? tsx : "tsx";
+  const command = RUNNING_FROM_TS ? resolveTsx() : process.execPath;
+  const execStart = `${command} ${SELF_ENTRY} start --foreground`;
   if (hasSystemdUser()) {
     const unitPath = systemdUnitPath();
     ensureDir(path.dirname(unitPath));
     const unit = [
       "[Unit]",
-      "Description=Mythgram background deamon (backend + frontend supervisor)",
+      "Description=Mythgram background deamon (unified API + web console supervisor)",
       "After=network.target",
       "",
       "[Service]",
       "Type=simple",
-      `WorkingDirectory=${REPO_ROOT}`,
-      `ExecStart=${tsxAbs} ${DAEMON_TS} start --foreground`,
+      `WorkingDirectory=${WORKSPACE}`,
+      `Environment=MYTHGRAM_WORKSPACE=${WORKSPACE}`,
+      `ExecStart=${execStart}`,
       "Restart=always",
       "RestartSec=5",
       "",
@@ -442,14 +427,14 @@ function cmdInstall(): void {
     // No systemd user bus (containers, minimal installs): persist via cron @reboot
     // and start the supervisor right now (detached, survives shell exit).
     try {
-      const entry = `@reboot ${tsxAbs} ${DAEMON_TS} start`;
+      const entry = `@reboot cd '${WORKSPACE}' && '${command}' '${SELF_ENTRY}' start`;
       let current = "";
       try {
         current = execSync("crontab -l", { encoding: "utf8", timeout: 5000 });
       } catch {
         current = "";
       }
-      if (!current.includes(`${DAEMON_TS} start`)) {
+      if (!current.includes(`${SELF_ENTRY} start`)) {
         const next = `${current.replace(/\n?$/, "\n")}${entry}\n`;
         execSync("crontab -", { input: next, timeout: 5000 });
         process.stdout.write("[deamon] added cron @reboot entry.\n");
@@ -469,7 +454,7 @@ function cmdInstall(): void {
   if (pid === null) cmdStart(false);
 }
 
-function cmdUninstall(): void {
+export function cmdUninstall(): void {
   void cmdStop().then(() => {
     if (hasSystemdUser()) {
       try {
@@ -488,7 +473,7 @@ function cmdUninstall(): void {
       const current = execSync("crontab -l", { encoding: "utf8", timeout: 5000 });
       const filtered = current
         .split("\n")
-        .filter((line) => !line.includes(`${DAEMON_TS} start`))
+        .filter((line) => !line.includes(`${SELF_ENTRY} start`))
         .join("\n");
       execSync("crontab -", { input: filtered, timeout: 5000 });
     } catch {
@@ -498,7 +483,7 @@ function cmdUninstall(): void {
   });
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   process.stdout.write(
     [
       "mythgram deamon — run the app forever in the background",
@@ -506,8 +491,8 @@ function printHelp(): void {
       "  start [--foreground]   start the supervisor (daemonized by default)",
       "  stop                   stop the supervisor and the app",
       "  restart                restart",
-      "  status                 supervisor + backend + frontend status",
-      "  logs [--lines N]       tail supervisor/backend/frontend logs",
+      "  status                 supervisor + app status",
+      "  logs [--lines N]       tail supervisor/app logs",
       "  install                install autostart (systemd or cron) and start now",
       "  uninstall              stop and remove autostart entries",
       "",
@@ -550,4 +535,15 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+/** True when this module is the process entrypoint (direct `node dist/deamon/daemon.js`). */
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return pathToFileURL(path.resolve(entry)).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) void main();

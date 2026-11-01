@@ -1,0 +1,11 @@
+# Never publish dependencies, runtime state, logs, or build-only sources.
+# The publishable artifact is defined by the "files" field in package.json; this
+# file exists so npm does not fall back to .gitignore (which excludes dist/).
+**/node_modules/
+**/.mythgram/
+**/workspace/
+**/dist/*.test.js
+**/*.log
+.env
+.env.local
+.env.*.local

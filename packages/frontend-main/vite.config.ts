@@ -57,5 +57,10 @@ export default defineConfig({
     target: "es2022",
     sourcemap: false,
     chunkSizeWarningLimit: 1200,
+    // The unified package ships one process: the mythgram backend serves the built console.
+    // Emit the SPA straight into the backend's dist/web so a single `npm run build` at the
+    // repo root produces the publishable artifact.
+    outDir: path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../mythgram/dist/web"),
+    emptyOutDir: true,
   },
 });

@@ -16,6 +16,9 @@ Thumbs.db
 node_modules/
 dist/
 
+# Built unified package artifacts (compiled backend + bundled web console)
+packages/mythgram/dist/
+
 # Python
 __pycache__/
 *.pyc

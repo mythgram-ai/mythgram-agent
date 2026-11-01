@@ -1,20 +1,55 @@
 {
-  "name": "mythgram-agent",
+  "name": "mythgram",
   "version": "1.0.0",
-  "private": true,
-  "description": "Git hooks and workspace tooling for the Mythgram Agent monorepo.",
+  "description": "Mythgram AI — a fast, reliable, autonomous local coding agent with a bundled web console. Run `mythgram` to start the API and UI on one port.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "mythgram": "packages/mythgram/dist/cli.js"
+  },
+  "main": "packages/mythgram/dist/index.js",
+  "files": [
+    "packages/mythgram/dist",
+    "packages/mythgram/.env.example",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20.9.0"
   },
+  "keywords": [
+    "mythgram",
+    "ai",
+    "agent",
+    "coding-agent",
+    "cli",
+    "acp"
+  ],
   "scripts": {
-    "prepare": "husky",
+    "prepare": "husky || exit 0",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "npm --prefix packages/mythgram run build",
+    "build:frontend": "npm --prefix packages/frontend-main run build",
+    "prepublishOnly": "npm run build",
     "typecheck:mythgram": "npm --prefix packages/mythgram run typecheck",
     "typecheck:frontend": "npm --prefix packages/frontend-main run typecheck",
     "lint:frontend": "npm --prefix packages/frontend-main run lint",
     "lint:webui": "npm --prefix packages/local-tts/web-ui run lint",
-    "test:mythgram": "npm --prefix packages/mythgram test",
-    "build:mythgram": "npm --prefix packages/mythgram run build",
-    "build:frontend": "npm --prefix packages/frontend-main run build"
+    "test:mythgram": "npm --prefix packages/mythgram test"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.1",
+    "express": "^5.1.0",
+    "jpeg-js": "^0.4.4",
+    "jsqr": "^1.4.0",
+    "multer": "^2.3.0",
+    "pngjs": "^7.0.0",
+    "tesseract.js": "^7.0.0",
+    "ws": "^8.21.3",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
     "husky": "^9.1.7"

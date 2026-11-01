@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
-import { config, ensureWorkspace, resolveDataRoot } from "./config.js";
+import fs from "node:fs";
+import path from "node:path";
+import { PROJECT_ROOT, config, ensureWorkspace, resolveDataRoot } from "./config.js";
 import { createProviderRegistry } from "./agents/providers/registry.js";
 import { createToolRegistry } from "./agents/tools/index.js";
 import { AgentRunner } from "./agents/agent.js";
@@ -330,8 +332,8 @@ function main(): void {
 
   // Agent Client Protocol (ACP): lets any ACP client (e.g. Zed) drive this agent as
   // an ACP-compatible subprocess. The ACP panel in the console persists the config;
-  // the stdio bridge (`src/acp/index.ts`) resolves each turn from `/api/acp/turn` and
-  // runs it through the SAME runtimes as the web console.
+  // the stdio bridge (the published `mythgram` CLI) resolves each turn from `/api/acp/turn`
+  // and runs it through the SAME runtimes as the web console.
   app.use(
     "/api/acp",
     buildAcpRouter({
@@ -342,6 +344,21 @@ function main(): void {
       tts,
     }),
   );
+
+  // Serve the bundled web console (built from packages/frontend-main into dist/web) from the
+  // SAME origin as the API. The published package ships one process: the backend serves both
+  // `/api/*` and the static SPA, so the browser's same-origin `/api` calls need no proxy, and
+  // `mythgram` opens a single port for the frontend and interaction. In a dev checkout where
+  // the frontend has not been built yet, this block is skipped and Vite serves the UI instead.
+  const webDir = path.join(PROJECT_ROOT, "dist", "web");
+  if (fs.existsSync(path.join(webDir, "index.html"))) {
+    app.use(express.static(webDir));
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      if (req.path.startsWith("/api") || req.path === "/health") return next();
+      res.sendFile(path.join(webDir, "index.html"));
+    });
+  }
 
   const server = app.listen(config.port, () => {
     // eslint-disable-next-line no-console

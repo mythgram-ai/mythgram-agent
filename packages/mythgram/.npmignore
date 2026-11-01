@@ -1,0 +1,15 @@
+# Packing rules for the built backend (a nested package inside the published
+# `mythgram` package). This file replaces the sibling .gitignore during packing so
+# the compiled `dist/` (backend JS + bundled web console) IS published while all
+# runtime state and secrets stay out of the tarball.
+node_modules/
+.env
+.env.local
+*.log
+.mythgram/
+uploads/
+.acp-endpoint.json
+.DS_Store
+src/
+tsconfig.json
+tsconfig.build.json

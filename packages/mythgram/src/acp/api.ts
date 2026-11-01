@@ -1,6 +1,5 @@
-import path from "node:path";
 import { Router, type Request, type Response } from "express";
-import { PROJECT_ROOT, type AppConfig } from "../config.js";
+import { type AppConfig } from "../config.js";
 import type { MythgramDatabase } from "../database/index.js";
 import type { ProviderRegistry } from "../agents/providers/registry.js";
 import type { MainAgentPromptManager } from "../agents/mainagentprompt/index.js";
@@ -53,7 +52,10 @@ function listNamed(raw: unknown): Array<{ id: string; name: string }> {
 export function buildAcpRouter(deps: AcpRouterDeps): Router {
   const router = Router();
   const manager = new AcpConfigManager(deps.db.appState);
-  const entryPath = path.join(PROJECT_ROOT, "src", "acp", "index.ts");
+  // The ACP bridge now ships as the published `mythgram` CLI, so editors launch it with
+  // `npx --yes mythgram` (no local tsx/entry path required). The CLI detects the non-interactive
+  // stdio context an ACP client provides and speaks the protocol itself.
+  const entryPath = "mythgram";
 
   const buildStatus = () => {
     const config = manager.get();
@@ -141,7 +143,7 @@ export function buildAcpRouter(deps: AcpRouterDeps): Router {
         transport: "stdio",
         protocolVersion: ACP_PROTOCOL_VERSION,
         command: "npx",
-        args: ["--yes", "tsx", entryPath],
+        args: ["--yes", "mythgram"],
         backendUrl: `http://127.0.0.1:${port}`,
         agent: { name: ACP_AGENT_NAME, title: ACP_AGENT_TITLE, version: ACP_AGENT_VERSION },
         entryPath,
