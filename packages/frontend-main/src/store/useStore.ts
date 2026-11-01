@@ -57,6 +57,7 @@ import type {
 import { uid, newSessionId } from "@/utils/id";
 import type { Schedule } from "@/lib/schedules";
 import type { SlideProject } from "@/lib/slides";
+import type { ArtifactMeta, ArtifactWithContent } from "@/lib/artifacts";
 import type { BackendBootPayload } from "@/lib/backendState";
 import { forkSessionData } from "@/lib/backendState";
 import { CUSTOM_PROVIDER_PREFIX } from "@/lib/providers";
@@ -122,6 +123,7 @@ export type Section =
   | "taskmodes"
   | "prompts"
   | "slides"
+  | "artifacts"
   | "promptagent"
   | "schedules"
   | "connectors"
@@ -184,6 +186,12 @@ interface AppState {
    * Synced with the backend SQLite database like every other slice.
    */
   promptLibrary: PromptLibraryItem[];
+  /**
+   * Saved artifacts (filesystem-backed under ".mythgram/artifacts"). Not persisted to the
+   * backend app-state: the panel loads them from /api/artifacts on open and agent mutations
+   * arrive live over the `artifacts_updated` SSE event.
+   */
+  artifacts: ArtifactMeta[];
   /**
    * Third-party app connector connections (GitHub, Slack, …), synced with the backend
    * SQLite database like every other slice. Only the connected-account id + status are
@@ -387,6 +395,16 @@ interface AppState {
     toolId: string,
     projects: SlideProject[],
   ) => void;
+
+  // show_artifact_to_user tool block (renders the artifact raw content inline)
+  setArtifactShown: (
+    convId: string,
+    msgId: string,
+    toolId: string,
+    artifact: ArtifactWithContent,
+  ) => void;
+  /** Replace the artifacts slice (panel load + agent-driven mutations). */
+  setArtifacts: (artifacts: ArtifactMeta[]) => void;
 
   // Slide presentation overlay (Slides panel preview)
   setSlidesPresentation: (projects: SlideProject[], activeProjectId?: string) => void;
@@ -999,6 +1017,7 @@ export const useStore = create<AppState>()(
       planModePrompt: DEFAULT_PLAN_MODE_PROMPT,
       agentMode: "agent",
       promptLibrary: [],
+      artifacts: [],
       composerPrefill: null,
       connectors: [],
       mcpServers: [],
@@ -1734,6 +1753,26 @@ export const useStore = create<AppState>()(
             }),
           ),
         })),
+
+      setArtifactShown: (convId, msgId, toolId, artifact) =>
+        set((s) => ({
+          conversations: patchTool(
+            s.conversations,
+            convId,
+            msgId,
+            toolId,
+            (tool) => ({ ...tool, artifactShow: artifact }),
+            () => ({
+              id: toolId,
+              name: "show_artifact_to_user",
+              label: `Artifact: ${artifact.title || artifact.id}`,
+              status: "ok",
+              artifactShow: artifact,
+            }),
+          ),
+        })),
+
+      setArtifacts: (artifacts) => set(() => ({ artifacts })),
 
       setSlidesPresentation: (projects, activeProjectId) =>
         set(() => ({

@@ -152,6 +152,42 @@ export const API_ROUTES = {
     path: "/api/chat/slides-template/:chatId/:toolCallId",
     description: "Submit the user's chosen slide template to ask_user_to_choose_slides_template.",
   },
+  artifactsList: {
+    name: "artifacts.list",
+    method: "GET",
+    path: "/api/artifacts",
+    description: "List every saved artifact (metadata only, pinned/newest first).",
+  },
+  artifactsGet: {
+    name: "artifacts.get",
+    method: "GET",
+    path: "/api/artifacts/:id",
+    description: "Read one artifact with its full raw content (for preview/editing).",
+  },
+  artifactsUpdate: {
+    name: "artifacts.update",
+    method: "PUT",
+    path: "/api/artifacts/:id",
+    description: "Update an artifact's metadata and/or replace its content.",
+  },
+  artifactsPin: {
+    name: "artifacts.pin",
+    method: "POST",
+    path: "/api/artifacts/:id/pin",
+    description: "Pin or unpin an artifact.",
+  },
+  artifactsDuplicate: {
+    name: "artifacts.duplicate",
+    method: "POST",
+    path: "/api/artifacts/:id/duplicate",
+    description: "Duplicate an artifact under a new id.",
+  },
+  artifactsDelete: {
+    name: "artifacts.delete",
+    method: "DELETE",
+    path: "/api/artifacts/:id",
+    description: "Delete an artifact (file + metadata).",
+  },
   chatStream: {
     name: "chat.stream",
     method: "POST",

@@ -45,6 +45,9 @@ export const SCHEDULE_RUN_ID_LENGTH = 12;
 /** Slide projects and user-created slide templates carry a 16-character alphanumeric ID. */
 export const SLIDE_PROJECT_ID_LENGTH = 16;
 
+/** Artifacts carry a 16-character alphanumeric ID (also used as their file-name stem). */
+export const ARTIFACT_ID_LENGTH = 16;
+
 /** Generate a cryptographically random ID of `length` characters from the 62-char alphabet. */
 export function randomId(length: number): string {
   const bytes = crypto.randomBytes(length);
@@ -130,6 +133,15 @@ export function createPromptLibraryId(): string {
  */
 export function createSlideProjectId(): string {
   return randomId(SLIDE_PROJECT_ID_LENGTH);
+}
+
+/**
+ * Create a new 16-character artifact ID (all numbers + all letters). Each saved
+ * artifact carries its own id; the id doubles as the artifact file's name stem
+ * inside `.mythgram/artifacts/` so the file path is always derivable from the id.
+ */
+export function createArtifactId(): string {
+  return randomId(ARTIFACT_ID_LENGTH);
 }
 
 /**

@@ -13,6 +13,7 @@ import { normalizePromptLibrary } from "@/lib/promptLibrary";
 import { normalizeMainAgentPrompts } from "@/lib/mainAgentPrompts";
 import { normalizeCustomAgents } from "@/lib/customAgents";
 import { normalizeSlideProject, normalizeTemplateSummaries } from "@/lib/slides";
+import { normalizeArtifactList, normalizeArtifactWithContent } from "@/lib/artifacts";
 import type { StreamBatcher } from "@/lib/streamBatcher";
 import type {
   AttachedFile,
@@ -288,6 +289,21 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
     case "slides_templates_updated":
       // The Slides panel refetches when opened; templates saved by the agent are also
       // reflected on the next panel load. No store slice is needed for this event.
+      break;
+
+    case "artifact_show": {
+      // show_artifact_to_user attaches the artifact (metadata + raw content) to its
+      // tool block so it stays viewable inline in the conversation.
+      const artifact = normalizeArtifactWithContent(data.artifact);
+      const toolId = typeof data.tool_call_id === "string" ? data.tool_call_id : "";
+      if (artifact && toolId) s.setArtifactShown(convId, msgId, toolId, artifact);
+      break;
+    }
+
+    case "artifacts_updated":
+      // An agent-driven artifact tool (save/delete) mutated the filesystem-backed store.
+      // Mirror the backend truth into the store so the Artifacts panel converges at once.
+      s.setArtifacts(normalizeArtifactList(data.artifacts));
       break;
 
     case "tool_result": {

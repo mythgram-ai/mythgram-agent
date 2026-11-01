@@ -9,6 +9,7 @@ import { AskQuestionBlock } from "./AskQuestionBlock";
 import { AskSomethingBlock } from "./AskSomethingBlock";
 import { AskSlidesTemplateBlock } from "./AskSlidesTemplateBlock";
 import { PresentSlidesBlock } from "./PresentSlidesBlock";
+import { ShowArtifactBlock } from "./ShowArtifactBlock";
 import { TeamRunView } from "./TeamRunView";
 import { SavePromptModal } from "@/components/panels/PromptLibraryPanel";
 
@@ -19,7 +20,8 @@ function isBlockTool(name: string): boolean {
     name === "ask_question_to_user" ||
     name === "ask_for_something" ||
     name === "ask_user_to_choose_slides_template" ||
-    name === "present_slides"
+    name === "present_slides" ||
+    name === "show_artifact_to_user"
   );
 }
 
@@ -115,6 +117,8 @@ function MessageItemImpl({ message }: { message: ChatMessage }) {
             <AskSlidesTemplateBlock key={tool.id} tool={tool} />
           ) : tool.name === "present_slides" ? (
             <PresentSlidesBlock key={tool.id} tool={tool} />
+          ) : tool.name === "show_artifact_to_user" ? (
+            <ShowArtifactBlock key={tool.id} tool={tool} />
           ) : (
             <AskQuestionBlock key={tool.id} tool={tool} />
           ),

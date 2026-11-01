@@ -31,6 +31,7 @@ import { buildTtsRouter } from "./api/tts.js";
 import { buildSummaryRouter } from "./api/summaries.js";
 import { buildPromptAgentRouter } from "./api/promptagent.js";
 import { buildSlidesRouter } from "./api/slides.js";
+import { buildArtifactsRouter } from "./api/artifacts.js";
 import { buildAcpRouter } from "./acp/api.js";
 import { writeAcpEndpoint } from "./acp/endpoint.js";
 import { ScheduleStore } from "./cron/store.js";
@@ -291,6 +292,7 @@ function main(): void {
   app.use("/api/main-agent-prompts", buildMainAgentPromptsRouter(mainAgentPrompts, config));
   app.use("/api/prompt-library", buildPromptLibraryRouter(promptLibrary));
   app.use("/api/slides", buildSlidesRouter(slidesManager));
+  app.use("/api/artifacts", buildArtifactsRouter(config));
   app.use(
     "/api/chat",
     buildChatRouter(

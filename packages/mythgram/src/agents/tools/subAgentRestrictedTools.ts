@@ -127,6 +127,9 @@ export const SUB_AGENT_RESTRICTED_TOOLS: readonly string[] = [
   "read_slides_template",
   "manage_slides",
   "save_slides_as_template",
+  // Artifact preview is a user-facing presentation — only for main/custom/team/CEO agents.
+  // The other artifact tools (save/list/read/delete_artifacts) remain available to sub-agents.
+  "show_artifact_to_user",
 ];
 
 /** Fast membership test for the restricted set. */

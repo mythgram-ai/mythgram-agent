@@ -1,4 +1,5 @@
 import type { SlideProject } from "@/lib/slides";
+import type { ArtifactWithContent } from "@/lib/artifacts";
 
 export interface ProviderMeta {
   id: string;
@@ -183,6 +184,8 @@ export interface ToolActivity {
   slidesChoice?: SlidesTemplateChoiceInfo;
   /** Slide decks rendered inline by the present_slides tool block. */
   slidesPresent?: SlideProject[];
+  /** Artifact preview rendered inline by the show_artifact_to_user tool block. */
+  artifactShow?: ArtifactWithContent;
 }
 
 /** Structured result streamed back for the read_image tool (no image payload — metadata only). */
@@ -1151,6 +1154,12 @@ export interface SSEEventData {
   tool_call_id?: string;
   /** Complete slide projects to render in the present_slides tool block. */
   projects?: unknown[];
+  // artifact_show fields
+  /** Complete artifact (metadata + raw content) to render in the show_artifact_to_user tool block. */
+  artifact?: unknown;
+  // artifacts_updated fields
+  /** The complete artifact list after an agent-driven save/delete. */
+  artifacts?: unknown[];
   // todo_updated (TodoWrite) fields
   todos?: TodoItem[];
   // memory_updated (memory tool) fields

@@ -15,6 +15,7 @@ import { MainAgentPromptsPanel } from "@/components/panels/MainAgentPromptsPanel
 import { TaskModesPanel } from "@/components/panels/TaskModesPanel";
 import { PromptLibraryPanel } from "@/components/panels/PromptLibraryPanel";
 import { SlidesPanel } from "@/components/panels/SlidesPanel";
+import { ArtifactsPanel } from "@/components/panels/ArtifactsPanel";
 import { SlidesPresenter } from "@/components/overlays/SlidesPresenter";
 import { PromptAgentPanel } from "@/components/panels/PromptAgentPanel";
 import { SchedulesPanel } from "@/components/panels/SchedulesPanel";
@@ -176,6 +177,7 @@ export function App() {
               {section === "taskmodes" && <TaskModesPanel />}
               {section === "prompts" && <PromptLibraryPanel />}
               {section === "slides" && <SlidesPanel />}
+              {section === "artifacts" && <ArtifactsPanel />}
               {section === "promptagent" && <PromptAgentPanel />}
               {section === "schedules" && <SchedulesPanel />}
               {section === "connectors" && <ConnectorsPanel />}

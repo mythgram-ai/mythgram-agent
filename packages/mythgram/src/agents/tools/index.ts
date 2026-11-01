@@ -107,6 +107,11 @@ import { askUserToChooseSlidesTemplateTool } from "./ask_user_to_choose_slides_t
 import { readSlidesTemplateTool } from "./read_slides_template.js";
 import { manageSlidesTool } from "./manage_slides.js";
 import { saveSlidesAsTemplateTool } from "./save_slides_as_template.js";
+import { saveArtifactsTool } from "./save_artifacts.js";
+import { listArtifactsTool } from "./list_artifacts.js";
+import { deleteArtifactsTool } from "./delete_artifacts.js";
+import { showArtifactToUserTool } from "./show_artifact_to_user.js";
+import { readArtifactTool } from "./read_artifact.js";
 
 export { ToolRegistry } from "./registry.js";
 export type {
@@ -281,6 +286,11 @@ export { askUserToChooseSlidesTemplateTool } from "./ask_user_to_choose_slides_t
 export { readSlidesTemplateTool } from "./read_slides_template.js";
 export { manageSlidesTool } from "./manage_slides.js";
 export { saveSlidesAsTemplateTool } from "./save_slides_as_template.js";
+export { saveArtifactsTool } from "./save_artifacts.js";
+export { listArtifactsTool } from "./list_artifacts.js";
+export { deleteArtifactsTool } from "./delete_artifacts.js";
+export { showArtifactToUserTool } from "./show_artifact_to_user.js";
+export { readArtifactTool } from "./read_artifact.js";
 export {
   ARCHIVE_FORMATS,
   FORMAT_EXTENSION,
@@ -439,6 +449,11 @@ export function createToolRegistry(): ToolRegistry {
     readSlidesTemplateTool,
     manageSlidesTool,
     saveSlidesAsTemplateTool,
+    saveArtifactsTool,
+    listArtifactsTool,
+    deleteArtifactsTool,
+    showArtifactToUserTool,
+    readArtifactTool,
     sendResponsesTool,
   ]);
 }
@@ -551,5 +566,10 @@ export const tools = {
   readSlidesTemplateTool,
   manageSlidesTool,
   saveSlidesAsTemplateTool,
+  saveArtifactsTool,
+  listArtifactsTool,
+  deleteArtifactsTool,
+  showArtifactToUserTool,
+  readArtifactTool,
   sendResponsesTool,
 };
