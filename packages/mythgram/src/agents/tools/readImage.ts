@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
-import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
+import { isPathAllowed, safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 
 /** Supported image file extensions (lowercase, with a leading dot). */
 export const SUPPORTED_IMAGE_EXTENSIONS: readonly string[] = [
@@ -164,7 +164,7 @@ function resolveWorkspaceImage(workspaceRoot: string, input: string): { absPath:
   const trimmed = input.trim();
   const root = path.resolve(workspaceRoot);
 
-  if (path.isAbsolute(trimmed) && (trimmed === root || trimmed.startsWith(root + path.sep))) {
+  if (path.isAbsolute(trimmed) && isPathAllowed(workspaceRoot, trimmed)) {
     const abs = safeResolve(workspaceRoot, trimmed);
     return { absPath: abs, relPath: toWorkspaceRelative(workspaceRoot, abs) };
   }

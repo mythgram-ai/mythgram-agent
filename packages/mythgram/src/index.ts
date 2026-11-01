@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
-import path from "node:path";
-import { config, ensureWorkspace } from "./config.js";
+import { config, ensureWorkspace, resolveDataRoot } from "./config.js";
 import { createProviderRegistry } from "./agents/providers/registry.js";
 import { createToolRegistry } from "./agents/tools/index.js";
 import { AgentRunner } from "./agents/agent.js";
@@ -90,7 +89,8 @@ function main(): void {
   // starts the server, and points the `localtts` provider at it.
   const localTtsInstaller = new LocalTtsInstaller({
     manager: tts,
-    dataDir: path.join(config.workspaceRoot, ".mythgram"),
+    // Fixed application data dir (created once at boot) — never moved on a workspace switch.
+    dataDir: resolveDataRoot(config.workspaceRoot),
     python: process.env.LOCAL_TTS_PYTHON?.trim() || undefined,
   });
   // Speech runtime bridge for the agent's generate_speech tool: it selects a connected provider

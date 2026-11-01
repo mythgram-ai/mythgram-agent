@@ -5,8 +5,11 @@ import { requestJson } from "@/lib/api";
  * Workspace client — the agent's workspace defaults to wherever mythgram is
  * started/running. The picker shows the current absolute path, lets the user
  * switch it (absolute or relative), and can create new folders (nested
- * `<folder>` or `<a>/<b>/<c>` supported). The ".mythgram" dir is initialized
- * where the workspace is set.
+ * `<folder>` or `<a>/<b>/<c>` supported).
+ *
+ * The ".mythgram" data dir is created once at app boot and is NOT recreated or
+ * moved when the workspace is switched: switching only changes the file-tool
+ * sandbox, so the app keeps using a single data dir.
  */
 
 export async function fetchWorkspace(signal?: AbortSignal): Promise<string> {

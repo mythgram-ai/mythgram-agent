@@ -1,26 +1,33 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
+import { MYTHGRAM_DATA_DIR_NAME, resolveDataRoot } from "../config.js";
 
 /**
  * SQLite connection management.
  *
- * The database file lives at `<workspace>/.mythgram/mythgram.db` and is created automatically
- * the first time the agent starts. better-sqlite3 bundles SQLite 3.53.4 and executes
- * statements synchronously — every write on a request/streaming path therefore goes
- * through the batched {@link ../writeQueue.ts DatabaseWriteQueue}, never directly,
- * so token streaming at 10k-100k+ tokens/second can never block the event loop.
+ * The database file lives at `<data-dir>/mythgram.db`, where the data dir is the fixed
+ * ".mythgram" folder created once at boot (`resolveDataRoot`) — it does not move when the
+ * active workspace is switched. It is created automatically the first time the agent starts.
+ * better-sqlite3 bundles SQLite 3.53.4 and executes statements synchronously — every write
+ * on a request/streaming path therefore goes through the batched
+ * {@link ../writeQueue.ts DatabaseWriteQueue}, never directly, so token streaming at
+ * 10k-100k+ tokens/second can never block the event loop.
  */
 
-/** Directory (inside the workspace) that holds the database file. */
-export const MYTHGRAM_DATA_DIR = ".mythgram";
+/** Directory name that holds the database file (the fixed application data dir). */
+export const MYTHGRAM_DATA_DIR = MYTHGRAM_DATA_DIR_NAME;
 
 /** Database file name inside the `.mythgram` folder. */
 export const DATABASE_FILE_NAME = "mythgram.db";
 
-/** Resolve the absolute path of the database file for a workspace. */
+/**
+ * Resolve the absolute path of the database file for a workspace. Uses the fixed data
+ * directory (see {@link resolveDataRoot}), so the database stays in one place across
+ * workspace switches.
+ */
 export function resolveDatabasePath(workspaceRoot: string): string {
-  return path.join(workspaceRoot, MYTHGRAM_DATA_DIR, DATABASE_FILE_NAME);
+  return path.join(resolveDataRoot(workspaceRoot), DATABASE_FILE_NAME);
 }
 
 export interface ConnectionOptions {

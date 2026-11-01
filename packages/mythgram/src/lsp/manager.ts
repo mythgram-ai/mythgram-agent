@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { resolveDataRoot } from "../config.js";
 import { safeResolve, toWorkspaceRelative } from "../utils/paths.js";
 import { LspClient, type SpawnFunction } from "./client.js";
 import { LspError, messageOf, toLspError } from "./errors.js";
@@ -576,7 +577,7 @@ function envInt(name: string): number | undefined {
 
 /**
  * Read optional workspace-specific server definitions from
- * `<workspace>/.mythgram/lsp.json`. Accepted shapes:
+ * `<data-dir>/lsp.json` (the fixed ".mythgram" data directory). Accepted shapes:
  *
  *   { "servers": [ { "id": "...", "extensions": { ".foo": "foo" },
  *                     "command": "...", "args": ["..."],
@@ -588,7 +589,7 @@ function envInt(name: string): number | undefined {
 export function loadWorkspaceServerDefinitions(
   workspaceRoot: string,
 ): LspServerDefinition[] {
-  const configPath = path.join(workspaceRoot, ".mythgram", "lsp.json");
+  const configPath = path.join(resolveDataRoot(workspaceRoot), "lsp.json");
   let raw: string;
   try {
     raw = readFileSync(configPath, "utf8");

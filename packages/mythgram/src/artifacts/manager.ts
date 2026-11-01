@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { createArtifactId } from "../database/ids.js";
+import { resolveDataRoot } from "../config.js";
 import { safeResolve } from "../utils/paths.js";
 import {
   ARTIFACT_TYPES,
@@ -135,14 +136,23 @@ function normalizeMeta(raw: unknown): ArtifactMeta | null {
   };
 }
 
-/** Absolute path of the artifacts directory for a workspace root. */
+/** Absolute path of the artifacts directory inside the fixed data dir. */
 export function artifactsDirAbs(workspaceRoot: string): string {
-  return path.join(workspaceRoot, ARTIFACTS_DIR);
+  return artifactAbs(workspaceRoot, ARTIFACTS_DIR);
 }
 
-/** Absolute path of an artifact file given its workspace-relative path. */
+/**
+ * Absolute path of an artifact file given its logical workspace-relative path
+ * (".mythgram/artifacts/<id>.<ext>"). The ".mythgram" prefix is mapped onto the fixed
+ * application data directory so artifacts survive workspace switches.
+ */
 export function artifactAbs(workspaceRoot: string, file: string): string {
-  return path.join(workspaceRoot, file);
+  const rel = file
+    .replace(/\\/g, "/")
+    .replace(/^\.mythgram\/?/, "")
+    .split("/")
+    .filter(Boolean);
+  return path.join(resolveDataRoot(workspaceRoot), ...rel);
 }
 
 /** A copy safe to hand to the model/UI (no mutation aliasing). */

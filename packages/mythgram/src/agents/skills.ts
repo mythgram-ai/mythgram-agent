@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { safeResolve, toWorkspaceRelative } from "../utils/paths.js";
+import { resolveDataRoot } from "../config.js";
+import { MYTHGRAM_DIR, toWorkspaceRelative } from "../utils/paths.js";
 import type {
   FailedSkill,
   InitializedSkill,
@@ -84,10 +85,13 @@ class SkillRunner {
     params: { filePath: string; skillNames: string[] },
     ctx: ToolContext,
   ): Promise<SkillInitializeResult> {
-    // Base directory the model asked to initialize skills under. safeResolve keeps it inside the
-    // workspace even when the model passes an absolute-looking path (e.g. "/workspace/project").
-    const baseAbs = safeResolve(ctx.workspaceRoot, params.filePath || ".");
-    const skillsRootAbs = path.join(baseAbs, SKILLS_DIR);
+    // Skills are ALWAYS materialized in the fixed application data directory (".mythgram/skills"),
+    // never inside the active workspace, so they are not recreated or scattered when the workspace
+    // is switched. `params.filePath` is still accepted for backwards compatibility but no longer
+    // changes where skills are written.
+    void params.filePath;
+    const dataRoot = resolveDataRoot(ctx.workspaceRoot);
+    const skillsRootAbs = path.join(dataRoot, "skills");
     await fs.mkdir(skillsRootAbs, { recursive: true });
 
     const initialized: InitializedSkill[] = [];
@@ -117,8 +121,8 @@ class SkillRunner {
       if (await pathExists(skillDirAbs)) {
         failed.push({
           skill_name: definition.name.trim(),
-          error: `Skill "${definition.name.trim()}" is already initialized at ${relativeToBase(
-            baseAbs,
+          error: `Skill "${definition.name.trim()}" is already initialized at ${dataRelative(
+            dataRoot,
             skillDirAbs,
           )}. Read its files with file_read instead of re-initializing.`,
         });
@@ -131,21 +135,21 @@ class SkillRunner {
         const written: string[] = [];
 
         for (const file of files) {
-          // Each file path is resolved under the skill folder and validated to stay inside the
-          // workspace (defense in depth against "../" traversal in a file name).
-          const targetAbs = safeResolve(ctx.workspaceRoot, path.join(skillDirAbs, file.path));
+          // Each file path is resolved under the skill folder and validated to stay inside it
+          // (defense in depth against "../" traversal in a file name).
+          const targetAbs = path.resolve(skillDirAbs, file.path);
           if (!isInside(skillDirAbs, targetAbs)) {
             throw new Error(`File path "${file.path}" escapes the skill folder.`);
           }
           await fs.mkdir(path.dirname(targetAbs), { recursive: true });
           await fs.writeFile(targetAbs, file.content, "utf8");
-          written.push(relativeToBase(baseAbs, targetAbs));
+          written.push(dataRelative(dataRoot, targetAbs));
         }
 
         initialized.push({
           skill_name: definition.name.trim(),
-          path: relativeToBase(baseAbs, skillDirAbs),
-          skill_file: relativeToBase(baseAbs, path.join(skillDirAbs, skillFile)),
+          path: dataRelative(dataRoot, skillDirAbs),
+          skill_file: dataRelative(dataRoot, path.join(skillDirAbs, skillFile)),
           files: written,
         });
       } catch (error) {
@@ -200,10 +204,13 @@ function cleanFilePath(raw: string | undefined): string {
   return path.normalize(trimmed.replace(/^[\\/]+/, "")).replace(/\\/g, "/");
 }
 
-/** Path of `target` relative to `base`, using forward slashes for stable, portable output. */
-function relativeToBase(base: string, target: string): string {
-  const rel = path.relative(base, target);
-  return rel.split(path.sep).join("/");
+/**
+ * Convert an absolute path inside the fixed data dir to its logical ".mythgram/..." form
+ * (posix separators), e.g. ".mythgram/skills/git-workflow/SKILL.md".
+ */
+function dataRelative(dataRoot: string, target: string): string {
+  const rel = path.relative(dataRoot, target).split(path.sep).join("/");
+  return rel ? `${MYTHGRAM_DIR}/${rel}` : MYTHGRAM_DIR;
 }
 
 /** Whether `target` is `parent` itself or nested inside it. */

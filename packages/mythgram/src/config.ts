@@ -10,6 +10,13 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 /** Root of the mythgram package (one level above src/). */
 export const PROJECT_ROOT = path.resolve(currentDir, "..");
 
+/**
+ * Name of the application data directory. It is created exactly once (at boot) inside
+ * the initial workspace root (or at MYTHGRAM_DATA_DIR when that env var is set) and is
+ * never created or moved again when the active workspace is switched.
+ */
+export const MYTHGRAM_DATA_DIR_NAME = ".mythgram";
+
 function resolveWorkspaceRoot(): string {
   const configured = process.env.WORKSPACE_ROOT?.trim();
   if (configured) {
@@ -26,6 +33,15 @@ function resolveWorkspaceRoot(): string {
 export interface AppConfig {
   port: number;
   workspaceRoot: string;
+  /**
+   * Absolute path of the fixed application data directory (the ".mythgram" folder).
+   * Resolved once at boot by {@link ensureWorkspace} from the initial workspace root
+   * (or the MYTHGRAM_DATA_DIR env override) and never changed when the workspace is
+   * switched, so the SQLite database, artifacts, skills, checkpoints, ... always live
+   * in a single place. Undefined before boot and in isolated tests, where callers fall
+   * back to `<workspaceRoot>/.mythgram` via {@link resolveDataRoot}.
+   */
+  dataRoot?: string;
   maxIterations: number;
   corsOrigins: string[] | "*";
   shellTimeoutMs: number;
@@ -156,23 +172,54 @@ export const config: AppConfig = {
   ),
 };
 
+/**
+ * Resolve the fixed ".mythgram" data directory at boot. Preference order:
+ *   1. the MYTHGRAM_DATA_DIR env var (absolute, or relative to the process cwd); else
+ *   2. `<workspaceRoot>/.mythgram` for the workspace the server started in.
+ */
+export function resolveDataRootOverride(workspaceRoot: string): string {
+  const configured = process.env.MYTHGRAM_DATA_DIR?.trim();
+  if (configured) {
+    return path.isAbsolute(configured)
+      ? path.normalize(configured)
+      : path.resolve(process.cwd(), configured);
+  }
+  return path.join(workspaceRoot, MYTHGRAM_DATA_DIR_NAME);
+}
+
+/**
+ * The fixed application data directory (the ".mythgram" folder). After boot this is the
+ * single directory created by {@link ensureWorkspace}; it is NOT affected by workspace
+ * switches. Before boot (and in isolated tests that never call ensureWorkspace) it falls
+ * back to `<workspaceRoot>/.mythgram` so each caller keeps its own local data dir.
+ */
+export function resolveDataRoot(workspaceRoot: string): string {
+  return config.dataRoot ?? path.join(workspaceRoot, MYTHGRAM_DATA_DIR_NAME);
+}
+
 /** Ensure the workspace directory exists so file tools never hit permission/ENOENT errors. */
 export function ensureWorkspace(): void {
   fs.mkdirSync(config.workspaceRoot, { recursive: true });
-  // The ".mythgram" dir is initialized where the workspace is set (holds the SQLite
-  // database, sub-agent outputs, skills materializations, uploads, ...).
-  fs.mkdirSync(path.join(config.workspaceRoot, ".mythgram"), { recursive: true });
+  // The ".mythgram" data dir is created ONCE here (at boot) and holds the SQLite database,
+  // sub-agent outputs, skills materializations, artifacts, checkpoints, uploads, ... It is
+  // intentionally NOT tied to the active workspace: switching the workspace never creates
+  // or moves it (see setWorkspaceRoot). Idempotent: a later call keeps the first data root.
+  if (!config.dataRoot) {
+    config.dataRoot = resolveDataRootOverride(config.workspaceRoot);
+  }
+  fs.mkdirSync(config.dataRoot, { recursive: true });
 }
 
 /**
  * Switch the active workspace at runtime (used by the custom workspace picker).
- * Creates the directory (and its ".mythgram" dir) when missing and points all
- * workspace-sandboxed file tools at the new root from now on.
+ * Creates the directory when missing and points all workspace-sandboxed file tools at the
+ * new root from now on. The fixed ".mythgram" data directory is deliberately left untouched:
+ * the app keeps using the single data dir created at boot, and no ".mythgram" folder is
+ * created inside the newly selected workspace.
  */
 export function setWorkspaceRoot(next: string): string {
   const resolved = path.normalize(next);
   fs.mkdirSync(resolved, { recursive: true });
-  fs.mkdirSync(path.join(resolved, ".mythgram"), { recursive: true });
   config.workspaceRoot = resolved;
   return resolved;
 }

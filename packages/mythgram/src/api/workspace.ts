@@ -9,8 +9,9 @@ import { safeResolve, toWorkspaceRelative } from "../utils/paths.js";
  * Workspace API — lets the user see and change the agent's workspace at runtime.
  *
  * The workspace defaults to wherever mythgram is started/running (process.cwd()).
- * All file tools are sandboxed to it, and the ".mythgram" dir is initialized where
- * the workspace is set.
+ * All file tools are sandboxed to it. The fixed ".mythgram" data dir is created once at
+ * boot and is never created or moved by a workspace switch — switching only changes the
+ * file-tool sandbox.
  *
  * - GET  /api/workspace         -> { workspace } (absolute path)
  * - POST /api/workspace         -> { workspace } — body { path?: string }.

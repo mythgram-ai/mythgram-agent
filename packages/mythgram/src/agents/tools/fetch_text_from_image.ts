@@ -4,7 +4,8 @@ import path from "node:path";
 import { z } from "zod";
 import Tesseract from "tesseract.js";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
-import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
+import { resolveDataRoot } from "../../config.js";
+import { isPathAllowed, safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 
 /**
  * Extract text from an image with Tesseract.js (OCR). The image may be a publicly reachable
@@ -83,7 +84,7 @@ function resolveWorkspaceImage(
     }
   };
 
-  if (path.isAbsolute(trimmed) && (trimmed === root || trimmed.startsWith(root + path.sep))) {
+  if (path.isAbsolute(trimmed) && isPathAllowed(workspaceRoot, trimmed)) {
     const abs = resolveSafely(trimmed);
     return { absPath: abs, relPath: toWorkspaceRelative(workspaceRoot, abs) };
   }
@@ -296,12 +297,13 @@ interface OcrOutcome {
 }
 
 /**
- * Directory Tesseract caches its downloaded language data in. Prefers "<workspace>/.mythgram/tesseract"
- * (persistent per workspace and already gitignored) and falls back to the OS temp directory when the
- * workspace is not writable, so a first OCR run never litters the package/working directory.
+ * Directory Tesseract caches its downloaded language data in. Prefers "<data-dir>/tesseract"
+ * (the fixed ".mythgram" data dir, so the cache is shared across workspace switches and is already
+ * gitignored) and falls back to the OS temp directory when that is not writable, so a first OCR run
+ * never litters the package/working directory.
  */
 function resolveCachePath(workspaceRoot: string): string {
-  const preferred = path.join(workspaceRoot, ".mythgram", "tesseract");
+  const preferred = path.join(resolveDataRoot(workspaceRoot), "tesseract");
   try {
     fs.mkdirSync(preferred, { recursive: true });
     return preferred;

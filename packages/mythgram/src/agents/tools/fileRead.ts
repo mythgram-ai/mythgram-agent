@@ -3,7 +3,7 @@ import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { z } from "zod";
 import { defineTool, type ToolResult } from "./types.js";
-import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
+import { isPathAllowed, safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 
 /** Maximum number of lines the file_read tool returns when no limit is given. */
 export const MAX_FILE_READ_LINES = 4000;
@@ -143,7 +143,9 @@ function resolveForRead(workspaceRoot: string, input: string): string {
     );
   }
   const root = path.resolve(workspaceRoot);
-  if (trimmed !== root && !trimmed.startsWith(root + path.sep)) {
+  // Absolute paths inside the active workspace or the fixed data dir are allowed. The data dir
+  // stays reachable after a workspace switch (sub-agent outputs, skills, artifacts, ...).
+  if (!isPathAllowed(workspaceRoot, trimmed)) {
     throw new FileReadError(
       "invalid_file_path",
       `Absolute path "${trimmed}" is outside the workspace root (${root}).`,

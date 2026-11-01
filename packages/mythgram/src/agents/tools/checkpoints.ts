@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { deflateRawSync, inflateRawSync } from "node:zlib";
+import { resolveDataRoot } from "../../config.js";
 
 /**
  * Shared checkpoint infrastructure (GitHub-commit-style workspace backups).
@@ -567,9 +568,18 @@ export async function clearWorkspaceForRestore(
 // Manifest + safety backups
 // ---------------------------------------------------------------------------
 
+/**
+ * Absolute path of the checkpoint backups directory. Backups always live in the fixed
+ * application data dir (".mythgram/backups"), so they are not lost or duplicated when the
+ * active workspace is switched.
+ */
+function backupsDirAbs(workspaceRoot: string): string {
+  return path.join(resolveDataRoot(workspaceRoot), "backups");
+}
+
 /** Read the checkpoint manifest (never throws — a missing/corrupt file is empty). */
 export async function readCheckpointManifest(workspaceRoot: string): Promise<CheckpointRecord[]> {
-  const abs = path.join(workspaceRoot, ...CHECKPOINT_MANIFEST_FILE.split("/"));
+  const abs = path.join(backupsDirAbs(workspaceRoot), "checkpoints.json");
   let raw: string;
   try {
     raw = await fs.readFile(abs, "utf8");
@@ -604,7 +614,7 @@ export async function writeCheckpointManifest(
   workspaceRoot: string,
   records: CheckpointRecord[],
 ): Promise<void> {
-  const abs = path.join(workspaceRoot, ...CHECKPOINT_MANIFEST_FILE.split("/"));
+  const abs = path.join(backupsDirAbs(workspaceRoot), "checkpoints.json");
   await fs.mkdir(path.dirname(abs), { recursive: true });
   const tmpPath = `${abs}.${crypto.randomBytes(6).toString("hex")}.tmp`;
   try {
@@ -623,12 +633,12 @@ export function checkpointZipRel(name: string): string {
 
 /** Absolute path of a checkpoint zip. The name is validated upstream, so the join is safe. */
 export function checkpointZipAbs(workspaceRoot: string, name: string): string {
-  return path.join(workspaceRoot, CHECKPOINT_BACKUPS_DIR, `${name}.zip`);
+  return path.join(backupsDirAbs(workspaceRoot), `${name}.zip`);
 }
 
 /** Absolute path of the safety-backup directory. */
 export function safetyDirAbs(workspaceRoot: string): string {
-  return path.join(workspaceRoot, ...CHECKPOINT_SAFETY_DIR.split("/"));
+  return path.join(backupsDirAbs(workspaceRoot), "btocptd");
 }
 
 const SAFETY_WORDS: readonly string[] = [
