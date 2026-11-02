@@ -66,6 +66,15 @@ export interface AppConfig {
    */
   openrouterApiKey?: string;
   kittenmlApiKey?: string;
+  /**
+   * Server fallback image-generation API keys, used when a provider has no key
+   * stored in the Image generation panel. Optional so existing test fixtures keep
+   * type-checking.
+   */
+  geminiApiKey?: string;
+  minimaxApiKey?: string;
+  nvidiaApiKey?: string;
+  clipdropApiKey?: string;
   /** Model-id substrings that are always treated as vision capable (read_image tool). */
   visionModelPatterns: string[];
   /** Model-id substrings that are always treated as text-only (read_image tool). */
@@ -160,6 +169,10 @@ export const config: AppConfig = {
   composioApiKey: process.env.COMPOSIO_API_KEY?.trim() ?? "",
   openrouterApiKey: process.env.OPENROUTER_API_KEY?.trim() ?? "",
   kittenmlApiKey: process.env.KITTENML_API_KEY?.trim() ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY?.trim() ?? "",
+  minimaxApiKey: process.env.MINIMAX_API_KEY?.trim() ?? "",
+  nvidiaApiKey: process.env.NVIDIA_API_KEY?.trim() ?? "",
+  clipdropApiKey: process.env.CLIPDROP_API_KEY?.trim() ?? "",
   visionModelPatterns: parsePatterns(process.env.VISION_MODEL_PATTERNS),
   textOnlyModelPatterns: parsePatterns(process.env.TEXT_ONLY_MODEL_PATTERNS),
   memoryAgentEnabled: parseMemoryAgentEnabled(process.env.MEMORY_AGENT_ENABLED),

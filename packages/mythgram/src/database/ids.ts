@@ -24,6 +24,9 @@ export const CUSTOM_AGENT_ID_LENGTH = 16;
 /** Custom TTS providers carry a 12-character alphanumeric ID. */
 export const TTS_PROVIDER_ID_LENGTH = 12;
 
+/** Custom image-generation providers carry a 12-character alphanumeric ID. */
+export const IMAGE_PROVIDER_ID_LENGTH = 12;
+
 /** User profiles carry a 16-character alphanumeric ID (`"default"` for the built-in profile). */
 export const USER_PROFILE_ID_LENGTH = 16;
 
@@ -82,6 +85,14 @@ export function createCustomAgentId(): string {
  */
 export function createTtsProviderId(): string {
   return randomId(TTS_PROVIDER_ID_LENGTH);
+}
+
+/**
+ * Create a 12-character id for a user-added image-generation provider. Built-in
+ * providers use their kind as the id; only custom providers mint an id here.
+ */
+export function createImageProviderId(): string {
+  return randomId(IMAGE_PROVIDER_ID_LENGTH);
 }
 
 /**

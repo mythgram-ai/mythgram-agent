@@ -23,6 +23,7 @@ import { ConnectorsPanel } from "@/components/panels/ConnectorsPanel";
 import { McpPanel } from "@/components/panels/McpPanel";
 import { ChannelsPanel } from "@/components/panels/ChannelsPanel";
 import { TtsPanel } from "@/components/panels/TtsPanel";
+import { ImageGenPanel } from "@/components/panels/ImageGenPanel";
 import { AcpPanel } from "@/components/panels/AcpPanel";
 import { ProfilesPanel } from "@/components/panels/ProfilesPanel";
 import { SettingsModal } from "@/components/editors/SettingsModal";
@@ -184,6 +185,7 @@ export function App() {
               {section === "mcp" && <McpPanel />}
               {section === "channels" && <ChannelsPanel />}
               {section === "tts" && <TtsPanel />}
+              {section === "imagegen" && <ImageGenPanel />}
               {section === "acp" && <AcpPanel />}
               {section === "profiles" && <ProfilesPanel />}
             </div>

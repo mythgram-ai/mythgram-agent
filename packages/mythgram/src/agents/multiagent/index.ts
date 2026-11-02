@@ -65,6 +65,7 @@ export class MultiAgentRunner {
   private customAgents?: import("../tools/types.js").CustomAgentsRuntime;
   private customSystemPrompts?: import("../tools/types.js").CustomSystemPromptsRuntime;
   private speech?: import("../tools/types.js").SpeechRuntime;
+  private image?: import("../tools/types.js").ImageRuntime;
   private slides?: import("../../slides/runtime.js").SlidesRuntime;
   private askRequests?: import("../../services/askRequestStore.js").AskRequestStore;
   private userProfiles?: import("../profiles/index.js").UserProfileManager;
@@ -136,6 +137,14 @@ export class MultiAgentRunner {
    */
   setSpeechRuntime(runtime?: import("../tools/types.js").SpeechRuntime): void {
     this.speech = runtime;
+  }
+
+  /**
+   * Attach the image generation runtime (called once at boot). When set, every team agent granted
+   * the generate_image tool can create images with an automatically selected, connected provider.
+   */
+  setImageRuntime(runtime?: import("../tools/types.js").ImageRuntime): void {
+    this.image = runtime;
   }
 
   /**
@@ -240,6 +249,7 @@ export class MultiAgentRunner {
         customAgents: this.customAgents,
         customSystemPrompts: this.customSystemPrompts,
         speech: this.speech,
+        image: this.image,
         slides: this.slides,
         skills,
         todos,

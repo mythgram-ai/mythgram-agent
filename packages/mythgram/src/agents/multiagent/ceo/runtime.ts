@@ -110,6 +110,8 @@ export interface CeoOrchestratorDeps {
   customSystemPrompts?: import("../../tools/types.js").CustomSystemPromptsRuntime;
   /** Speech runtime — lets the CEO/leader/member agents granted generate_speech synthesize audio. */
   speech?: import("../../tools/types.js").SpeechRuntime;
+  /** Image generation runtime — lets the CEO/leader/member agents granted generate_image create images. */
+  image?: import("../../tools/types.js").ImageRuntime;
   /** Slides runtime — lets CEO/leader/member agents create, read, present, and manage HTML slides. */
   slides?: import("../../../slides/runtime.js").SlidesRuntime;
   skills: SkillRuntime;
@@ -557,6 +559,7 @@ export class CeoOrchestrator {
       memory: this.deps.memory,
       knowledge: this.deps.knowledge,
       speech: this.deps.speech,
+      image: this.deps.image,
       slides: this.deps.slides,
       promptLibrary: this.deps.promptLibrary,
       customAgents: this.deps.customAgents,

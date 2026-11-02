@@ -752,6 +752,52 @@ export interface SpeechRuntime {
   synthesize(input: { text: string; signal?: AbortSignal }): Promise<SpeechSynthesis>;
 }
 
+/** Raw image + metadata produced by one image generation request. */
+export interface ImageGenSynthesis {
+  /** Image bytes, base64-encoded. */
+  base64: string;
+  /** Image size in bytes. */
+  bytes: number;
+  /** Container format (best-effort, e.g. png, jpeg, webp). */
+  format: string;
+  /** MIME type of the returned image. */
+  mime: string;
+  /** Suggested file name for the image. */
+  filename: string;
+  /** Id of the provider that served the request. */
+  providerId: string;
+  /** Human-friendly provider name. */
+  providerName: string;
+  /** Model that served the request. */
+  model: string;
+  /** Aspect ratio the image was generated with. */
+  aspectRatio: string;
+}
+
+/**
+ * Runtime bridge injected into the ToolContext so the `generate_image` tool can turn a text
+ * prompt into an image using an automatically selected, connected image provider. The provider is
+ * chosen from the SAME configuration the user manages in the Image generation panel (keyed
+ * built-ins first, then the keyless Pollinations provider, then custom providers); the LLM never
+ * supplies a provider. Present on the top-level agent surfaces (Main Agent, Custom Agents,
+ * team/CEO agents) and chat mode, and forwarded to sub-agents granted the tool.
+ */
+export interface ImageRuntime {
+  /** True when at least one usable image provider is connected/configured. */
+  available(): boolean;
+  /** The configured default aspect ratio (used when the tool omits one). */
+  defaultAspectRatio(): string;
+  /**
+   * Generate an image with the best available provider. Throws with a clear message when no
+   * provider is usable or when the provider fails.
+   */
+  generate(input: {
+    prompt: string;
+    aspectRatio?: string;
+    signal?: AbortSignal;
+  }): Promise<ImageGenSynthesis>;
+}
+
 /**
  * The self-description one agent can report about itself through the `who_im` tool. Every field is
  * best-effort: a surface only fills the sections it actually knows about. Data is assembled per turn
@@ -874,6 +920,11 @@ export interface ToolContext {
    * synthesize audio with an automatically selected, connected TTS provider. Absent when the TTS
    * engine is unavailable, which is why the tool refuses to run. */
   speech?: SpeechRuntime;
+  /** Image generation runtime — present for the top-level agent surfaces (Main Agent, Custom
+   * Agents, team/CEO agents) and chat mode, and forwarded to sub-agents. Lets the generate_image
+   * tool generate an image with an automatically selected, connected provider. Absent when the
+   * engine is unavailable, which is why the tool refuses to run. */
+  image?: ImageRuntime;
   /** Slides runtime — present for the Main Agent, every Custom Agent, and every team/CEO agent.
    * Lets the slide tools create, read, present, and manage HTML slide projects and templates.
    * Absent for sub-agents, chat mode, and the memory agent. */

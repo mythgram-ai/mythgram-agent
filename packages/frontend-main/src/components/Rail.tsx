@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { MessageCircle, Brain, Library, Bot, Sparkles, Users, Boxes, FileText, Crown, ListChecks, CalendarClock, Plug, Server, MessagesSquare, Search, ChevronsLeft, ChevronsRight, Bookmark, WandSparkles, Volume2, Presentation, Terminal, Package } from "lucide-react";
+import { MessageCircle, Brain, Library, Bot, Sparkles, Users, Boxes, FileText, Crown, ListChecks, CalendarClock, Plug, Server, MessagesSquare, Search, ChevronsLeft, ChevronsRight, Bookmark, WandSparkles, Volume2, Image as ImageIcon, Presentation, Terminal, Package } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore, type Section } from "@/store/useStore";
 import { findActiveProfile, isUsableAvatar, profileInitials } from "@/lib/userProfiles";
@@ -25,6 +25,7 @@ const NAV: Array<{ id: Section; label: string; Icon: typeof MessageCircle }> = [
   { id: "mcp", label: "MCP servers", Icon: Server },
   { id: "channels", label: "Channels", Icon: MessagesSquare },
   { id: "tts", label: "Text to speech", Icon: Volume2 },
+  { id: "imagegen", label: "Image generation", Icon: ImageIcon },
   { id: "acp", label: "ACP", Icon: Terminal },
 ];
 

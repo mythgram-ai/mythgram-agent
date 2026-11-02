@@ -108,6 +108,8 @@ export interface TeamOrchestratorDeps {
   customSystemPrompts?: import("../tools/types.js").CustomSystemPromptsRuntime;
   /** Speech runtime — lets every team agent granted generate_speech synthesize audio. */
   speech?: import("../tools/types.js").SpeechRuntime;
+  /** Image generation runtime — lets every team agent granted generate_image create images. */
+  image?: import("../tools/types.js").ImageRuntime;
   /** Slides runtime — lets every team agent create, read, present, and manage HTML slides. */
   slides?: import("../../slides/runtime.js").SlidesRuntime;
   skills: SkillRuntime;
@@ -507,6 +509,7 @@ export class TeamOrchestrator {
       memory: this.deps.memory,
       knowledge: this.deps.knowledge,
       speech: this.deps.speech,
+      image: this.deps.image,
       slides: this.deps.slides,
       promptLibrary: this.deps.promptLibrary,
       customAgents: this.deps.customAgents,

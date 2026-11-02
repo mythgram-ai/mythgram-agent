@@ -38,6 +38,8 @@ export const APP_STATE_KEYS = [
   "channels",
   "tts",
   "ttsAgent",
+  "imageGen",
+  "imageAgent",
   "acp",
 ] as const;
 

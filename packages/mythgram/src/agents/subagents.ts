@@ -815,6 +815,7 @@ class SubAgentRunner {
       skills: outerCtx.skills,
       schedules: outerCtx.schedules,
       speech: outerCtx.speech,
+      image: outerCtx.image,
       connectors: this.deps.connectors,
       mcp: this.deps.mcp,
     };

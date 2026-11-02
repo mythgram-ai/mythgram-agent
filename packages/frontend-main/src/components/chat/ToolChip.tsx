@@ -118,6 +118,7 @@ const ICONS: Record<string, typeof Terminal> = {
   scan_qr_code: QrCode,
   image_search: ImageIcon,
   generate_speech: AudioLines,
+  generate_image: ImageIcon,
   call_sub_agent: Bot,
   call_multiple_sub_agents: Bot,
   list_sub_agents: ListTree,
@@ -289,6 +290,7 @@ export function ToolChip({ tool }: { tool: ToolActivity }) {
   if (tool.name === "scan_qr_code") return <ScanQrCodeChip tool={tool} />;
   if (tool.name === "image_search") return <ImageSearchChip tool={tool} />;
   if (tool.name === "generate_speech") return <GenerateSpeechChip tool={tool} />;
+  if (tool.name === "generate_image") return <GenerateImageChip tool={tool} />;
   if (tool.name === "fatch_web_urls") return <FetchChip tool={tool} />;
   if (tool.name === "web_search") return <WebSearchChip tool={tool} />;
   if (tool.name === "TodoWrite" || tool.name === "read_todos") return <TodoChip tool={tool} />;
@@ -1382,8 +1384,88 @@ function GenerateSpeechChip({ tool }: { tool: ToolActivity }) {
   );
 }
 
-/* ------------------------------------------------------------------ web */
+/* ------------------------------------------------------------------ image generation */
 
+function GenerateImageChip({ tool }: { tool: ToolActivity }) {
+  const { data, error, args, hasResult } = parts(tool);
+  const prompt: string = (data?.prompt as string) ?? (args.prompt as string) ?? "";
+  const filePath: string = (data?.file_path as string) ?? "";
+  const outputPath: string = (args.output_path as string) ?? "";
+  const started = (data?.status as string) === "started";
+
+  const src = filePath
+    ? routeUrl(API_ROUTES.filesPreview, { query: { path: filePath } })
+    : "";
+
+  return (
+    <Shell
+      icon={<ImageIcon className="h-3.5 w-3.5" />}
+      label={tool.label}
+      status={tool.status}
+      expandable
+      defaultOpen
+      pills={data?.provider ? <Pill tone="accent">{String(data.provider)}</Pill> : undefined}
+      panel={() => (
+        <>
+          {error?.message && (
+            <div className="text-[var(--danger)]">Image generation failed: {error.message}</div>
+          )}
+          {prompt && (
+            <div>
+              <Label>Prompt</Label>
+              <Pre className="mt-1 max-h-40">{prompt}</Pre>
+            </div>
+          )}
+          {src && !error && (
+            <div className="space-y-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={src}
+                alt={prompt || "Generated image"}
+                className="max-h-[420px] w-full rounded-[var(--radius-md)] border border-[var(--border)] object-contain"
+              />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Pill>
+                  <ImageIcon className="h-2.5 w-2.5" />
+                  <span className="font-mono">{filePath}</span>
+                </Pill>
+                {data?.aspect_ratio && <Pill>{String(data.aspect_ratio)}</Pill>}
+                {data?.format && <Pill>{String(data.format)}</Pill>}
+                {data?.bytes != null && <Pill>{formatBytes(Number(data.bytes))}</Pill>}
+                {data?.model && <Pill>{String(data.model)}</Pill>}
+              </div>
+              <div className="flex justify-end">
+                <a
+                  href={routeUrl(API_ROUTES.filesDownload, { query: { path: filePath } })}
+                  download={data?.filename ? String(data.filename) : undefined}
+                  className="inline-flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--muted)] transition hover:border-[var(--secondary)] hover:text-[var(--fg)]"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download
+                </a>
+              </div>
+            </div>
+          )}
+          {started && !src && !error && (
+            <div className="flex items-center gap-2 text-[var(--muted)]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Generating in the background{outputPath ? ` → ${outputPath}` : ""}...
+            </div>
+          )}
+          {!src && !started && !error && !hasResult && (
+            <div className="flex items-center gap-2 text-[var(--muted)]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating image...
+            </div>
+          )}
+          {!src && !started && !error && hasResult && outputPath && (
+            <div className="text-[var(--muted)]">Saved to {outputPath}.</div>
+          )}
+        </>
+      )}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ web */
 function WebSearchChip({ tool }: { tool: ToolActivity }) {
   const { data, error, hasResult } = parts(tool);
   const results: any[] = (data?.results as any[]) ?? [];

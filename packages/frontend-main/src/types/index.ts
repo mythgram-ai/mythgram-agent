@@ -1603,3 +1603,86 @@ export interface TtsAudioResult {
   filename: string;
   bytes: number;
 }
+
+// ---------------------------------------------------------------------------
+// Image generation
+// ---------------------------------------------------------------------------
+
+/** The provider kinds the image generation engine understands. */
+export type ImageGenProviderKind =
+  | "openrouter"
+  | "minimax"
+  | "gemini"
+  | "clipdrop"
+  | "pollinations"
+  | "nvidia"
+  | "custom";
+
+/** Aspect ratios the engine exposes. */
+export type ImageAspectRatio = "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+
+/**
+ * One configured image provider (browser-safe projection — never carries the API
+ * key). Keys stay server-side in the backend SQLite database.
+ */
+export interface ImageGenProvider {
+  id: string;
+  kind: ImageGenProviderKind;
+  name: string;
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  aspectRatio: ImageAspectRatio;
+  headers: CustomHeader[];
+  /** Manually declared models (custom providers). */
+  models: string[];
+  /** True when a key is stored server-side (or provided by env for a built-in). */
+  hasApiKey: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Static provider metadata + setup instructions shown in the panel. */
+export interface ImageGenProviderDefinition {
+  kind: ImageGenProviderKind;
+  name: string;
+  description: string;
+  docsUrl: string;
+  signupUrl: string;
+  defaultBaseUrl: string;
+  requiresApiKey: boolean;
+  supportsModelListing: boolean;
+  defaultModel: string;
+  defaultAspectRatio: ImageAspectRatio;
+  instructions: string[];
+}
+
+/**
+ * Agent image preferences configured in the image panel and used by the agent's
+ * `generate_image` tool. A blank `providerId` means "auto".
+ */
+export interface ImageGenAgentConfig {
+  providerId: string;
+  model: string;
+  aspectRatio: ImageAspectRatio;
+}
+
+/** One selectable image model returned by a provider. */
+export interface ImageGenModel {
+  id: string;
+  name: string;
+}
+
+/** The result of a generation request (image is base64-encoded). */
+export interface ImageGenResult {
+  providerId: string;
+  providerKind: ImageGenProviderKind;
+  providerName: string;
+  model: string;
+  aspectRatio: string;
+  format: string;
+  mime: string;
+  base64: string;
+  filename: string;
+  bytes: number;
+}

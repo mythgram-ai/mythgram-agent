@@ -52,6 +52,7 @@ import type {
   TodoItem,
   ToolActivity,
   TtsProvider,
+  ImageGenProvider,
   UserProfile,
 } from "@/types";
 import { uid, newSessionId } from "@/utils/id";
@@ -130,6 +131,7 @@ export type Section =
   | "mcp"
   | "channels"
   | "tts"
+  | "imagegen"
   | "acp"
   | "profiles";
 
@@ -584,6 +586,21 @@ interface AppState {
   /** Drop one provider by id. */
   removeTtsProvider: (id: string) => void;
 
+  // Image generation (backend-owned providers, ephemeral mirror)
+  /**
+   * Ephemeral mirror of the backend image-generation provider list, refreshed from
+   * the Image generation API by the panel. The backend SQLite database is the
+   * source of truth (API keys never leave it) — this slice is never synced through
+   * the app-state bridge and never touches browser storage.
+   */
+  imageGenProviders: ImageGenProvider[];
+  /** Replace the whole provider list (used after a backend fetch). */
+  setImageGenProviders: (providers: ImageGenProvider[]) => void;
+  /** Insert or replace one provider by id (used after create/update). */
+  upsertImageGenProvider: (provider: ImageGenProvider) => void;
+  /** Drop one provider by id. */
+  removeImageGenProvider: (id: string) => void;
+
   // Schedules (persistent cron tasks, executed by the backend scheduler)
   /**
    * Ephemeral mirror of the backend schedules list, refreshed from the
@@ -1023,6 +1040,7 @@ export const useStore = create<AppState>()(
       mcpServers: [],
       channelConnections: [],
       ttsProviders: [],
+      imageGenProviders: [],
       schedules: [],
       userProfiles: mergeProfilesWithDefaults([]),
       activeUserProfileId: null,
@@ -2278,6 +2296,18 @@ export const useStore = create<AppState>()(
 
       removeTtsProvider: (id) =>
         set((s) => ({ ttsProviders: s.ttsProviders.filter((p) => p.id !== id) })),
+
+      // ---- Image generation providers (backend-owned, ephemeral mirror) --------------
+      setImageGenProviders: (imageGenProviders) => set(() => ({ imageGenProviders })),
+
+      upsertImageGenProvider: (provider) =>
+        set((s) => {
+          const rest = s.imageGenProviders.filter((p) => p.id !== provider.id);
+          return { imageGenProviders: [...rest, provider] };
+        }),
+
+      removeImageGenProvider: (id) =>
+        set((s) => ({ imageGenProviders: s.imageGenProviders.filter((p) => p.id !== id) })),
 
       // ---- Schedules (persistent cron tasks, backend-owned) ----------------
       setSchedules: (schedules) => set(() => ({ schedules })),

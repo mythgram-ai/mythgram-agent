@@ -54,6 +54,9 @@ import { McpManager } from "./agents/mcp/index.js";
 import { ChannelManager } from "./channels/index.js";
 import { LocalTtsInstaller, TtsManager } from "./tts/index.js";
 import { createSpeechRuntime } from "./tts/runtime.js";
+import { ImageManager } from "./image-gen/index.js";
+import { createImageRuntime } from "./image-gen/runtime.js";
+import { buildImageGenRouter } from "./api/imagegen.js";
 import { MythgramDatabase } from "./database/index.js";
 
 function main(): void {
@@ -98,6 +101,21 @@ function main(): void {
   // Speech runtime bridge for the agent's generate_speech tool: it selects a connected provider
   // automatically (cloud → custom → local) from the SAME TTS configuration the panel manages.
   const speechRuntime = createSpeechRuntime(tts);
+  // Image generation: provider configurations (API keys, models) live in the SQLite app_state
+  // repository; the router lists live models and generates images. Server env keys act as
+  // fallbacks for the built-in providers. Pollinations is free and keyless.
+  const image = new ImageManager({
+    appState: db.appState,
+    openrouterApiKey: config.openrouterApiKey,
+    geminiApiKey: config.geminiApiKey,
+    minimaxApiKey: config.minimaxApiKey,
+    nvidiaApiKey: config.nvidiaApiKey,
+    clipdropApiKey: config.clipdropApiKey,
+  });
+  // Image runtime bridge for the agent's generate_image tool: it selects a connected provider
+  // automatically (keyed built-ins → keyless Pollinations → custom) from the SAME image
+  // configuration the panel manages.
+  const imageRuntime = createImageRuntime(image);
   const agent = new AgentRunner(
     providers,
     tools,
@@ -111,7 +129,7 @@ function main(): void {
   );
   // Chat mode: lightweight conversational assistant with only memory + knowledge + web tools.
   // Streams onto the same event buffer, so resume/replay/persistence work identically.
-  const chatRunner = new ChatRunner(providers, tools, config, memoryAgent, speechRuntime);
+  const chatRunner = new ChatRunner(providers, tools, config, memoryAgent, speechRuntime, imageRuntime);
   // The multi-agent team runner: drives a whole agent team (head + members) for one chat turn,
   // streaming onto the same event buffer the single agent uses.
   const multiAgent = new MultiAgentRunner(providers, tools, config, mcp, connectors);
@@ -250,6 +268,11 @@ function main(): void {
   multiAgent.setSpeechRuntime(speechRuntime);
   ceoAgent.setSpeechRuntime(speechRuntime);
 
+  // Attach the image generation runtime to the same surfaces that may run generate_image.
+  agent.setImageRuntime(imageRuntime);
+  multiAgent.setImageRuntime(imageRuntime);
+  ceoAgent.setImageRuntime(imageRuntime);
+
   // Attach the human-in-the-loop information-request store (ask_for_something) to every surface
   // that exposes the tool: the Main Agent (and every Custom Agent through the same core runtime),
   // the team agents, and the CEO-system agents. Sub-agents, chat mode, and the memory agent never
@@ -327,6 +350,7 @@ function main(): void {
   app.use("/api/schedules", buildSchedulesRouter(scheduleStore, scheduler, db, customAgents));
   app.use("/api/channels", buildChannelsRouter(channels, customAgents));
   app.use("/api/tts", buildTtsRouter(tts, localTtsInstaller));
+  app.use("/api/image-gen", buildImageGenRouter(image));
   app.use("/api/summaries", buildSummaryRouter());
   app.use("/api/prompt-agent", buildPromptAgentRouter(promptAgent, store, config));
 

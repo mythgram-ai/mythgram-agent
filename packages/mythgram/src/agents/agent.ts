@@ -333,6 +333,18 @@ export class AgentRunner {
   private speechRuntime?: import("./tools/types.js").SpeechRuntime;
 
   /**
+   * Attach the image generation runtime (called once at boot). When set, the generate_image tool
+   * can generate an image with an automatically selected, connected provider for the Main Agent
+   * and every Custom Agent (both run through this core runtime). When unset, the tool returns a
+   * structured "unavailable" error.
+   */
+  setImageRuntime(runtime?: import("./tools/types.js").ImageRuntime): void {
+    this.imageRuntime = runtime;
+  }
+
+  private imageRuntime?: import("./tools/types.js").ImageRuntime;
+
+  /**
    * Attach the slides runtime (called once at boot). When set, the slide tools
    * (organize_slides / get_available_slides_template / present_slides /
    * ask_user_to_choose_slides_template / read_slides_template / manage_slides /
@@ -811,6 +823,7 @@ export class AgentRunner {
               memory: memoryRuntime,
               knowledge: knowledgeRuntime,
               speech: this.speechRuntime,
+              image: this.imageRuntime,
               slides: this.slidesRuntime,
               promptLibrary: promptLibraryRuntime,
               customAgents: customAgentsRuntime,

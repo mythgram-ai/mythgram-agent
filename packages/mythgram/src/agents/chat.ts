@@ -14,6 +14,7 @@ import type {
   MemoryFile,
   MemoryRuntime,
   SpeechRuntime,
+  ImageRuntime,
 } from "./tools/types.js";
 import type { MemoryAgentService } from "./memoryagent/index.js";
 
@@ -48,6 +49,7 @@ export const CHAT_MODE_TOOLS: readonly string[] = [
   "web_search",
   "fatch_web_urls",
   "generate_speech",
+  "generate_image",
 ];
 
 const CHAT_TOOL_SET = new Set<string>(CHAT_MODE_TOOLS);
@@ -111,6 +113,12 @@ You are a helpful conversational AI assistant.
   and a workspace output directory (e.g. "audio"), and the saved clip is shown with playback
   controls in the chat.
 
+# Image generation
+- Use generate_image(prompt, output_path, aspect_ratio?, wait_for_output?) to create an image
+  from a text prompt. The provider is selected automatically from the user's image configuration
+  — you supply a detailed prompt and the workspace file path (e.g. "images/cat.png"); the saved
+  image is shown inline in the chat.
+
 # Tools (native function calling only)
 You have exactly these tools. Use real tool calls — never describe a tool call in prose,
 never output JSON/markdown pretending to be a tool call, and never invent tools.
@@ -121,6 +129,7 @@ never output JSON/markdown pretending to be a tool call, and never invent tools.
   knowledge_delete(knowledge_path)
 - web_search(query), fatch_web_urls(url, format?, crawl?, maxPages?, maxDepth?, ...)
 - generate_speech(speech, output_directory)
+- generate_image(prompt, output_path, aspect_ratio?, wait_for_output?)
 
 # Output policy
 - When a tool is needed, call it — do not narrate fake results.
@@ -181,6 +190,11 @@ export class ChatRunner {
      * automatically selected, connected TTS provider.
      */
     private readonly speechRuntime?: SpeechRuntime,
+    /**
+     * Optional image generation runtime. When present, the generate_image tool can generate an
+     * image with an automatically selected, connected provider.
+     */
+    private readonly imageRuntime?: ImageRuntime,
   ) {}
 
   /**
@@ -394,6 +408,7 @@ export class ChatRunner {
               memory: memoryRuntime,
               knowledge: knowledgeRuntime,
               speech: this.speechRuntime,
+              image: this.imageRuntime,
               toolCallId: toolCall.id ?? undefined,
               chatId: request.chatId,
               emit: send,
