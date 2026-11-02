@@ -716,31 +716,76 @@ function ProviderConfigModal({
       open
       onClose={onClose}
       size="lg"
+      align="top"
       title={provider ? `Configure ${provider.name}` : "Add custom provider"}
       icon={<ImageIcon className="h-4 w-4" />}
+      footer={
+        <>
+          {custom && provider ? (
+            <Button variant="danger" onClick={() => void remove()} disabled={busy}>
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          ) : null}
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => void save()}
+            disabled={busy || (required && !keyPresent) || !baseUrl.trim()}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {provider ? "Save" : "Add provider"}
+          </Button>
+        </>
+      }
     >
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4 p-5">
         {definition && (
-          <p className="rounded-[var(--radius-md)] bg-[var(--chip)] p-3 text-xs leading-relaxed text-[var(--muted)]">
-            {definition.description}
-          </p>
-        )}
-
-        {definition && definition.instructions.length > 0 && (
-          <ol className="list-decimal space-y-1 pl-5 text-[11px] leading-relaxed text-[var(--muted)]">
-            {definition.instructions.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ol>
+          <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] p-3">
+            <p className="text-xs leading-relaxed text-[var(--muted)]">{definition.description}</p>
+            {definition.instructions.length > 0 && (
+              <ol className="m-0 mt-2 list-decimal space-y-1 pl-4 text-xs leading-relaxed text-[var(--muted)]">
+                {definition.instructions.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ol>
+            )}
+            <div className="mt-2 flex flex-wrap gap-3 text-xs">
+              {definition.signupUrl && (
+                <a
+                  className="inline-flex items-center gap-1 text-[var(--secondary)] hover:underline"
+                  href={definition.signupUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Get an API key <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+              {definition.docsUrl && (
+                <a
+                  className="inline-flex items-center gap-1 text-[var(--secondary)] hover:underline"
+                  href={definition.docsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Documentation <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          </div>
         )}
 
         {custom && (
           <Field label="Name">
-            <TextInput value={name} onChange={(e) => setName(e.target.value)} />
+            <TextInput
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Local image server"
+            />
           </Field>
         )}
 
-        <Field label="Base URL" hint={custom ? "must expose /images/generations" : undefined}>
+        <Field label="Base URL" hint={custom ? "required, /images/generations" : "advanced"}>
           <TextInput
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
@@ -750,19 +795,31 @@ function ProviderConfigModal({
 
         <Field
           label="API key"
-          hint={provider?.hasApiKey ? "a key is stored — leave blank to keep it" : required ? "required" : "optional"}
+          hint={
+            provider?.hasApiKey
+              ? "•••• saved — leave blank to keep"
+              : required
+                ? "required"
+                : "optional"
+          }
           hintError={required && !keyPresent}
         >
           <TextInput
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder={provider?.hasApiKey ? "••••••••" : required ? "paste your API key" : "optional"}
+            placeholder={
+              provider?.hasApiKey
+                ? "Leave blank to keep the stored key"
+                : required
+                  ? "paste your API key"
+                  : "optional"
+            }
             autoComplete="off"
           />
         </Field>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Model">
             <TextInput
               value={model}
@@ -780,7 +837,7 @@ function ProviderConfigModal({
               </datalist>
             )}
           </Field>
-          <Field label="Default aspect ratio">
+          <Field label="Aspect ratio">
             <Select
               value={aspectRatio}
               onChange={(e) => setAspectRatio(e.target.value as ImageAspectRatio)}
@@ -792,16 +849,33 @@ function ProviderConfigModal({
               ))}
             </Select>
           </Field>
+          <div className="flex items-end pb-2">
+            <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
+              <Toggle checked={enabled} onChange={setEnabled} label="Enabled" />
+              Provider enabled
+            </label>
+          </div>
         </div>
 
         {definition?.supportsModelListing && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={fetchModels} disabled={!provider || fetchingModels} className="px-3 py-1.5 text-xs">
-              {fetchingModels ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            <Button
+              variant="outline"
+              onClick={() => void fetchModels()}
+              disabled={!provider || fetchingModels}
+              className="px-3 py-1.5 text-xs"
+            >
+              {fetchingModels ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
               Fetch models
             </Button>
             {models.length > 0 && (
-              <span className="text-[11px] text-[var(--muted)]">{models.length} model(s) available</span>
+              <span className="text-[11px] text-[var(--muted)]">
+                {models.length} model(s) available
+              </span>
             )}
             {modelsError && <span className="text-[11px] text-[var(--danger)]">{modelsError}</span>}
             {!provider && (
@@ -811,45 +885,9 @@ function ProviderConfigModal({
         )}
 
         {custom && (
-          <div className="space-y-3 rounded-[var(--radius-md)] border border-[var(--border)] p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-[var(--muted)]">Custom headers</span>
-              <Button
-                variant="ghost"
-                className="px-2 py-1 text-[11px]"
-                onClick={() => setHeaders([...headers, { key: "", value: "" }])}
-              >
-                <Plus className="h-3 w-3" /> Add
-              </Button>
-            </div>
-            {headers.length === 0 && (
-              <p className="text-[11px] text-[var(--subtle)]">No custom headers.</p>
-            )}
-            {headers.map((header, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <TextInput
-                  placeholder="Header"
-                  value={header.key}
-                  onChange={(e) => {
-                    const next = [...headers];
-                    next[i] = { ...header, key: e.target.value };
-                    setHeaders(next);
-                  }}
-                />
-                <TextInput
-                  placeholder="Value"
-                  value={header.value}
-                  onChange={(e) => {
-                    const next = [...headers];
-                    next[i] = { ...header, value: e.target.value };
-                    setHeaders(next);
-                  }}
-                />
-                <IconTrash onClick={() => setHeaders(headers.filter((_, j) => j !== i))} />
-              </div>
-            ))}
-
-            <Field label="Manual models" hint="one per line">
+          <>
+            <HeadersEditor headers={headers} onChange={setHeaders} />
+            <Field label="Models" hint="one per line">
               <TextArea
                 rows={3}
                 value={manualModels}
@@ -857,45 +895,69 @@ function ProviderConfigModal({
                 placeholder={"sdxl\nflux"}
               />
             </Field>
-          </div>
+          </>
         )}
-
-        <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border)] px-3 py-2">
-          <span className="text-xs font-medium text-[var(--muted)]">Enabled</span>
-          <Toggle checked={enabled} onChange={setEnabled} label="Enabled" />
-        </div>
 
         {error && (
-          <div className="flex items-start gap-2 rounded-[var(--radius-md)] bg-[var(--danger-soft)] p-2.5 text-xs text-[var(--danger)]">
-            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{error}</span>
+          <div className="flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="break-words">{error}</span>
           </div>
         )}
-
-        <div className="flex items-center justify-between gap-2 pt-1">
-          {custom && provider ? (
-            <Button variant="danger" onClick={remove} disabled={busy} className="px-3 py-1.5 text-xs">
-              <Trash2 className="h-3.5 w-3.5" /> Delete
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={onClose} className="px-3 py-1.5 text-xs">
-              Cancel
-            </Button>
-            <Button
-              onClick={save}
-              disabled={busy || (required && !keyPresent) || !baseUrl.trim()}
-              className="px-4 py-1.5 text-xs"
-            >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              {provider ? "Save" : "Add provider"}
-            </Button>
-          </div>
-        </div>
       </div>
     </Modal>
+  );
+}
+
+/** Row editor for arbitrary HTTP request headers (custom providers). */
+function HeadersEditor({
+  headers,
+  onChange,
+}: {
+  headers: CustomHeader[];
+  onChange: (headers: CustomHeader[]) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--border)] p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-[var(--muted)]">Custom headers</span>
+        <Button
+          variant="ghost"
+          className="px-2 py-1 text-[11px]"
+          onClick={() => onChange([...headers, { key: "", value: "" }])}
+        >
+          <Plus className="h-3 w-3" /> Add
+        </Button>
+      </div>
+      {headers.length === 0 && (
+        <p className="text-[11px] text-[var(--subtle)]">No custom headers.</p>
+      )}
+      {headers.map((header, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <TextInput
+            className="min-w-0 flex-1"
+            placeholder="Header"
+            value={header.key}
+            onChange={(e) => {
+              const next = [...headers];
+              next[i] = { ...header, key: e.target.value };
+              onChange(next);
+            }}
+          />
+          <TextInput
+            className="min-w-0 flex-1"
+            placeholder="Value"
+            value={header.value}
+            onChange={(e) => {
+              const next = [...headers];
+              next[i] = { ...header, value: e.target.value };
+              onChange(next);
+            }}
+          />
+          <IconTrash onClick={() => onChange(headers.filter((_, j) => j !== i))} />
+        </div>
+      ))}
+    </div>
   );
 }
 
