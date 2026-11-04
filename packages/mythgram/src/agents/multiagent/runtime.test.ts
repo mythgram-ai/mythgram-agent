@@ -1,13 +1,22 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { TeamOrchestrator } from "./runtime.js";
-import { EV_AGENT_SEGMENT, EV_TEAM_MESSAGE, type AgentTeamDefinition } from "./types.js";
+import {
+  EV_AGENT_SEGMENT,
+  EV_AGENT_TOOL_RESULT,
+  EV_TEAM_MESSAGE,
+  type AgentTeamDefinition,
+} from "./types.js";
 import { createToolRegistry } from "../tools/index.js";
 import { createMemoryRuntime } from "../memory.js";
 import { createKnowledgeRuntime } from "../knowledge.js";
 import { createSkillRuntime } from "../skills.js";
 import { createTodoRuntime } from "../todos.js";
 import { ConnectorRuntime } from "../connectors/index.js";
+import type { ImageRuntime } from "../tools/types.js";
 import type { AppConfig } from "../../config.js";
 import type { Provider, StreamDelta } from "../providers/types.js";
 
@@ -219,16 +228,126 @@ function silentMemberProvider(): Provider {
   };
 }
 
+/** A scripted provider where the member first calls generate_image, then reports the saved path. */
+function imageMemberProvider(): Provider {
+  return {
+    metadata: { id: "mock", label: "Mock", defaultBaseUrl: "" },
+    async listModels() {
+      return [];
+    },
+    async *streamChatCompletion(opts): AsyncGenerator<StreamDelta, void, unknown> {
+      const sys = String(opts.messages[0]?.content ?? "");
+      const msgs = opts.messages;
+      const called = (name: string) =>
+        msgs.some(
+          (m) =>
+            m.role === "assistant" &&
+            Array.isArray((m as { tool_calls?: unknown }).tool_calls) &&
+            ((m as { tool_calls: Array<{ function?: { name?: string } }> }).tool_calls).some(
+              (t) => t.function?.name === name,
+            ),
+        );
+
+      if (sys.includes('You are "Elio"')) {
+        if (!called("delegate_task_or_send_message")) {
+          yield {
+            toolCalls: [
+              {
+                index: 0,
+                id: "t-del",
+                type: "function",
+                function: {
+                  name: "delegate_task_or_send_message",
+                  arguments: JSON.stringify({
+                    messages: [{ agent_id: "Niko", message: "Generate a hero image." }],
+                  }),
+                },
+              },
+            ],
+            finishReason: "tool_calls",
+          };
+          return;
+        }
+        yield { text: "All done — the team generated the hero image." };
+        return;
+      }
+
+      // Niko: generate the image, then report to the leader.
+      if (!called("generate_image")) {
+        yield {
+          toolCalls: [
+            {
+              index: 0,
+              id: "n-img",
+              type: "function",
+              function: {
+                name: "generate_image",
+                arguments: JSON.stringify({
+                  prompt: "a small blue square",
+                  output_path: "images/hero.png",
+                }),
+              },
+            },
+          ],
+          finishReason: "tool_calls",
+        };
+        return;
+      }
+      if (!called("message_team_leader")) {
+        yield {
+          toolCalls: [
+            {
+              index: 0,
+              id: "n-rep",
+              type: "function",
+              function: {
+                name: "message_team_leader",
+                arguments: JSON.stringify({
+                  my_name: "Niko",
+                  message: "Generated images/hero.png.",
+                }),
+              },
+            },
+          ],
+          finishReason: "tool_calls",
+        };
+        return;
+      }
+      yield { text: "Finished the image task." };
+    },
+  };
+}
+
+/** A fake image runtime that writes a tiny PNG to the workspace and reports its path. */
+function fakeImageRuntime(): ImageRuntime {
+  return {
+    available: () => true,
+    defaultAspectRatio: () => "1:1",
+    generate: async () => ({
+      base64: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
+      bytes: 4,
+      format: "png",
+      mime: "image/png",
+      filename: "mock-image.png",
+      providerId: "mock",
+      providerName: "Mock",
+      model: "mock-model",
+      aspectRatio: "1:1",
+    }),
+  };
+}
+
 function buildOrchestrator(
   events: Array<{ e: string; d: Record<string, unknown> }>,
   signal: AbortSignal,
   provider: Provider = scriptedProvider(),
+  options: { image?: ImageRuntime; workspaceRoot?: string } = {},
 ) {
   const tools = createToolRegistry();
   return new TeamOrchestrator({
     provider,
     tools,
-    config: fakeConfig,
+    config: { ...fakeConfig, workspaceRoot: options.workspaceRoot ?? fakeConfig.workspaceRoot },
     team,
     sendMessageToTeamEnabled: false,
     contexts: new Map(),
@@ -243,6 +362,7 @@ function buildOrchestrator(
     subAgentDefinitions: [],
     userSubAgents: [],
     connectors: ConnectorRuntime.empty(),
+    image: options.image,
     send: (e, d) => events.push({ e, d }),
     signal,
   });
@@ -316,5 +436,39 @@ describe("TeamOrchestrator actor model", () => {
     // Already-aborted run must resolve immediately without hanging.
     await orch.run("Build something.", "");
     assert.ok(true, "aborted run settled");
+  });
+
+  it("lets a member generate an image with the injected image runtime", async () => {
+    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "mythgram-team-image-"));
+    try {
+      const events: Array<{ e: string; d: Record<string, unknown> }> = [];
+      const controller = new AbortController();
+      const orch = buildOrchestrator(events, controller.signal, imageMemberProvider(), {
+        image: fakeImageRuntime(),
+        workspaceRoot: workspace,
+      });
+
+      await orch.run("Generate a hero image.", "");
+
+      // The generate_image tool result reported by the member succeeded.
+      const result = events.find(
+        (ev) =>
+          ev.e === EV_AGENT_TOOL_RESULT &&
+          ev.d.agent_id === "Niko" &&
+          ev.d.name === "generate_image",
+      );
+      assert.ok(result, "member should have run generate_image");
+      assert.equal(result!.d.ok, true);
+      assert.equal(
+        (result!.d.result as { data?: { file_path?: string } }).data?.file_path,
+        "images/hero.png",
+      );
+
+      // The image file was actually written inside the workspace.
+      const written = await fs.readFile(path.join(workspace, "images", "hero.png"));
+      assert.equal(written.length, 4);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 });
