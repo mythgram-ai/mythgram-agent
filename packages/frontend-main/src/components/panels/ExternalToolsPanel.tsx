@@ -19,8 +19,8 @@ export function ExternalToolsPanel({
   Icon,
   calloutTitle,
   calloutBody,
-  mcpDescription = "Add a capable MCP server the agent can call.",
-  connectorDescription = "Connect a third-party app that provides this capability.",
+  mcpDescription,
+  connectorDescription,
 }: {
   kicker: string;
   title: string;
@@ -31,48 +31,82 @@ export function ExternalToolsPanel({
   mcpDescription?: string;
   connectorDescription?: string;
 }) {
-  const setSection = useStore((s) => s.setSection);
-
   return (
     <div className="mx-auto w-full max-w-3xl panel-in">
       <PanelHeader kicker={kicker} title={title} />
       <p className="mb-6 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">{intro}</p>
 
-      <section
-        className="relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--chip)] p-6"
-        style={{ boxShadow: "var(--shadow-card)" }}
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[color:color-mix(in_oklab,var(--secondary)_12%,transparent)] blur-3xl"
-        />
-
-        <div className="relative flex items-start gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[var(--radius-lg)] bg-[var(--secondary)] text-[var(--secondary-fg)]">
-            <Icon className="h-6 w-6" strokeWidth={1.8} />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold leading-snug text-[var(--fg)]">{calloutTitle}</h2>
-            <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">{calloutBody}</p>
-          </div>
-        </div>
-
-        <div className="relative mt-6 grid gap-3 sm:grid-cols-2">
-          <RedirectCard
-            Icon={Server}
-            title="MCP servers"
-            description={mcpDescription}
-            onClick={() => setSection("mcp")}
-          />
-          <RedirectCard
-            Icon={Plug}
-            title="Connectors"
-            description={connectorDescription}
-            onClick={() => setSection("connectors")}
-          />
-        </div>
-      </section>
+      <ExternalToolsNotice
+        Icon={Icon}
+        title={calloutTitle}
+        body={calloutBody}
+        mcpDescription={mcpDescription}
+        connectorDescription={connectorDescription}
+      />
     </div>
+  );
+}
+
+/**
+ * Highlighted callout telling the user a capability is provided through MCP servers and
+ * Connectors, with two cards that jump to those panels. Reused by the dedicated
+ * capability panels and as a top notice inside the built-in provider panels.
+ */
+export function ExternalToolsNotice({
+  Icon,
+  title,
+  body,
+  mcpDescription = "Add a capable MCP server the agent can call.",
+  connectorDescription = "Connect a third-party app that provides this capability.",
+  className,
+}: {
+  Icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  title: string;
+  body: ReactNode;
+  mcpDescription?: string;
+  connectorDescription?: string;
+  className?: string;
+}) {
+  const setSection = useStore((s) => s.setSection);
+
+  return (
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--chip)] p-5 sm:p-6",
+        className,
+      )}
+      style={{ boxShadow: "var(--shadow-card)" }}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[color:color-mix(in_oklab,var(--secondary)_12%,transparent)] blur-3xl"
+      />
+
+      <div className="relative flex items-start gap-4">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[var(--radius-lg)] bg-[var(--secondary)] text-[var(--secondary-fg)]">
+          <Icon className="h-6 w-6" strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold leading-snug text-[var(--fg)]">{title}</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">{body}</p>
+        </div>
+      </div>
+
+      <div className="relative mt-5 grid gap-3 sm:grid-cols-2">
+        <RedirectCard
+          Icon={Server}
+          title="MCP servers"
+          description={mcpDescription}
+          onClick={() => setSection("mcp")}
+        />
+        <RedirectCard
+          Icon={Plug}
+          title="Connectors"
+          description={connectorDescription}
+          onClick={() => setSection("connectors")}
+        />
+      </div>
+    </section>
   );
 }
 

@@ -42,6 +42,7 @@ import {
 } from "@/lib/imagegen";
 import { Modal } from "@/components/ui/Modal";
 import { Button, EmptyState, Field, PanelHeader, Select, TextArea, TextInput, Toggle } from "@/components/ui/primitives";
+import { ExternalToolsNotice, Highlight } from "@/components/panels/ExternalToolsPanel";
 import { cn } from "@/utils/cn";
 
 const ASPECT_RATIOS: ImageAspectRatio[] = ["1:1", "16:9", "9:16", "4:3", "3:4"];
@@ -122,6 +123,22 @@ export function ImageGenPanel() {
   return (
     <div className="mx-auto w-full max-w-4xl panel-in">
       <PanelHeader kicker="Create images from text" title="Image generation" />
+
+      <ExternalToolsNotice
+        className="mb-6"
+        Icon={ImageIcon}
+        title="Use MCP servers and Connectors for image generation"
+        body={
+          <>
+            Add an <Highlight>image-capable MCP server</Highlight> or connect an{" "}
+            <Highlight>image app</Highlight> from Connectors. Once connected, the agent can generate
+            images with it — or configure a built-in provider below.
+          </>
+        }
+        mcpDescription="Add an MCP server that exposes image generation to the agent."
+        connectorDescription="Connect a third-party image app the agent can use."
+      />
+
       <p className="mb-6 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
         Turn a prompt into an image with a cloud model or the free, keyless Pollinations provider.
         Cloud providers need an API key; models are fetched live where the provider supports it.
