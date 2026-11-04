@@ -46,6 +46,10 @@ function contextLabel(section: Section, counts: Record<string, number>): string 
       return "Speech studio";
     case "imagegen":
       return "Image studio";
+    case "videogen":
+      return "Video studio";
+    case "musicgen":
+      return "Music studio";
     case "acp":
       return "External clients";
     case "profiles":

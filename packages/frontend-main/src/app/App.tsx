@@ -24,6 +24,8 @@ import { McpPanel } from "@/components/panels/McpPanel";
 import { ChannelsPanel } from "@/components/panels/ChannelsPanel";
 import { TtsPanel } from "@/components/panels/TtsPanel";
 import { ImageGenPanel } from "@/components/panels/ImageGenPanel";
+import { VideoGenPanel } from "@/components/panels/VideoGenPanel";
+import { MusicGenPanel } from "@/components/panels/MusicGenPanel";
 import { AcpPanel } from "@/components/panels/AcpPanel";
 import { ProfilesPanel } from "@/components/panels/ProfilesPanel";
 import { SettingsModal } from "@/components/editors/SettingsModal";
@@ -186,6 +188,8 @@ export function App() {
               {section === "channels" && <ChannelsPanel />}
               {section === "tts" && <TtsPanel />}
               {section === "imagegen" && <ImageGenPanel />}
+              {section === "videogen" && <VideoGenPanel />}
+              {section === "musicgen" && <MusicGenPanel />}
               {section === "acp" && <AcpPanel />}
               {section === "profiles" && <ProfilesPanel />}
             </div>

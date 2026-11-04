@@ -132,6 +132,8 @@ export type Section =
   | "channels"
   | "tts"
   | "imagegen"
+  | "videogen"
+  | "musicgen"
   | "acp"
   | "profiles";
 
