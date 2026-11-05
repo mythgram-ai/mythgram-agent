@@ -63,9 +63,7 @@ jobs:
       - name: Attach distributions to the release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            packages/local-tts/python/dist/*
-            !packages/local-tts/python/dist/*.sha256
+          files: packages/local-tts/python/dist/*
           fail_on_unmatched_files: true
 
   container:
