@@ -113,7 +113,8 @@ const SECTION_INDEX: Array<{ section: Section; label: string; keywords: string; 
   { section: "channels", label: "Channels", keywords: "channels telegram discord slack whatsapp messaging bot chat adapters", hint: "Go to channels" },
   { section: "videogen", label: "Video generation", keywords: "video generation text to video animate render clip mcp connectors", hint: "Go to video generation" },
   { section: "musicgen", label: "Music generation", keywords: "music generation audio compose song text to music mcp connectors", hint: "Go to music generation" },
-  { section: "acp", label: "ACP", keywords: "acp agent client protocol zed editor external client gateway stdio integration", hint: "Go to ACP" },
+  { section: "acp", label: "ACP gateway", keywords: "acp agent client protocol zed editor external client gateway stdio integration", hint: "Go to ACP gateway" },
+  { section: "acp-client", label: "ACP client", keywords: "acp client agent client protocol claude codex gemini opencode goose external agents chat connect", hint: "Go to ACP client" },
   { section: "profiles", label: "Profiles", keywords: "profiles account user identity avatar", hint: "Go to profiles" },
 ];
 

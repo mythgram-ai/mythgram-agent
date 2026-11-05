@@ -52,6 +52,8 @@ function contextLabel(section: Section, counts: Record<string, number>): string 
       return "Music studio";
     case "acp":
       return "External clients";
+    case "acp-client":
+      return "External agents";
     case "profiles":
       return `${counts.profiles} profile${counts.profiles === 1 ? "" : "s"}`;
     default:

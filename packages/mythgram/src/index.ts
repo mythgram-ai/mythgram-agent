@@ -35,6 +35,8 @@ import { buildSlidesRouter } from "./api/slides.js";
 import { buildArtifactsRouter } from "./api/artifacts.js";
 import { buildAcpRouter } from "./acp/api.js";
 import { writeAcpEndpoint } from "./acp/endpoint.js";
+import { AcpClientManager } from "./acp-client/manager.js";
+import { buildAcpClientRouter } from "./acp-client/api.js";
 import { ScheduleStore } from "./cron/store.js";
 import { ScheduleRunner } from "./cron/runner.js";
 import { ScheduleScheduler } from "./cron/scheduler.js";
@@ -64,6 +66,11 @@ function main(): void {
 
   // The SQLite database (workspace/.mythgram/mythgram.db) is created automatically on boot.
   const db = MythgramDatabase.open(config.workspaceRoot);
+
+  // In-app ACP client: spawns and drives external ACP-compatible agents (Claude
+  // Agent, Codex, Gemini CLI, OpenCode, Goose, ...). Connections and sessions are
+  // owned by this app with 20-digit numeric ids; agent-side session ids stay private.
+  const acpClients = new AcpClientManager(db, config.workspaceRoot);
 
   const providers = createProviderRegistry();
   const tools = createToolRegistry();
@@ -368,6 +375,7 @@ function main(): void {
       tts,
     }),
   );
+  app.use("/api/acp-client", buildAcpClientRouter(acpClients, config.workspaceRoot));
 
   // Serve the bundled web console (built from packages/frontend-main into dist/web) from the
   // SAME origin as the API. The published package ships one process: the backend serves both
@@ -395,6 +403,8 @@ function main(): void {
   });
 
   const shutdown = () => {
+    // Stop spawned ACP agents first so no external process outlives the server.
+    acpClients.closeAll();
     // Stop the scheduler first so no new run starts during teardown.
     scheduler.stop();
     // Stop channel providers so no new inbound turn starts during teardown.

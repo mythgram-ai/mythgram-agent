@@ -27,6 +27,7 @@ import { ImageGenPanel } from "@/components/panels/ImageGenPanel";
 import { VideoGenPanel } from "@/components/panels/VideoGenPanel";
 import { MusicGenPanel } from "@/components/panels/MusicGenPanel";
 import { AcpPanel } from "@/components/panels/AcpPanel";
+import { AcpClientPanel } from "@/components/panels/AcpClientPanel";
 import { ProfilesPanel } from "@/components/panels/ProfilesPanel";
 import { SettingsModal } from "@/components/editors/SettingsModal";
 import { FilesPanel } from "@/components/overlays/FilesPanel";
@@ -191,12 +192,13 @@ export function App() {
               {section === "videogen" && <VideoGenPanel />}
               {section === "musicgen" && <MusicGenPanel />}
               {section === "acp" && <AcpPanel />}
+              {section === "acp-client" && <AcpClientPanel />}
               {section === "profiles" && <ProfilesPanel />}
             </div>
           )}
         </main>
 
-        {section !== "promptagent" && <Composer onSend={send} onStop={stop} />}
+        {section !== "promptagent" && section !== "acp-client" && <Composer onSend={send} onStop={stop} />}
       </div>
 
       <NetworkBanner />

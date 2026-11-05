@@ -15,6 +15,7 @@ import { ScheduleRunsRepo } from "./repositories/scheduleRunsRepo.js";
 import { ChannelChatsRepo } from "./repositories/channelChatsRepo.js";
 import { ChannelMessagesRepo } from "./repositories/channelMessagesRepo.js";
 import { SlidesRepo } from "./repositories/slidesRepo.js";
+import { AcpClientRepo } from "./repositories/acpClientRepo.js";
 
 export {
   createChatSessionId,
@@ -48,6 +49,8 @@ export type {
 export type { ChannelChatRow } from "./repositories/channelChatsRepo.js";
 export type { SlideRow, SlideTemplateRow } from "./repositories/slidesRepo.js";
 export { SlidesRepo } from "./repositories/slidesRepo.js";
+export { AcpClientRepo } from "./repositories/acpClientRepo.js";
+export type { AcpClientRow, AcpSessionRow, AcpStoredEvent } from "./repositories/acpClientRepo.js";
 
 /**
  * The application's persistence facade. Everything the system produces — main-agent
@@ -69,6 +72,7 @@ export class MythgramDatabase {
   readonly channelChats: ChannelChatsRepo;
   readonly channelMessages: ChannelMessagesRepo;
   readonly slides: SlidesRepo;
+  readonly acpClients: AcpClientRepo;
   readonly queue: DatabaseWriteQueue;
 
   private readonly maintenance: DatabaseMaintenance;
@@ -90,6 +94,7 @@ export class MythgramDatabase {
     this.channelChats = new ChannelChatsRepo(db);
     this.channelMessages = new ChannelMessagesRepo(db);
     this.slides = new SlidesRepo(db);
+    this.acpClients = new AcpClientRepo(db);
     this.queue = new DatabaseWriteQueue(db);
     this.maintenance = new DatabaseMaintenance(db);
   }

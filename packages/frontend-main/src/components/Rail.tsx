@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { MessageCircle, Brain, Library, Bot, Sparkles, Users, Boxes, FileText, Crown, ListChecks, CalendarClock, Plug, Server, MessagesSquare, Search, ChevronsLeft, ChevronsRight, Bookmark, WandSparkles, Volume2, Image as ImageIcon, Clapperboard, Music, Presentation, Terminal, Package } from "lucide-react";
+import { MessageCircle, Brain, Library, Bot, Sparkles, Users, Boxes, FileText, Crown, ListChecks, CalendarClock, Plug, Server, MessagesSquare, Search, ChevronsLeft, ChevronsRight, Bookmark, WandSparkles, Volume2, Image as ImageIcon, Clapperboard, Music, Presentation, Terminal, Package, PlugZap } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore, type Section } from "@/store/useStore";
 import { findActiveProfile, isUsableAvatar, profileInitials } from "@/lib/userProfiles";
@@ -28,7 +28,8 @@ const NAV: Array<{ id: Section; label: string; Icon: typeof MessageCircle }> = [
   { id: "imagegen", label: "Image generation", Icon: ImageIcon },
   { id: "videogen", label: "Video generation", Icon: Clapperboard },
   { id: "musicgen", label: "Music generation", Icon: Music },
-  { id: "acp", label: "ACP", Icon: Terminal },
+  { id: "acp", label: "ACP gateway", Icon: Terminal },
+  { id: "acp-client", label: "ACP client", Icon: PlugZap },
 ];
 
 const EXPANDED_WIDTH = "13.5rem";

@@ -135,6 +135,7 @@ export type Section =
   | "videogen"
   | "musicgen"
   | "acp"
+  | "acp-client"
   | "profiles";
 
 /** Connection state surfaced to the user. Slow ≠ offline; only a lost connection is "offline". */
