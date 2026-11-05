@@ -4,6 +4,14 @@
   "description": "Mythgram AI — a fast, reliable, autonomous local coding agent with a bundled web console. Run `mythgram` to start the API and UI on one port.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mythgram-ai/mythgram-agent.git"
+  },
+  "homepage": "https://github.com/mythgram-ai/mythgram-agent#readme",
+  "bugs": {
+    "url": "https://github.com/mythgram-ai/mythgram-agent/issues"
+  },
   "bin": {
     "mythgram": "packages/mythgram/dist/cli.js"
   },
