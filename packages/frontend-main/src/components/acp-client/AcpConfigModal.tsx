@@ -258,7 +258,7 @@ export function AcpConfigModal({
     <Modal
       open={open}
       onClose={onClose}
-      icon={<AcpClientIcon className="h-4 w-4" />}
+      icon={<AcpClientIcon className="h-5 w-8" />}
       title={client ? "Edit ACP agent" : "Add ACP agent"}
       size="lg"
       align="top"

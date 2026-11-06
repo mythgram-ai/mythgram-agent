@@ -216,7 +216,7 @@ export function ConnectorsIcon({ className, ...props }: IconProps) {
       xmlns="http://www.w3.org/2000/svg"
       width={24}
       height={24}
-      viewBox="0 0 512 512"
+      viewBox="64 64 341 405"
       fill="none"
       aria-hidden="true"
       focusable="false"

@@ -238,7 +238,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                   aria-selected="false"
                 >
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--chip)] text-[var(--muted)]">
-                    <PromptLibraryIcon className="h-4 w-4" />
+                    <PromptLibraryIcon className="h-5 w-5" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium text-[var(--fg)]">
@@ -286,7 +286,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                             aria-selected="false"
                             title={item.content.slice(0, 200)}
                           >
-                            <PromptLibraryIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--subtle)]" />
+                            <PromptLibraryIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]" />
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-xs font-medium text-[var(--fg)]">
                                 {item.title}

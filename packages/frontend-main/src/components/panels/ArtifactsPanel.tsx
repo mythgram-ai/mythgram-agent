@@ -353,7 +353,7 @@ function PreviewModal({
     <Modal
       open={preview !== null || loading}
       onClose={onClose}
-      icon={<ArtifactsIcon className="h-4 w-4" />}
+      icon={<ArtifactsIcon className="h-5 w-5" />}
       title={preview?.meta.title ?? "Loading artifact..."}
       size="xl"
       actions={

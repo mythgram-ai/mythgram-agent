@@ -130,7 +130,7 @@ export function AcpChat({
           )}
           aria-hidden
         >
-          <AcpClientIcon className="h-4 w-4" />
+          <AcpClientIcon className="h-5 w-8" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -338,7 +338,7 @@ function EmptyChat({ client, onNewSession }: { client: AcpClient; onNewSession: 
   return (
     <div className="flex h-full min-h-56 flex-col items-center justify-center gap-4 text-center">
       <span className="grid h-14 w-14 place-items-center rounded-full bg-[var(--secondary)] text-[var(--secondary-fg)]">
-        <AcpClientIcon className="h-6 w-6" />
+        <AcpClientIcon className="h-7 w-12" />
       </span>
       <div>
         <p className="m-0 text-base font-semibold text-[var(--fg)]">Chat with {client.name}</p>

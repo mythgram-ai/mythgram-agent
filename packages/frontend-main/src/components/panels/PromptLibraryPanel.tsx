@@ -190,7 +190,7 @@ export function PromptLibraryPanel() {
       <Modal
         open={Boolean(draft)}
         onClose={() => setDraft(null)}
-        icon={<PromptLibraryIcon className="h-4 w-4" />}
+        icon={<PromptLibraryIcon className="h-5 w-5" />}
         title={draft?.id ? "Edit saved prompt" : "Save prompt to library"}
         size="lg"
         footer={
@@ -281,7 +281,7 @@ export function SavePromptModal({
     <Modal
       open={open}
       onClose={onClose}
-      icon={<PromptLibraryIcon className="h-4 w-4" />}
+      icon={<PromptLibraryIcon className="h-5 w-5" />}
       title="Save prompt to library"
       size="md"
       footer={

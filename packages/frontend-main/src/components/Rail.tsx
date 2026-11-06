@@ -19,31 +19,36 @@ import {
   TtsIcon,
 } from "@/components/icons/NavIcons";
 
-const NAV: Array<{ id: Section; label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }> = [
+const NAV: Array<{
+  id: Section;
+  label: string;
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  iconClassName?: string;
+}> = [
   { id: "chat", label: "Chat history", Icon: MessageCircle },
-  { id: "customagents", label: "Custom agents", Icon: CustomAgentIcon },
-  { id: "systemprompts", label: "Custom system prompts", Icon: SystemPromptIcon },
+  { id: "customagents", label: "Custom agents", Icon: CustomAgentIcon, iconClassName: "h-6 w-6" },
+  { id: "systemprompts", label: "Custom system prompts", Icon: SystemPromptIcon, iconClassName: "h-6 w-6" },
   { id: "taskmodes", label: "Task modes", Icon: ListChecks },
-  { id: "prompts", label: "Prompt library", Icon: PromptLibraryIcon },
-  { id: "slides", label: "Slides", Icon: SlidesIcon },
-  { id: "artifacts", label: "Artifacts", Icon: ArtifactsIcon },
+  { id: "prompts", label: "Prompt library", Icon: PromptLibraryIcon, iconClassName: "h-6 w-6" },
+  { id: "slides", label: "Slides", Icon: SlidesIcon, iconClassName: "h-6 w-6" },
+  { id: "artifacts", label: "Artifacts", Icon: ArtifactsIcon, iconClassName: "h-6 w-6" },
   { id: "promptagent", label: "Prompt agent", Icon: WandSparkles },
   { id: "schedules", label: "Schedules", Icon: CalendarClock },
   { id: "memory", label: "Memory", Icon: Brain },
-  { id: "knowledge", label: "Knowledge base", Icon: KnowledgeIcon },
+  { id: "knowledge", label: "Knowledge base", Icon: KnowledgeIcon, iconClassName: "h-6 w-6" },
   { id: "agents", label: "Sub-agents", Icon: Bot },
-  { id: "skills", label: "Skills", Icon: SkillsIcon },
+  { id: "skills", label: "Skills", Icon: SkillsIcon, iconClassName: "h-6 w-6" },
   { id: "teams", label: "Agent teams", Icon: Users },
   { id: "ceo", label: "CEO agents", Icon: Crown },
-  { id: "connectors", label: "Connectors", Icon: ConnectorsIcon },
-  { id: "mcp", label: "MCP servers", Icon: McpIcon },
+  { id: "connectors", label: "Connectors", Icon: ConnectorsIcon, iconClassName: "h-6 w-6" },
+  { id: "mcp", label: "MCP servers", Icon: McpIcon, iconClassName: "h-6 w-6" },
   { id: "channels", label: "Channels", Icon: MessagesSquare },
-  { id: "tts", label: "Text to speech", Icon: TtsIcon },
+  { id: "tts", label: "Text to speech", Icon: TtsIcon, iconClassName: "h-6 w-6" },
   { id: "imagegen", label: "Image generation", Icon: ImageIcon },
   { id: "videogen", label: "Video generation", Icon: Clapperboard },
   { id: "musicgen", label: "Music generation", Icon: Music },
-  { id: "acp", label: "ACP gateway", Icon: AcpIcon },
-  { id: "acp-client", label: "ACP client", Icon: AcpClientIcon },
+  { id: "acp", label: "ACP gateway", Icon: AcpIcon, iconClassName: "h-6 w-9" },
+  { id: "acp-client", label: "ACP client", Icon: AcpClientIcon, iconClassName: "h-6 w-9" },
 ];
 
 const EXPANDED_WIDTH = "13.5rem";
@@ -161,7 +166,7 @@ export function Rail() {
           aria-label="Workspace"
           className={cn("mt-3 flex flex-col gap-1", expanded ? "w-full items-stretch" : "items-center")}
         >
-          {NAV.map(({ id, label, Icon }) => {
+          {NAV.map(({ id, label, Icon, iconClassName }) => {
             const active = section === id;
             return (
               <button
@@ -180,7 +185,7 @@ export function Rail() {
                     : "text-[var(--muted)] hover:bg-[color:color-mix(in_oklab,var(--fg)_6%,transparent)] hover:text-[var(--fg)]",
                 )}
               >
-                <Icon className="h-5 w-5 shrink-0" strokeWidth={1.7} />
+                <Icon className={cn("shrink-0", iconClassName ?? "h-5 w-5")} strokeWidth={1.7} />
                 {expanded ? (
                   <span className="truncate text-sm font-medium">{label}</span>
                 ) : (

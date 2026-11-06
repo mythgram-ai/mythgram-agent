@@ -499,7 +499,7 @@ export function PromptAgentPanel() {
       <Modal
         open={saveOpen}
         onClose={() => setSaveOpen(false)}
-        icon={<PromptLibraryIcon className="h-4 w-4" />}
+        icon={<PromptLibraryIcon className="h-5 w-5" />}
         title="Save prompt to library"
         size="md"
         footer={

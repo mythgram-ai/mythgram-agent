@@ -147,7 +147,7 @@ export function TopBar() {
             title={`Chatting with your custom agent "${activeAgent.name}". Click to manage agents.`}
             className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-[var(--chip)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--chip-hover)] hover:text-[var(--fg)]"
           >
-            <CustomAgentIcon className="h-3.5 w-3.5 shrink-0 text-[var(--secondary)]" />
+            <CustomAgentIcon className="h-4 w-4 shrink-0 text-[var(--secondary)]" />
             <span className="truncate max-w-[10rem]">{activeAgent.name}</span>
           </button>
         )}

@@ -280,7 +280,7 @@ export function CustomAgentsPanel() {
         className="mb-4 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] px-3 py-2 text-xs text-[var(--muted)]"
         aria-live="polite"
       >
-        <CustomAgentIcon className="h-3.5 w-3.5 shrink-0 text-[var(--subtle)]" />
+        <CustomAgentIcon className="h-4 w-4 shrink-0 text-[var(--subtle)]" />
         <span>
           Active agent:{" "}
           <span className="font-medium text-[var(--fg)]">
@@ -425,7 +425,7 @@ export function CustomAgentsPanel() {
       <Modal
         open={Boolean(draft)}
         onClose={() => setDraft(null)}
-        icon={<CustomAgentIcon className="h-4 w-4" />}
+        icon={<CustomAgentIcon className="h-5 w-5" />}
         title={draft?.id ? "Edit custom agent" : "New custom agent"}
         size="lg"
         footer={

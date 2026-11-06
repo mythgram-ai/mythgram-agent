@@ -55,7 +55,7 @@ export function SlidesPresenter() {
     >
       <div className="flex items-center justify-between gap-3 pb-3">
         <div className="flex min-w-0 items-center gap-2 text-[var(--fg)]">
-          <SlidesIcon className="h-4 w-4 shrink-0" />
+          <SlidesIcon className="h-5 w-5 shrink-0" />
           <span className="truncate text-sm font-semibold">{active.name}</span>
           <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--muted)]">
             {index + 1} / {slides.length}

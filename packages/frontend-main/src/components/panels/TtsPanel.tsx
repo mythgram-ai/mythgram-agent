@@ -960,7 +960,7 @@ function AgentSpeechSettings({ providers }: { providers: TtsProvider[] }) {
   return (
     <section className="mb-6">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
-        <TtsIcon className="h-4 w-4 text-[var(--subtle)]" /> Agent voice
+        <TtsIcon className="h-5 w-5 text-[var(--subtle)]" /> Agent voice
       </h2>
       <div
         className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg)] p-5"

@@ -142,7 +142,7 @@ function KnowledgeModal({ view, onClose }: { view: View; onClose: () => void }) 
           : "";
 
   return (
-    <Modal open={view.kind !== "none"} onClose={onClose} icon={<KnowledgeIcon className="h-4 w-4" />} title={title} size="lg">
+    <Modal open={view.kind !== "none"} onClose={onClose} icon={<KnowledgeIcon className="h-5 w-5" />} title={title} size="lg">
       {view.kind === "editor" && <EditorView view={view} onClose={onClose} />}
       {view.kind === "upload" && <UploadView onClose={onClose} />}
       {view.kind === "url" && <UrlView editingPath={view.editingPath} onClose={onClose} />}

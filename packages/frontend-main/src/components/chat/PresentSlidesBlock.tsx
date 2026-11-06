@@ -51,7 +51,7 @@ export function PresentSlidesBlock({ tool }: { tool: ToolActivity }) {
   return (
     <div className="w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] fade-in">
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
-        <SlidesIcon className="h-4 w-4 shrink-0 text-[var(--secondary)]" />
+        <SlidesIcon className="h-5 w-5 shrink-0 text-[var(--secondary)]" />
         <span className="min-w-0 truncate text-xs font-semibold text-[var(--fg)]">
           {active.name}
         </span>

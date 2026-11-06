@@ -407,7 +407,7 @@ function McpCard({
             {server.kind === "local" ? (
               <SquareTerminal className="h-5 w-5" />
             ) : (
-              <McpIcon className="h-5 w-5" />
+              <McpIcon className="h-6 w-6" />
             )}
           </span>
           <div className="min-w-0 flex-1">
@@ -858,7 +858,7 @@ function McpCreateModal({
     <Modal
       open
       onClose={onClose}
-      icon={kind === "local" ? <SquareTerminal className="h-4 w-4" /> : <McpIcon className="h-4 w-4" />}
+      icon={kind === "local" ? <SquareTerminal className="h-4 w-4" /> : <McpIcon className="h-5 w-5" />}
       title={kind === "local" ? "Add local MCP server" : "Add remote MCP server"}
       size="lg"
       footer={

@@ -129,7 +129,7 @@ export function SlidesPanel() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <SlidesIcon className="h-5 w-5 text-[var(--secondary)]" />
+            <SlidesIcon className="h-6 w-6 text-[var(--secondary)]" />
             <h1 className="text-lg font-semibold text-[var(--fg)]">Slides</h1>
           </div>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
@@ -262,7 +262,7 @@ export function SlidesPanel() {
                       {project.slide_count} slide{project.slide_count === 1 ? "" : "s"}
                     </p>
                   </div>
-                  <SlidesIcon className="h-4 w-4 shrink-0 text-[var(--secondary)]" />
+                  <SlidesIcon className="h-5 w-5 shrink-0 text-[var(--secondary)]" />
                 </div>
                 <div className="mt-auto flex flex-wrap items-center gap-2">
                   <button

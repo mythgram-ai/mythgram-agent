@@ -96,7 +96,7 @@ export function SkillsPanel() {
           {skills.map((skill) => (
             <li key={skill.id} className="group flex items-start gap-4 border-b border-[var(--border)] px-5 py-4 transition-colors last:border-b-0 hover:bg-[var(--chip)]">
               <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--chip)] text-[var(--fg)]">
-                <SkillsIcon className="h-4 w-4" />
+                <SkillsIcon className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="m-0 flex items-center gap-2 text-sm font-medium">
@@ -173,7 +173,7 @@ function SkillEditor({ draft, error, setDraft, onClose, onSave }: { draft: Draft
   };
 
   return (
-    <Modal open={Boolean(draft)} onClose={onClose} icon={<SkillsIcon className="h-4 w-4" />} title={draft?.id ? "Edit skill" : "New skill"} size="lg" footer={<Button onClick={onSave}><Check className="h-4 w-4" /> Save</Button>}>
+    <Modal open={Boolean(draft)} onClose={onClose} icon={<SkillsIcon className="h-5 w-5" />} title={draft?.id ? "Edit skill" : "New skill"} size="lg" footer={<Button onClick={onSave}><Check className="h-4 w-4" /> Save</Button>}>
       {draft && (
         <div className="space-y-4 p-5">
           <Field label="Skill name" hint={`${draft.name.length}/${NAME_MAX}`} hintError={draft.name.length > NAME_MAX}>
