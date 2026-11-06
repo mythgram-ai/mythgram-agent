@@ -1,17 +1,16 @@
 name: local-tts publish
 
-# Publishes the `local-tts` package on every v* tag and provides all three
-# install methods:
+# Publishes the `local-tts` package on every v* tag via two install methods:
 #
 #   1. PyPI      (already published — pip install local-tts-studio)
-#   2. Releases  (python-package job: builds wheel + sdist and attaches them to
-#                 the GitHub Release for this tag, so users can install with:
-#                 pip install <release asset url>)
-#   3. Docker    (container job: builds the local-tts OCI image and pushes it to
+#   2. Docker    (container job: builds the local-tts OCI image and pushes it to
 #                 ghcr.io/mythgram-ai/local-tts, which is where the package
 #                 appears in the repository's "Packages" section:
 #                 docker run -p 7878:7878 -v local-tts-data:/data \
 #                   ghcr.io/mythgram-ai/local-tts:latest)
+#
+# This workflow deliberately does NOT create a GitHub Release. Only the OCI
+# image is published on a tag.
 #
 # workflow_dispatch (manual run) publishes only the container, from main.
 
@@ -22,50 +21,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  # Read-only repository contents: this workflow must never create a release.
+  contents: read
   packages: write
 
 jobs:
-  python-package:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: packages/local-tts/web-ui/package-lock.json
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Build web UI
-        working-directory: packages/local-tts/web-ui
-        run: |
-          npm ci --no-audit --no-fund
-          npm run build
-
-      - name: Bundle web UI into the package
-        run: |
-          rm -rf packages/local-tts/python/local_tts/_web
-          cp -r packages/local-tts/web-ui/dist packages/local-tts/python/local_tts/_web
-
-      - name: Build distributions
-        working-directory: packages/local-tts/python
-        run: |
-          python -m pip install --upgrade build twine
-          python -m build --outdir dist
-          python -m twine check dist/*
-
-      - name: Attach distributions to the release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: packages/local-tts/python/dist/*
-          fail_on_unmatched_files: true
-
   container:
     runs-on: ubuntu-latest
     steps:
