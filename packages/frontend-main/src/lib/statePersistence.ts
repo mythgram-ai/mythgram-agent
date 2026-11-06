@@ -37,6 +37,7 @@ const SYNC_KEYS = [
   "knowledge",
   "knowledgeSources",
   "customProviders",
+  "modelsByProvider",
   "agentTeams",
   "ceoAgents",
   "customAgents",

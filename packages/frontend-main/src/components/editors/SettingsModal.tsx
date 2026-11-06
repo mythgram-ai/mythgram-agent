@@ -30,7 +30,7 @@ export function SettingsModal() {
   const settings = useStore((s) => s.settings);
   const customProviders = useStore((s) => s.customProviders);
   const setProviders = useStore((s) => s.setProviders);
-  const setModels = useStore((s) => s.setModels);
+  const setModelsForProvider = useStore((s) => s.setModelsForProvider);
   const setModelsLoading = useStore((s) => s.setModelsLoading);
   const setSettings = useStore((s) => s.setSettings);
   const setApiKey = useStore((s) => s.setApiKey);
@@ -76,10 +76,9 @@ export function SettingsModal() {
     setError(null);
     if (isCustomProviderId(value)) {
       selectCustomProvider(value);
-      setModels([]);
     } else {
+      // The store swaps in this provider's cached catalog (if any) via setSettings.
       setSettings({ provider: value, model: "", baseUrl: "" });
-      setModels([]);
     }
   };
 
@@ -94,11 +93,13 @@ export function SettingsModal() {
     setModelsLoading(true);
     try {
       const list = await fetchModels(settings.provider, currentKey, settings.baseUrl || undefined);
-      setModels(list);
+      // Persist the whole catalog (including context windows, pricing, capabilities)
+      // so it survives a refresh instead of being re-fetched or lost.
+      setModelsForProvider(settings.provider, list);
       if (list.length > 0 && !list.some((m) => m.id === settings.model)) setSettings({ model: list[0].id });
     } catch (e) {
+      // Keep the last successfully loaded catalog on a transient fetch failure.
       setError(e instanceof Error ? e.message : String(e));
-      setModels([]);
     } finally {
       setModelsLoading(false);
     }

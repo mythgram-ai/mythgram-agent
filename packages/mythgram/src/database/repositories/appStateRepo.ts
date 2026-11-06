@@ -17,6 +17,7 @@ export const APP_STATE_KEYS = [
   "knowledge",
   "knowledgeSources",
   "customProviders",
+  "modelsByProvider",
   "currentSessionId",
   "agentTeams",
   "ceoAgents",

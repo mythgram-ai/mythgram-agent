@@ -32,6 +32,7 @@ import type {
   MemoryAgentRunMeta,
   MemoryFile,
   ModelInfo,
+  ModelPricing,
   PlanApprovalStatus,
   PromptLibraryItem,
   ProviderMeta,
@@ -244,6 +245,14 @@ interface AppState {
   hydrated: boolean;
   section: Section;
   providers: ProviderMeta[];
+  /**
+   * Provider model catalogs fetched from `POST /api/providers/models`, keyed by
+   * provider id and persisted in the backend SQLite database. Survives a page
+   * refresh so the fetched models (and their metadata: context windows, pricing,
+   * capabilities, ...) are restored without asking the provider again.
+   */
+  modelsByProvider: Record<string, ModelInfo[]>;
+  /** The visible model list for the currently selected provider. */
   models: ModelInfo[];
   modelsLoading: boolean;
   settingsOpen: boolean;
@@ -712,6 +721,8 @@ interface AppState {
   setFetchProvider: (provider: FetchProvider) => void;
   setSearchApiKey: (provider: "tavily" | "exa" | "serpapi" | "firecrawl", key: string) => void;
   setProviders: (p: ProviderMeta[]) => void;
+  /** Store one provider's fetched catalog (persisted) and refresh the visible list when active. */
+  setModelsForProvider: (provider: string, models: ModelInfo[]) => void;
   setModels: (m: ModelInfo[]) => void;
   setModelsLoading: (v: boolean) => void;
   setSection: (section: Section) => void;
@@ -939,6 +950,90 @@ function normalizeAgentMode(raw: unknown): AgentMode {
   return typeof raw === "string" && raw.trim().toLowerCase() === "chat" ? "chat" : "agent";
 }
 
+/** A finite, strictly positive integer from an untrusted value, or null. */
+function positiveIntOrNull(value: unknown): number | null {
+  const n =
+    typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+/** A finite, non-negative price from an untrusted value, or null. */
+function modelPriceOrNull(value: unknown): number | null {
+  const n =
+    typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Normalize one untrusted pricing payload, or null when it carries no usable prices. */
+function normalizeModelPricing(raw: unknown): ModelPricing | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const prompt = modelPriceOrNull(record.prompt);
+  const completion = modelPriceOrNull(record.completion);
+  if (prompt === null && completion === null) return null;
+  return {
+    prompt,
+    completion,
+    currency: typeof record.currency === "string" ? record.currency : "USD",
+    unit: typeof record.unit === "string" ? record.unit : "1M tokens",
+  };
+}
+
+/**
+ * Normalize the persisted provider-model catalog. The document is written by this
+ * app but could be malformed (older client / manual edit), so every entry is
+ * validated and only known fields survive. Unknown provider keys are dropped.
+ */
+function normalizeModelsByProvider(raw: unknown): Record<string, ModelInfo[]> {
+  const out: Record<string, ModelInfo[]> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [rawKey, rawList] of Object.entries(raw as Record<string, unknown>)) {
+    const key = rawKey.trim();
+    if (!key || !Array.isArray(rawList)) continue;
+    const models: ModelInfo[] = [];
+    for (const entry of rawList) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      const id = typeof record.id === "string" ? record.id.trim() : "";
+      if (!id) continue;
+      const capabilities = Array.isArray(record.capabilities)
+        ? record.capabilities.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+        : null;
+      models.push({
+        id,
+        provider:
+          typeof record.provider === "string" && record.provider.trim().length > 0
+            ? record.provider
+            : key,
+        label:
+          typeof record.label === "string" && record.label.trim().length > 0 ? record.label : id,
+        owned_by: typeof record.owned_by === "string" ? record.owned_by : null,
+        context_window: positiveIntOrNull(record.context_window),
+        max_output_tokens: positiveIntOrNull(record.max_output_tokens),
+        pricing: normalizeModelPricing(record.pricing),
+        description: typeof record.description === "string" ? record.description : null,
+        capabilities,
+      });
+    }
+    if (models.length > 0) out[key] = models;
+  }
+  return out;
+}
+
+/**
+ * The visible model list for a provider. Custom providers keep their models in the
+ * `customProviders` slice (the Settings UI reads them from there), so they have no
+ * entry in the built-in provider catalog.
+ */
+function activeModelsFor(
+  catalog: Record<string, ModelInfo[]>,
+  provider: string | undefined,
+): ModelInfo[] {
+  const id = (provider ?? "").trim();
+  if (!id || id.startsWith(CUSTOM_PROVIDER_PREFIX)) return [];
+  return catalog[id] ?? [];
+}
+
 /**
  * A brand-new, empty workspace snapshot: fresh defaults for every user-owned slice,
  * exactly matching the store's initial state. A new profile starts from this — no
@@ -1054,6 +1149,7 @@ export const useStore = create<AppState>()(
       hydrated: false,
       section: "chat",
       providers: [],
+      modelsByProvider: {},
       models: [],
       modelsLoading: false,
       settingsOpen: false,
@@ -1241,6 +1337,13 @@ export const useStore = create<AppState>()(
     ),
   };
 
+        // Provider model catalogs are global (not per-profile): restore every provider's
+        // last fetched list, then expose the active provider's models. This is what makes
+        // models + their metadata survive a page refresh instead of disappearing.
+        const modelsByProvider = normalizeModelsByProvider(
+          (p as { modelsByProvider?: unknown }).modelsByProvider,
+        );
+
         // Seed the active profile's snapshot from the working copy when it has none
         // (first run — preserves all pre-existing data under the default profile).
         if (!profileStates[activePid]) {
@@ -1311,6 +1414,8 @@ export const useStore = create<AppState>()(
           conversations,
           currentId,
           ...fromSnap,
+          modelsByProvider,
+          models: activeModelsFor(modelsByProvider, fromSnap.settings.provider),
           userProfiles,
           activeUserProfileId: activePid,
           profileStates,
@@ -2404,6 +2509,7 @@ export const useStore = create<AppState>()(
           connectors: normalizeConnectors(next.connectors),
           mcpServers: normalizeMcpServers(next.mcpServers),
           userProfiles: mergeProfilesWithDefaults(remaining),
+          models: activeModelsFor(s.modelsByProvider, next.settings.provider),
           activeUserProfileId: fallback.id,
           conversations,
           currentId,
@@ -2462,6 +2568,7 @@ export const useStore = create<AppState>()(
           connectors: normalizeConnectors(next.connectors),
           mcpServers: normalizeMcpServers(next.mcpServers),
           currentId,
+          models: activeModelsFor(s.modelsByProvider, next.settings.provider),
           activeUserProfileId: id,
           profileStates: { ...profileStates, [id]: { ...next, currentId } },
           profileSessions: { ...profileSessions, [id]: sessionIdsOf(s.conversations, id) },
@@ -2542,6 +2649,7 @@ export const useStore = create<AppState>()(
           activeUserProfileId: copy.id,
           conversations: [...copies, ...prev.conversations],
           ...cloneJson(snap),
+          models: activeModelsFor(prev.modelsByProvider, snap.settings.provider),
           subAgents: mergeSubAgentsWithDefaults(snap.subAgents),
           skills: mergeSkillsWithDefaults(snap.skills),
           memory: mergeMemoryWithDefaults(snap.memory),
@@ -2626,6 +2734,7 @@ export const useStore = create<AppState>()(
         }
         set({
           ...cloneJson(fresh),
+          models: activeModelsFor(s.modelsByProvider, fresh.settings.provider),
           subAgents: mergeSubAgentsWithDefaults(fresh.subAgents),
           skills: mergeSkillsWithDefaults(fresh.skills),
           memory: mergeMemoryWithDefaults(fresh.memory),
@@ -3002,7 +3111,11 @@ export const useStore = create<AppState>()(
           if (s.settings.provider === id) {
             settings = { ...s.settings, provider: "openrouter", model: "", baseUrl: "" };
           }
-          return { customProviders, settings };
+          return {
+            customProviders,
+            settings,
+            models: activeModelsFor(s.modelsByProvider, settings.provider),
+          };
         }),
 
       selectCustomProvider: (id) =>
@@ -3010,10 +3123,21 @@ export const useStore = create<AppState>()(
           const provider = s.customProviders.find((p) => p.id === id);
           if (!provider) return {};
           const model = provider.models.find((m) => m.trim().length > 0) ?? "";
-          return { settings: { ...s.settings, provider: id, model, baseUrl: "" } };
+          return { settings: { ...s.settings, provider: id, model, baseUrl: "" }, models: [] };
         }),
 
-      setSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+      setSettings: (patch) =>
+        set((s) => {
+          const settings = { ...s.settings, ...patch };
+          return {
+            settings,
+            // Switching providers swaps the visible catalog to that provider's cached
+            // models immediately (the Settings modal no longer has to clear the list).
+            ...(patch.provider !== undefined && patch.provider !== s.settings.provider
+              ? { models: activeModelsFor(s.modelsByProvider, settings.provider) }
+              : {}),
+          };
+        }),
       setManualContextLimit: (provider, model, limit) =>
         set((s) => ({
           settings: {
@@ -3062,6 +3186,16 @@ export const useStore = create<AppState>()(
           return { settings: { ...s.settings, ...patch } };
         }),
       setProviders: (providers) => set({ providers }),
+      setModelsForProvider: (provider, models) =>
+        set((s) => {
+          const id = typeof provider === "string" ? provider.trim() : "";
+          if (!id) return {};
+          const modelsByProvider = { ...s.modelsByProvider, [id]: models };
+          return {
+            modelsByProvider,
+            ...(s.settings.provider === id ? { models } : {}),
+          };
+        }),
       setModels: (models) => set({ models }),
       setModelsLoading: (modelsLoading) => set({ modelsLoading }),
       setSection: (section) => set({ section }),
