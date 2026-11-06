@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Haku design system.
+ * Mythgram AI design system.
  * The visual language (palette, radii, shadows, easing, typography) is lifted verbatim
  * from the reference design so the app reads as one calm, quiet surface. Tokens are
  * exposed as CSS variables AND as Tailwind theme colors so both `var(--fg)` and

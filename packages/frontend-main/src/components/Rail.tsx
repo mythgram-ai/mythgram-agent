@@ -98,7 +98,7 @@ export function Rail() {
             </svg>
           </span>
           {expanded && (
-            <span className="truncate text-sm font-semibold text-[var(--fg)]">Haku</span>
+            <span className="truncate text-sm font-semibold text-[var(--fg)]">Mythgram AI</span>
           )}
         </div>
 

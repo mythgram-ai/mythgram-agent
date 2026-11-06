@@ -53,7 +53,7 @@ export function KnowledgePanel() {
 
   return (
     <div className="mx-auto w-full max-w-2xl panel-in">
-      <PanelHeader kicker="Sources Haku can read" title="Knowledge base" />
+      <PanelHeader kicker="Sources Mythgram AI can read" title="Knowledge base" />
       <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">
         Reference material the agent can read and maintain. Add files manually, upload a file or
         folder, or fetch a URL — everything is stored locally in your browser.

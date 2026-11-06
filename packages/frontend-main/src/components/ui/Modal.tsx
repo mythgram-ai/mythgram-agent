@@ -27,7 +27,7 @@ const SIZES: Record<NonNullable<ModalProps["size"]>, string> = {
   xl: "max-w-3xl",
 };
 
-/** The shared Haku modal shell: soft overlay, rounded card, quiet header/footer dividers. */
+/** The shared Mythgram AI modal shell: soft overlay, rounded card, quiet header/footer dividers. */
 export function Modal({
   open,
   onClose,

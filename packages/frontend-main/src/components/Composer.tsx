@@ -314,7 +314,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
             onChange={autoGrow}
             onKeyDown={onKeyDown}
             rows={3}
-            placeholder="Ask Haku anything"
+            placeholder="Ask Mythgram AI anything"
             className="block max-h-[200px] min-h-[4.5rem] w-full resize-none border-0 bg-transparent text-base leading-relaxed text-[var(--fg)] outline-none placeholder:text-[var(--subtle)]"
           />
 
@@ -414,7 +414,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
         </div>
 
         <p className="mx-auto mt-3 max-w-3xl text-center text-xs text-[var(--subtle)]">
-          Haku can be wrong. Check anything that matters.
+          Mythgram AI can be wrong. Check anything that matters.
         </p>
       </div>
 

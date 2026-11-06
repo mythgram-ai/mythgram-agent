@@ -52,7 +52,7 @@ export function Select({ className, children, ...props }: React.SelectHTMLAttrib
   );
 }
 
-/** Primary (dark) button in the Haku secondary color. */
+/** Primary (dark) button in the Mythgram AI secondary color. */
 export function Button({
   className,
   variant = "primary",
