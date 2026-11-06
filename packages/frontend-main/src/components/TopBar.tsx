@@ -129,7 +129,10 @@ export function TopBar() {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between px-6 max-[640px]:px-4">
       <div className="flex min-w-0 items-center gap-2.5">
-        <p className="m-0 text-sm font-medium">Mythgram AI v1</p>
+        <p className="m-0 text-sm font-medium">Mythgram AI</p>
+        <span className="inline-flex items-center rounded-full bg-[var(--secondary)] px-2 py-0.5 text-[10px] font-semibold leading-5 text-[var(--secondary-fg)]">
+          v1
+        </span>
         {isBranch && (
           <span
             title="This thread is a fresh branch — no past context is sent for any agent."
