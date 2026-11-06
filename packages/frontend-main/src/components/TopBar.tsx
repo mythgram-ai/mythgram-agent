@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Plus, Settings, Paperclip, Brain, History, Boxes, Crown, MoreVertical, GitBranch, Copy, Pencil, MessageCircle, Search, RefreshCcw } from "lucide-react";
+import { Plus, Settings, Paperclip, Brain, History, Crown, MoreVertical, GitBranch, Copy, Pencil, MessageCircle, Search, RefreshCcw } from "lucide-react";
 import { useStore, type Section } from "@/store/useStore";
+import { CustomAgentIcon } from "@/components/icons/NavIcons";
 import { DEFAULT_PROFILE_ID } from "@/lib/userProfiles";
 import { ContextMeter } from "@/components/chat/ContextMeter";
 import { cn } from "@/utils/cn";
@@ -146,7 +147,7 @@ export function TopBar() {
             title={`Chatting with your custom agent "${activeAgent.name}". Click to manage agents.`}
             className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-[var(--chip)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--chip-hover)] hover:text-[var(--fg)]"
           >
-            <Boxes className="h-3.5 w-3.5 shrink-0 text-[var(--secondary)]" />
+            <CustomAgentIcon className="h-3.5 w-3.5 shrink-0 text-[var(--secondary)]" />
             <span className="truncate max-w-[10rem]">{activeAgent.name}</span>
           </button>
         )}

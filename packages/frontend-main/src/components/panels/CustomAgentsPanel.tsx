@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Boxes,
   Check,
   ChevronLeft,
   Pencil,
@@ -23,6 +22,7 @@ import { ImportCustomAgentsModal } from "@/components/panels/ImportCustomAgentsM
 import { Modal } from "@/components/ui/Modal";
 import { Button, EmptyState, Field, PanelHeader, TextArea, TextInput, Toggle } from "@/components/ui/primitives";
 import { cn } from "@/utils/cn";
+import { CustomAgentIcon } from "@/components/icons/NavIcons";
 
 const NAME_MAX = 70;
 const DESC_MAX = 300;
@@ -280,7 +280,7 @@ export function CustomAgentsPanel() {
         className="mb-4 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] px-3 py-2 text-xs text-[var(--muted)]"
         aria-live="polite"
       >
-        <Boxes className="h-3.5 w-3.5 shrink-0 text-[var(--subtle)]" />
+        <CustomAgentIcon className="h-3.5 w-3.5 shrink-0 text-[var(--subtle)]" />
         <span>
           Active agent:{" "}
           <span className="font-medium text-[var(--fg)]">
@@ -321,7 +321,7 @@ export function CustomAgentsPanel() {
       </article>
 
       {customAgents.length === 0 ? (
-        <EmptyState icon={<Boxes className="h-8 w-8" />}>
+        <EmptyState icon={<CustomAgentIcon className="h-8 w-8" />}>
           No custom agents yet. Create one to get your own independently-configured Main Agent.
         </EmptyState>
       ) : (
@@ -425,7 +425,7 @@ export function CustomAgentsPanel() {
       <Modal
         open={Boolean(draft)}
         onClose={() => setDraft(null)}
-        icon={<Boxes className="h-4 w-4" />}
+        icon={<CustomAgentIcon className="h-4 w-4" />}
         title={draft?.id ? "Edit custom agent" : "New custom agent"}
         size="lg"
         footer={

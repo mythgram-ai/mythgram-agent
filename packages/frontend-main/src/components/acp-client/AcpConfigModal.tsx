@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FlaskConical, Loader2, Plus, Sparkles, Terminal } from "lucide-react";
+import { CheckCircle2, FlaskConical, Loader2, Plus, Sparkles } from "lucide-react";
+import { AcpClientIcon } from "@/components/icons/NavIcons";
 import { Modal } from "@/components/ui/Modal";
 import { Button, Field, TextArea, TextInput } from "@/components/ui/primitives";
 import {
@@ -257,7 +258,7 @@ export function AcpConfigModal({
     <Modal
       open={open}
       onClose={onClose}
-      icon={<Terminal className="h-4 w-4" />}
+      icon={<AcpClientIcon className="h-4 w-4" />}
       title={client ? "Edit ACP agent" : "Add ACP agent"}
       size="lg"
       align="top"

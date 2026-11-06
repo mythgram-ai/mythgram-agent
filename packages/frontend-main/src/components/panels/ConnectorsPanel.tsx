@@ -25,6 +25,7 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import { Button, EmptyState, PanelHeader } from "@/components/ui/primitives";
 import { cn } from "@/utils/cn";
+import { ConnectorsIcon } from "@/components/icons/NavIcons";
 
 const STATUS_STYLE: Record<ConnectorStatus, { label: string; cls: string }> = {
   active: { label: "Connected", cls: "bg-emerald-500/15 text-emerald-600" },
@@ -205,7 +206,7 @@ export function ConnectorsPanel() {
           <Loader2 className="h-4 w-4 animate-spin" /> Loading connectors…
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState icon={<Plug className="h-8 w-8" />}>
+        <EmptyState icon={<ConnectorsIcon className="h-8 w-8" />}>
           No connectors match “{query}”.
         </EmptyState>
       ) : (

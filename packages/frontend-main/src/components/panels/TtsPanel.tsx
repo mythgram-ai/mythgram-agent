@@ -13,10 +13,10 @@ import {
   Settings2,
   Trash2,
   TriangleAlert,
-  Volume2,
   X,
   Zap,
 } from "lucide-react";
+import { TtsIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import type {
   CustomHeader,
@@ -715,7 +715,7 @@ function ProviderSection({
       </div>
 
       {providers.length === 0 ? (
-        <EmptyState icon={<Volume2 className="h-8 w-8" />}>
+        <EmptyState icon={<TtsIcon className="h-8 w-8" />}>
           No TTS providers yet. Add a custom OpenAI-compatible provider to get started.
         </EmptyState>
       ) : (
@@ -960,7 +960,7 @@ function AgentSpeechSettings({ providers }: { providers: TtsProvider[] }) {
   return (
     <section className="mb-6">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
-        <Volume2 className="h-4 w-4 text-[var(--subtle)]" /> Agent voice
+        <TtsIcon className="h-4 w-4 text-[var(--subtle)]" /> Agent voice
       </h2>
       <div
         className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg)] p-5"

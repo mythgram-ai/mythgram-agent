@@ -1,35 +1,49 @@
 import { useRef, useState } from "react";
-import { MessageCircle, Brain, Library, Bot, Sparkles, Users, Boxes, FileText, Crown, ListChecks, CalendarClock, Plug, Server, MessagesSquare, Search, ChevronsLeft, ChevronsRight, Bookmark, WandSparkles, Volume2, Image as ImageIcon, Clapperboard, Music, Presentation, Terminal, Package, PlugZap } from "lucide-react";
-import type { ReactNode } from "react";
+import { MessageCircle, Brain, Bot, Users, Crown, ListChecks, CalendarClock, MessagesSquare, Search, ChevronsLeft, ChevronsRight, WandSparkles, Image as ImageIcon, Clapperboard, Music } from "lucide-react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import { useStore, type Section } from "@/store/useStore";
 import { findActiveProfile, isUsableAvatar, profileInitials } from "@/lib/userProfiles";
 import { cn } from "@/utils/cn";
+import {
+  AcpClientIcon,
+  AcpIcon,
+  ArtifactsIcon,
+  ConnectorsIcon,
+  CustomAgentIcon,
+  KnowledgeIcon,
+  McpIcon,
+  PromptLibraryIcon,
+  SkillsIcon,
+  SlidesIcon,
+  SystemPromptIcon,
+  TtsIcon,
+} from "@/components/icons/NavIcons";
 
-const NAV: Array<{ id: Section; label: string; Icon: typeof MessageCircle }> = [
+const NAV: Array<{ id: Section; label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }> = [
   { id: "chat", label: "Chat history", Icon: MessageCircle },
-  { id: "customagents", label: "Custom agents", Icon: Boxes },
-  { id: "systemprompts", label: "Custom system prompts", Icon: FileText },
+  { id: "customagents", label: "Custom agents", Icon: CustomAgentIcon },
+  { id: "systemprompts", label: "Custom system prompts", Icon: SystemPromptIcon },
   { id: "taskmodes", label: "Task modes", Icon: ListChecks },
-  { id: "prompts", label: "Prompt library", Icon: Bookmark },
-  { id: "slides", label: "Slides", Icon: Presentation },
-  { id: "artifacts", label: "Artifacts", Icon: Package },
+  { id: "prompts", label: "Prompt library", Icon: PromptLibraryIcon },
+  { id: "slides", label: "Slides", Icon: SlidesIcon },
+  { id: "artifacts", label: "Artifacts", Icon: ArtifactsIcon },
   { id: "promptagent", label: "Prompt agent", Icon: WandSparkles },
   { id: "schedules", label: "Schedules", Icon: CalendarClock },
   { id: "memory", label: "Memory", Icon: Brain },
-  { id: "knowledge", label: "Knowledge base", Icon: Library },
+  { id: "knowledge", label: "Knowledge base", Icon: KnowledgeIcon },
   { id: "agents", label: "Sub-agents", Icon: Bot },
-  { id: "skills", label: "Skills", Icon: Sparkles },
+  { id: "skills", label: "Skills", Icon: SkillsIcon },
   { id: "teams", label: "Agent teams", Icon: Users },
   { id: "ceo", label: "CEO agents", Icon: Crown },
-  { id: "connectors", label: "Connectors", Icon: Plug },
-  { id: "mcp", label: "MCP servers", Icon: Server },
+  { id: "connectors", label: "Connectors", Icon: ConnectorsIcon },
+  { id: "mcp", label: "MCP servers", Icon: McpIcon },
   { id: "channels", label: "Channels", Icon: MessagesSquare },
-  { id: "tts", label: "Text to speech", Icon: Volume2 },
+  { id: "tts", label: "Text to speech", Icon: TtsIcon },
   { id: "imagegen", label: "Image generation", Icon: ImageIcon },
   { id: "videogen", label: "Video generation", Icon: Clapperboard },
   { id: "musicgen", label: "Music generation", Icon: Music },
-  { id: "acp", label: "ACP gateway", Icon: Terminal },
-  { id: "acp-client", label: "ACP client", Icon: PlugZap },
+  { id: "acp", label: "ACP gateway", Icon: AcpIcon },
+  { id: "acp-client", label: "ACP client", Icon: AcpClientIcon },
 ];
 
 const EXPANDED_WIDTH = "13.5rem";

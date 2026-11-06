@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, ArrowUp, Square, FolderOpen, X, Loader2, ChevronDown, ListChecks, Plus, Bookmark } from "lucide-react";
+import { Paperclip, ArrowUp, Square, FolderOpen, X, Loader2, ChevronDown, ListChecks, Plus } from "lucide-react";
+import { PromptLibraryIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { isCustomProviderId, isLocalProviderId } from "@/lib/providers";
 import { isContextLimitRequired, isMainAgentActive } from "@/lib/contextMeter";
@@ -237,7 +238,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                   aria-selected="false"
                 >
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--chip)] text-[var(--muted)]">
-                    <Bookmark className="h-4 w-4" />
+                    <PromptLibraryIcon className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium text-[var(--fg)]">
@@ -285,7 +286,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                             aria-selected="false"
                             title={item.content.slice(0, 200)}
                           >
-                            <Bookmark className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--subtle)]" />
+                            <PromptLibraryIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--subtle)]" />
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-xs font-medium text-[var(--fg)]">
                                 {item.title}

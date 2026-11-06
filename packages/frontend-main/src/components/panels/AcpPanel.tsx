@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Terminal,
   Copy,
   Check,
   RefreshCw,
   Info,
   Cpu,
-  Volume2,
   FolderOpen,
   Bot,
   Users,
@@ -14,6 +12,7 @@ import {
   ShieldCheck,
   ChevronDown,
 } from "lucide-react";
+import { AcpIcon, TtsIcon } from "@/components/icons/NavIcons";
 import {
   Button,
   Field,
@@ -219,7 +218,7 @@ export function AcpPanel() {
             warn={!(info.llm.hasApiKey || info.llm.provider === "local")}
           />
           <StatusCell
-            icon={<Volume2 className="h-4 w-4" />}
+            icon={<TtsIcon className="h-4 w-4" />}
             label="Text to speech"
             primary={info.tts?.providerName ?? "Not connected"}
             secondary={info.tts ? "Auto for the voice tool" : "Configure in Text to speech"}
@@ -598,7 +597,7 @@ function ConnectionGuide({ info }: { info: AcpInfo }) {
   return (
     <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--card)] p-4">
       <div className="flex items-center gap-2">
-        <Terminal className="h-4 w-4 text-[var(--secondary)]" />
+        <AcpIcon className="h-4 w-4 text-[var(--secondary)]" />
         <h2 className="text-sm font-semibold text-[var(--fg)]">Connect an ACP client</h2>
       </div>
 

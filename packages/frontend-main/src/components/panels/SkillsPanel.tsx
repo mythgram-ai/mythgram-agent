@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Check, FilePlus2, FileText, FolderTree, Pencil, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { Check, FilePlus2, FileText, FolderTree, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { SkillsIcon } from "@/components/icons/NavIcons";
 import { ImportSkillsModal } from "@/components/panels/ImportSkillsModal";
 import { useStore } from "@/store/useStore";
 import type { SkillFile } from "@/types";
@@ -87,7 +88,7 @@ export function SkillsPanel() {
 
       {skills.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-dashed border-[var(--border)] py-12 text-center">
-          <Sparkles className="h-8 w-8 text-[var(--subtle)]" />
+          <SkillsIcon className="h-8 w-8 text-[var(--subtle)]" />
           <p className="text-sm text-[var(--muted)]">No skills yet.</p>
         </div>
       ) : (
@@ -95,7 +96,7 @@ export function SkillsPanel() {
           {skills.map((skill) => (
             <li key={skill.id} className="group flex items-start gap-4 border-b border-[var(--border)] px-5 py-4 transition-colors last:border-b-0 hover:bg-[var(--chip)]">
               <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--chip)] text-[var(--fg)]">
-                <Sparkles className="h-4 w-4" />
+                <SkillsIcon className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="m-0 flex items-center gap-2 text-sm font-medium">
@@ -172,7 +173,7 @@ function SkillEditor({ draft, error, setDraft, onClose, onSave }: { draft: Draft
   };
 
   return (
-    <Modal open={Boolean(draft)} onClose={onClose} icon={<Sparkles className="h-4 w-4" />} title={draft?.id ? "Edit skill" : "New skill"} size="lg" footer={<Button onClick={onSave}><Check className="h-4 w-4" /> Save</Button>}>
+    <Modal open={Boolean(draft)} onClose={onClose} icon={<SkillsIcon className="h-4 w-4" />} title={draft?.id ? "Edit skill" : "New skill"} size="lg" footer={<Button onClick={onSave}><Check className="h-4 w-4" /> Save</Button>}>
       {draft && (
         <div className="space-y-4 p-5">
           <Field label="Skill name" hint={`${draft.name.length}/${NAME_MAX}`} hintError={draft.name.length > NAME_MAX}>

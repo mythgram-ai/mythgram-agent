@@ -3,7 +3,6 @@ import {
   AlertCircle,
   Check,
   Copy,
-  FileText,
   Loader2,
   MoreVertical,
   Pencil,
@@ -12,6 +11,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
+import { ArtifactsIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { Modal } from "@/components/ui/Modal";
 import { Button, EmptyState, Field, PanelHeader, Select, TextArea, TextInput } from "@/components/ui/primitives";
@@ -163,7 +163,7 @@ export function ArtifactsPanel() {
           ))}
         </div>
       ) : artifacts.length === 0 ? (
-        <EmptyState icon={<FileText className="h-8 w-8" />}>
+        <EmptyState icon={<ArtifactsIcon className="h-8 w-8" />}>
           No artifacts yet. Ask the agent to save a deliverable and it will appear here.
         </EmptyState>
       ) : (
@@ -353,7 +353,7 @@ function PreviewModal({
     <Modal
       open={preview !== null || loading}
       onClose={onClose}
-      icon={<FileText className="h-4 w-4" />}
+      icon={<ArtifactsIcon className="h-4 w-4" />}
       title={preview?.meta.title ?? "Loading artifact..."}
       size="xl"
       actions={

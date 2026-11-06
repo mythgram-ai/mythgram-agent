@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
-  Bookmark,
   Check,
   ClipboardCopy,
   Pencil,
@@ -12,6 +11,7 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
+import { PromptLibraryIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { Button, EmptyState, Field, PanelHeader, TextArea, TextInput } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/Modal";
@@ -454,7 +454,7 @@ export function PromptAgentPanel() {
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {!canvasContent.trim() ? (
-              <EmptyState icon={<Bookmark className="h-8 w-8" />}>
+              <EmptyState icon={<PromptLibraryIcon className="h-8 w-8" />}>
                 Nothing on the canvas yet. Ask the agent to draft a prompt — every Markdown file
                 it writes appears here, rendered as Markdown.
               </EmptyState>
@@ -499,7 +499,7 @@ export function PromptAgentPanel() {
       <Modal
         open={saveOpen}
         onClose={() => setSaveOpen(false)}
-        icon={<Bookmark className="h-4 w-4" />}
+        icon={<PromptLibraryIcon className="h-4 w-4" />}
         title="Save prompt to library"
         size="md"
         footer={

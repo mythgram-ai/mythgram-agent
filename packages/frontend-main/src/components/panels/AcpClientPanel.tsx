@@ -21,6 +21,7 @@ import { Button, EmptyState, PanelHeader } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/Modal";
 import { AcpChat } from "@/components/acp-client/AcpChat";
 import { AcpConfigModal } from "@/components/acp-client/AcpConfigModal";
+import { AcpClientIcon } from "@/components/icons/NavIcons";
 import {
   authenticateAcpClient,
   cancelAcpSession,
@@ -537,7 +538,7 @@ export function AcpClientPanel() {
         <aside className="flex min-h-0 flex-col gap-3">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--muted)]">
-              <PlugZap className="h-3.5 w-3.5" />
+              <AcpClientIcon className="h-3.5 w-3.5" />
               {clients.length} agent{clients.length === 1 ? "" : "s"} · {connectedCount} connected
             </div>
             {clients.length > 3 && (
@@ -556,7 +557,7 @@ export function AcpClientPanel() {
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading agents…
               </div>
             ) : filtered.length === 0 ? (
-              <EmptyState icon={<Terminal className="h-8 w-8" />}>
+              <EmptyState icon={<AcpClientIcon className="h-8 w-8" />}>
                 {clients.length === 0
                   ? "No ACP agents yet. Add one and enter its command + args."
                   : `No agents match “${query}”.`}
@@ -777,7 +778,7 @@ function AgentCard({
             connected ? "bg-[var(--secondary)] text-[var(--secondary-fg)]" : "bg-[var(--chip)] text-[var(--muted)]",
           )}
         >
-          <Terminal className="h-4 w-4" />
+          <AcpClientIcon className="h-4 w-4" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">

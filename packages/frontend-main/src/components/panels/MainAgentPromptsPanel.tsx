@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Check, FileText, Pencil, Plus, RefreshCw, RotateCcw, Sparkles, Trash2, Upload } from "lucide-react";
+import { Check, Pencil, Plus, RefreshCw, RotateCcw, Sparkles, Trash2, Upload } from "lucide-react";
+import { SystemPromptIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { fetchMainAgentSystemPrompt } from "@/lib/customAgentTools";
 import { Modal } from "@/components/ui/Modal";
@@ -121,7 +122,7 @@ export function MainAgentPromptsPanel() {
         className="mb-4 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] px-3 py-2 text-xs text-[var(--muted)]"
         aria-live="polite"
       >
-        <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--subtle)]" />
+        <SystemPromptIcon className="h-3.5 w-3.5 shrink-0 text-[var(--subtle)]" />
         <span>
           Active prompt:{" "}
           <span className="font-medium text-[var(--fg)]">
@@ -158,7 +159,7 @@ export function MainAgentPromptsPanel() {
       </article>
 
       {prompts.length === 0 ? (
-        <EmptyState icon={<FileText className="h-8 w-8" />}>
+        <EmptyState icon={<SystemPromptIcon className="h-8 w-8" />}>
           No custom system prompts yet. Create one to customize the Main Agent's instructions.
         </EmptyState>
       ) : (
@@ -243,7 +244,7 @@ export function MainAgentPromptsPanel() {
       <Modal
         open={Boolean(draft)}
         onClose={() => setDraft(null)}
-        icon={<FileText className="h-4 w-4" />}
+        icon={<SystemPromptIcon className="h-4 w-4" />}
         title={draft?.id ? "Edit system prompt" : "New system prompt"}
         size="lg"
         footer={

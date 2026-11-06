@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Bookmark, Check, ClipboardCopy, Pencil, Play, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Check, ClipboardCopy, Pencil, Play, Plus, Search, Trash2, Upload } from "lucide-react";
+import { PromptLibraryIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { Modal } from "@/components/ui/Modal";
 import { ImportPromptLibraryModal } from "@/components/panels/ImportPromptLibraryModal";
@@ -113,7 +114,7 @@ export function PromptLibraryPanel() {
       <ImportPromptLibraryModal open={importOpen} onClose={() => setImportOpen(false)} />
 
       {items.length === 0 ? (
-        <EmptyState icon={<Bookmark className="h-8 w-8" />}>
+        <EmptyState icon={<PromptLibraryIcon className="h-8 w-8" />}>
           No saved prompts yet. Save one here, or bookmark any chat prompt to reuse it later.
         </EmptyState>
       ) : filtered.length === 0 ? (
@@ -189,7 +190,7 @@ export function PromptLibraryPanel() {
       <Modal
         open={Boolean(draft)}
         onClose={() => setDraft(null)}
-        icon={<Bookmark className="h-4 w-4" />}
+        icon={<PromptLibraryIcon className="h-4 w-4" />}
         title={draft?.id ? "Edit saved prompt" : "Save prompt to library"}
         size="lg"
         footer={
@@ -280,7 +281,7 @@ export function SavePromptModal({
     <Modal
       open={open}
       onClose={onClose}
-      icon={<Bookmark className="h-4 w-4" />}
+      icon={<PromptLibraryIcon className="h-4 w-4" />}
       title="Save prompt to library"
       size="md"
       footer={

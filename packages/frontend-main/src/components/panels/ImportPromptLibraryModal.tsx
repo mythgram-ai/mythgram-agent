@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Bookmark, Check, FolderUp, Upload, X } from "lucide-react";
+import { Check, FolderUp, Upload, X } from "lucide-react";
+import { PromptLibraryIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/primitives";
@@ -276,7 +277,7 @@ export function ImportPromptLibraryModal({ open, onClose }: Props) {
         )}
 
         <p className="flex items-start gap-2 text-[11px] leading-relaxed text-[var(--subtle)]">
-          <Bookmark className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <PromptLibraryIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             Imported prompts work exactly like prompts you save in the app — find them with search,
             copy them, edit them, or insert them into the composer with “Use” (or type{" "}

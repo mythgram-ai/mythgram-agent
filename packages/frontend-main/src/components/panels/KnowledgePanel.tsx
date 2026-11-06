@@ -6,7 +6,6 @@ import {
   FileText,
   FolderUp,
   Globe,
-  Library,
   Loader2,
   Pencil,
   Plus,
@@ -15,6 +14,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { KnowledgeIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import type { KnowledgeSource, ScrapeResult } from "@/types";
 import { normalizeKnowledgePath } from "@/lib/defaultKnowledge";
@@ -66,7 +66,7 @@ export function KnowledgePanel() {
       </div>
 
       {knowledge.length === 0 ? (
-        <EmptyState icon={<Library className="h-8 w-8" />}>
+        <EmptyState icon={<KnowledgeIcon className="h-8 w-8" />}>
           No knowledge files yet. Add some with the options above.
         </EmptyState>
       ) : (
@@ -142,7 +142,7 @@ function KnowledgeModal({ view, onClose }: { view: View; onClose: () => void }) 
           : "";
 
   return (
-    <Modal open={view.kind !== "none"} onClose={onClose} icon={<Library className="h-4 w-4" />} title={title} size="lg">
+    <Modal open={view.kind !== "none"} onClose={onClose} icon={<KnowledgeIcon className="h-4 w-4" />} title={title} size="lg">
       {view.kind === "editor" && <EditorView view={view} onClose={onClose} />}
       {view.kind === "upload" && <UploadView onClose={onClose} />}
       {view.kind === "url" && <UrlView editingPath={view.editingPath} onClose={onClose} />}

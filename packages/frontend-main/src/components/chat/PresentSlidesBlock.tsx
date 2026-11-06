@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Presentation } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { SlidesIcon } from "@/components/icons/NavIcons";
 import type { ToolActivity } from "@/types";
 import { cn } from "@/utils/cn";
 import { SlideFrame } from "@/components/slides/SlideFrame";
@@ -50,7 +51,7 @@ export function PresentSlidesBlock({ tool }: { tool: ToolActivity }) {
   return (
     <div className="w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] fade-in">
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
-        <Presentation className="h-4 w-4 shrink-0 text-[var(--secondary)]" />
+        <SlidesIcon className="h-4 w-4 shrink-0 text-[var(--secondary)]" />
         <span className="min-w-0 truncate text-xs font-semibold text-[var(--fg)]">
           {active.name}
         </span>

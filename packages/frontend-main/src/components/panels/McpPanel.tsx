@@ -10,7 +10,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Server,
   ShieldCheck,
   SquareTerminal,
   Trash2,
@@ -18,6 +17,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { McpIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import type { McpAuthType, McpServer } from "@/types";
 import {
@@ -240,7 +240,7 @@ export function McpPanel() {
           <Loader2 className="h-4 w-4 animate-spin" /> Loading MCP servers…
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState icon={<Server className="h-8 w-8" />}>
+        <EmptyState icon={<McpIcon className="h-8 w-8" />}>
           {mcpServers.length === 0
             ? "No MCP servers yet. Add a remote endpoint or paste a local server's JSON."
             : `No MCP servers match “${query}”.`}
@@ -407,7 +407,7 @@ function McpCard({
             {server.kind === "local" ? (
               <SquareTerminal className="h-5 w-5" />
             ) : (
-              <Server className="h-5 w-5" />
+              <McpIcon className="h-5 w-5" />
             )}
           </span>
           <div className="min-w-0 flex-1">
@@ -858,7 +858,7 @@ function McpCreateModal({
     <Modal
       open
       onClose={onClose}
-      icon={kind === "local" ? <SquareTerminal className="h-4 w-4" /> : <Server className="h-4 w-4" />}
+      icon={kind === "local" ? <SquareTerminal className="h-4 w-4" /> : <McpIcon className="h-4 w-4" />}
       title={kind === "local" ? "Add local MCP server" : "Add remote MCP server"}
       size="lg"
       footer={
