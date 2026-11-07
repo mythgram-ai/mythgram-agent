@@ -2,10 +2,12 @@ import { useRef, useState } from "react";
 import { Check, FilePlus2, FileText, FolderTree, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { SkillsIcon } from "@/components/icons/NavIcons";
 import { ImportSkillsModal } from "@/components/panels/ImportSkillsModal";
+import { ResourceDirectorySection } from "@/components/panels/ResourceDirectorySection";
 import { useStore } from "@/store/useStore";
 import type { SkillFile } from "@/types";
 import { Modal } from "@/components/ui/Modal";
 import { Button, Field, PanelHeader, TextArea, TextInput, Toggle } from "@/components/ui/primitives";
+import { SKILL_DIRECTORIES } from "@/lib/resourceDirectories";
 
 const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const NAME_MAX = 70;
@@ -85,6 +87,14 @@ export function SkillsPanel() {
         Reusable, packaged capabilities the agent can load on demand — a folder with an entry
         SKILL.md plus any supporting files.
       </p>
+
+      <ResourceDirectorySection
+        title="Find skills"
+        notice="Browse skill directories and community collections to discover ready-made capabilities."
+        description="These external sites collect reusable skills for agents. Open one, pick a skill, then create it here — or use Import to bring in a full skill folder."
+        links={SKILL_DIRECTORIES}
+        icon={<SkillsIcon className="h-4 w-4" />}
+      />
 
       {skills.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-dashed border-[var(--border)] py-12 text-center">

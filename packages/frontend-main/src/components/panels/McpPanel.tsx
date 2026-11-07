@@ -37,6 +37,7 @@ import {
   type McpServerInput,
 } from "@/lib/mcp";
 import { Modal } from "@/components/ui/Modal";
+import { ResourceDirectorySection } from "@/components/panels/ResourceDirectorySection";
 import {
   Button,
   EmptyState,
@@ -45,6 +46,7 @@ import {
   TextArea,
   TextInput,
 } from "@/components/ui/primitives";
+import { MCP_DIRECTORIES } from "@/lib/resourceDirectories";
 import { cn } from "@/utils/cn";
 
 const STATUS_STYLE: Record<McpServer["status"], { label: string; cls: string }> = {
@@ -213,6 +215,14 @@ export function McpPanel() {
         agent tool (main agent, custom agents, sub-agents, teams, and CEO). Add a remote
         Streamable HTTP endpoint or paste a local server&apos;s JSON.
       </p>
+
+      <ResourceDirectorySection
+        title="Find MCP servers"
+        notice="Browse popular directories and marketplaces to discover servers worth connecting."
+        description="These external sites collect, review, and rank MCP servers. Open one, find a server you need, then add it here as a remote endpoint or local JSON — the agent gets its tools instantly."
+        links={MCP_DIRECTORIES}
+        icon={<McpIcon className="h-4 w-4" />}
+      />
 
       <div className="mb-4 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
         <Search className="h-4 w-4 shrink-0 text-[var(--subtle)]" />
