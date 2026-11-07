@@ -1,6 +1,7 @@
 import { API_ROUTES, routeUrl } from "@/app/api/routes";
 import { resilientFetch } from "@/lib/net";
 import type {
+  CustomHeader,
   FileNode,
   ModelInfo,
   ProviderMeta,
@@ -58,6 +59,47 @@ export async function fetchModels(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ provider, api_key: apiKey, base_url: baseUrl || undefined }),
+  });
+  return data.models ?? [];
+}
+
+/** A custom provider draft whose models should be discovered live (before saving). */
+export interface CustomModelsFetchInput {
+  id: string;
+  name?: string;
+  baseUrl: string;
+  apiKey?: string;
+  modelsUrl?: string;
+  headers?: CustomHeader[];
+}
+
+/**
+ * Fetch the live model list for a custom (user-defined) provider. Sends the
+ * provider's base URL, optional model-fetch URL override, key, and custom
+ * headers to the backend, which performs the request server-side (avoiding the
+ * browser CORS restrictions and keeping the key off the wire to third parties).
+ */
+export async function fetchCustomProviderModels(input: CustomModelsFetchInput): Promise<ModelInfo[]> {
+  const headers: Record<string, string> = {};
+  for (const header of input.headers ?? []) {
+    const key = header.key.trim();
+    if (key) headers[key] = header.value;
+  }
+  const data = await requestJson<{ models?: ModelInfo[] }>(routeUrl(API_ROUTES.providersModels), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider: input.id,
+      custom_provider: {
+        id: input.id,
+        name: input.name?.trim() || input.id,
+        model: "",
+        baseUrl: input.baseUrl.trim(),
+        apiKey: input.apiKey?.trim() ?? "",
+        modelsUrl: input.modelsUrl?.trim() ?? "",
+        headers,
+      },
+    }),
   });
   return data.models ?? [];
 }

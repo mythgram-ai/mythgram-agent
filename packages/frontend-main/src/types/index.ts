@@ -41,6 +41,11 @@ export interface CustomProvider {
   name: string;
   baseUrl: string;
   apiKey: string;
+  /**
+   * Optional override for the model-list endpoint. Empty/omitted means the
+   * standard `<baseUrl>/models`; relative paths resolve against `baseUrl`.
+   */
+  modelsUrl?: string;
   headers: CustomHeader[];
   models: string[];
   createdAt: number;
@@ -58,6 +63,8 @@ export interface CustomProviderConfig {
   model: string;
   baseUrl: string;
   apiKey?: string;
+  /** Optional model-list URL override (relative paths resolve against `baseUrl`). */
+  modelsUrl?: string;
   headers?: Record<string, string>;
 }
 

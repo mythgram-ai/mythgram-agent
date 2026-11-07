@@ -43,14 +43,24 @@ export class OpenAICompatibleProvider implements Provider {
   }
 
   async listModels(apiKey: string, baseUrl?: string): Promise<ProviderModel[]> {
-    const response = await fetch(`${this.baseUrl(baseUrl)}/models`, {
+    const payload = await this.fetchModelsPayload(`${this.baseUrl(baseUrl)}/models`, apiKey);
+    return this.parseModelsPayload(payload);
+  }
+
+  /** GET a model-list endpoint with this provider's auth headers, returning its JSON payload. */
+  protected async fetchModelsPayload(url: string, apiKey: string): Promise<unknown> {
+    const response = await fetch(url, {
       method: "GET",
       headers: this.headers(apiKey),
     });
     if (!response.ok) {
       throw new Error(`${this.metadata.label} models error ${response.status}: ${await safeText(response)}`);
     }
-    const payload = (await response.json()) as unknown;
+    return response.json();
+  }
+
+  /** Normalize a provider model-list payload (`[...]` or `{ data: [...] }`) into models. */
+  protected parseModelsPayload(payload: unknown): ProviderModel[] {
     const items: Array<Record<string, unknown>> = Array.isArray(payload)
       ? (payload as Array<Record<string, unknown>>)
       : (((payload as Record<string, unknown>)?.data as Array<Record<string, unknown>>) ?? []);

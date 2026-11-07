@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Pencil, Plug, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "@/store/useStore";
-import { fetchModels, fetchProviders } from "@/lib/api";
+import { fetchCustomProviderModels, fetchModels, fetchProviders } from "@/lib/api";
 import { validateComposioKey } from "@/lib/connectors";
 import {
   catalogContextLimit,
@@ -869,9 +869,12 @@ function CustomProviderEditor({
   const [name, setName] = useState(existing?.name ?? "");
   const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? "");
   const [apiKey, setApiKey] = useState(existing?.apiKey ?? "");
+  const [modelsUrl, setModelsUrl] = useState(existing?.modelsUrl ?? "");
   const [models, setModels] = useState<string[]>(existing?.models.length ? existing.models : [""]);
   const [headers, setHeaders] = useState<CustomHeader[]>(existing?.headers ?? []);
   const [error, setError] = useState<string | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [fetchingModels, setFetchingModels] = useState(false);
 
   const save = () => {
     const cleanModels = models.map((m) => m.trim()).filter(Boolean);
@@ -880,12 +883,52 @@ function CustomProviderEditor({
     if (cleanModels.length === 0) return setError("Add at least one model.");
     const cleanHeaders = headers.filter((h) => h.key.trim()).map((h) => ({ key: h.key.trim(), value: h.value }));
     const url = baseUrl.trim().replace(/\/+$/, "");
+    const cleanModelsUrl = modelsUrl.trim();
     if (existing) {
-      updateCustomProvider(existing.id, { name: name.trim(), baseUrl: url, apiKey, models: cleanModels, headers: cleanHeaders });
+      updateCustomProvider(existing.id, { name: name.trim(), baseUrl: url, apiKey, modelsUrl: cleanModelsUrl, models: cleanModels, headers: cleanHeaders });
       onSaved(existing);
     } else {
-      const created = addCustomProvider({ name: name.trim(), baseUrl: url, apiKey, models: cleanModels, headers: cleanHeaders });
+      const created = addCustomProvider({ name: name.trim(), baseUrl: url, apiKey, modelsUrl: cleanModelsUrl, models: cleanModels, headers: cleanHeaders });
       onSaved(created);
+    }
+  };
+
+  const fetchCustomModels = async () => {
+    if (!baseUrl.trim()) {
+      setModelsError("Enter a base URL first.");
+      return;
+    }
+    setModelsError(null);
+    setFetchingModels(true);
+    try {
+      const list = await fetchCustomProviderModels({
+        id: existing?.id ?? "custom_draft",
+        name: name.trim(),
+        baseUrl: baseUrl.trim(),
+        apiKey: apiKey.trim(),
+        modelsUrl: modelsUrl.trim(),
+        headers,
+      });
+      const fetched = list.map((m) => m.id.trim()).filter(Boolean);
+      if (fetched.length === 0) {
+        setModelsError("The provider returned no models.");
+        return;
+      }
+      // Merge fetched ids with any models the user already typed, deduped.
+      setModels((current) => {
+        const seen = new Set<string>();
+        const next: string[] = [];
+        for (const id of [...fetched, ...current.map((m) => m.trim())]) {
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          next.push(id);
+        }
+        return next.length > 0 ? next : [""];
+      });
+    } catch (e) {
+      setModelsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFetchingModels(false);
     }
   };
 
@@ -899,10 +942,35 @@ function CustomProviderEditor({
           <TextInput value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" />
         </Field>
         <Field label="API key (optional)">
-          <TextInput type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…" />
+          <TextInput type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
+        </Field>
+        <Field label="Model fetch URL (optional)" hint="defaults to <base URL>/models">
+          <TextInput
+            value={modelsUrl}
+            onChange={(e) => setModelsUrl(e.target.value)}
+            placeholder={baseUrl.trim() ? `${baseUrl.trim().replace(/\/+$/, "")}/models` : "https://api.example.com/v1/models"}
+            className="font-mono text-xs"
+            autoComplete="off"
+            spellCheck={false}
+          />
         </Field>
         <div>
-          <div className="mb-1.5 text-xs font-medium text-[var(--muted)]">Models *</div>
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-medium text-[var(--muted)]">Models *</span>
+            <Button
+              variant="outline"
+              onClick={() => void fetchCustomModels()}
+              disabled={fetchingModels || !baseUrl.trim()}
+              className="px-2.5 py-1 text-xs"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", fetchingModels && "animate-spin")} />
+              {fetchingModels ? "Fetching..." : "Fetch models"}
+            </Button>
+          </div>
+          {modelsError && <p className="m-0 mb-2 text-[11px] text-[var(--danger)]">{modelsError}</p>}
+          {!baseUrl.trim() && (
+            <p className="m-0 mb-2 text-[11px] text-[var(--subtle)]">Enter a Base URL to fetch models.</p>
+          )}
           <div className="space-y-2">
             {models.map((m, i) => (
               <div key={i} className="flex gap-2">
@@ -919,6 +987,9 @@ function CustomProviderEditor({
         </div>
         <div>
           <div className="mb-1.5 text-xs font-medium text-[var(--muted)]">Custom headers (optional)</div>
+          <p className="mb-1.5 text-[10px] leading-relaxed text-[var(--subtle)]">
+            Sent with chat requests and the model fetch request.
+          </p>
           <div className="space-y-2">
             {headers.map((h, i) => (
               <div key={i} className="flex gap-2">

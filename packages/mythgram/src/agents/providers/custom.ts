@@ -25,6 +25,11 @@ export interface CustomProviderConfig {
   baseUrl: string;
   /** Optional key used for Bearer auth; omitted entirely when empty. */
   apiKey?: string;
+  /**
+   * Optional model-list URL override. Absolute URLs are used verbatim; relative
+   * paths resolve against `baseUrl`. Empty means the standard `<baseUrl>/models`.
+   */
+  modelsUrl?: string;
   /** Optional extra HTTP headers (key/value) merged into every request. */
   headers?: Record<string, string>;
 }
@@ -44,6 +49,7 @@ function normalizeConfig(config: CustomProviderConfig): CustomProviderConfig {
     model: (config.model ?? "").trim(),
     baseUrl: (config.baseUrl ?? "").trim().replace(/\/+$/, ""),
     apiKey: config.apiKey?.trim() ?? "",
+    modelsUrl: (config.modelsUrl ?? "").trim(),
     headers: sanitizeHeaders(config.headers),
   };
 }
@@ -62,6 +68,7 @@ function sanitizeHeaders(headers: Record<string, string> | undefined): Record<st
 
 export class CustomOpenAIProvider extends OpenAICompatibleProvider {
   private readonly customHeaders: Record<string, string>;
+  private readonly modelsUrl: string;
 
   constructor(config: CustomProviderConfig) {
     const normalized = normalizeConfig(config);
@@ -72,6 +79,7 @@ export class CustomOpenAIProvider extends OpenAICompatibleProvider {
       defaultBaseUrl: normalized.baseUrl || "https://api.openai.com/v1",
     });
     this.customHeaders = normalized.headers ?? {};
+    this.modelsUrl = normalized.modelsUrl ?? "";
   }
 
   /** The user-config base URL with a trailing slash stripped. */
@@ -94,17 +102,37 @@ export class CustomOpenAIProvider extends OpenAICompatibleProvider {
   }
 
   /**
-   * List models when an API key is provided and the endpoint exposes `/models`.
-   * Custom providers usually type their models manually, so a missing key or an
-   * unsupported endpoint simply yields an empty list instead of failing the call.
+   * Resolve the model-list URL. An absolute override is used verbatim (http/https
+   * only); a relative path resolves against the base URL; empty falls back to the
+   * standard `<baseUrl>/models` endpoint.
+   */
+  private resolveModelsUrl(): string {
+    const raw = this.modelsUrl.trim();
+    const base = this.baseUrl();
+    if (!raw) {
+      if (!base) throw new Error("A Base URL is required to fetch models.");
+      return `${base}/models`;
+    }
+    let url: URL;
+    try {
+      url = new URL(raw, base ? `${base}/` : undefined);
+    } catch {
+      throw new Error("The Model Fetch URL is not a valid URL.");
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("The Model Fetch URL must use http or https.");
+    }
+    return url.toString();
+  }
+
+  /**
+   * List models from the provider. Unlike the base implementation this works
+   * without an API key and honors the user-configured model-fetch URL/headers,
+   * throwing a descriptive error so the Settings UI can surface it.
    */
   override async listModels(apiKey: string): Promise<ProviderModel[]> {
-    if (!(apiKey ?? "").trim()) return [];
-    try {
-      return await super.listModels(apiKey);
-    } catch {
-      return [];
-    }
+    const payload = await this.fetchModelsPayload(this.resolveModelsUrl(), apiKey);
+    return this.parseModelsPayload(payload);
   }
 }
 
@@ -131,6 +159,7 @@ export function buildCustomProvider(config: unknown): CustomOpenAIProvider {
     model: typeof record.model === "string" ? record.model : "",
     baseUrl: typeof record.baseUrl === "string" ? record.baseUrl : "",
     apiKey: typeof record.apiKey === "string" ? record.apiKey : "",
+    modelsUrl: typeof record.modelsUrl === "string" ? record.modelsUrl : "",
     headers,
   });
 }

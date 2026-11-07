@@ -149,6 +149,7 @@ function resolveLlm(
         model,
         baseUrl: acp.baseUrl.trim() || (customEntry ? str(customEntry.baseUrl) : ""),
         apiKey,
+        modelsUrl: customEntry ? str(customEntry.modelsUrl) : "",
         headers,
       },
     };

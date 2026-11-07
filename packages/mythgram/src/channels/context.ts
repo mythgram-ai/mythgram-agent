@@ -107,6 +107,7 @@ export function resolveChannelRunContext(
       model,
       baseUrl: customEntry ? str(customEntry.baseUrl) : "",
       apiKey: customEntry ? str(customEntry.apiKey) : "",
+      modelsUrl: customEntry ? str(customEntry.modelsUrl) : "",
       headers,
     };
     const customKey = customEntry ? str(customEntry.apiKey) : "";

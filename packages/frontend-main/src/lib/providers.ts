@@ -39,6 +39,7 @@ export function toCustomProviderConfig(
     model: model || (provider.models[0] as string | undefined) || "",
     baseUrl: provider.baseUrl,
     apiKey: provider.apiKey || undefined,
+    modelsUrl: (provider.modelsUrl ?? "").trim() || undefined,
     headers: Object.keys(headers).length > 0 ? headers : undefined,
   };
 }
