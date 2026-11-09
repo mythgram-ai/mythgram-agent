@@ -106,6 +106,8 @@ export interface CeoOrchestratorDeps {
   promptLibrary?: PromptLibraryRuntime;
   /** The persistent custom-agents runtime — lets the CEO/leader/member agents manage custom agents. */
   customAgents?: import("../../tools/types.js").CustomAgentsRuntime;
+  /** The ACP-agents runtime — lets the CEO/leader/member agents drive external ACP-compatible agents. */
+  acpAgents?: import("../../tools/types.js").AcpAgentsRuntime;
   /** The persistent custom-system-prompts runtime — lets the CEO/leader/member agents manage saved system prompts. */
   customSystemPrompts?: import("../../tools/types.js").CustomSystemPromptsRuntime;
   /** Speech runtime — lets the CEO/leader/member agents granted generate_speech synthesize audio. */
@@ -563,6 +565,7 @@ export class CeoOrchestrator {
       slides: this.deps.slides,
       promptLibrary: this.deps.promptLibrary,
       customAgents: this.deps.customAgents,
+      acpAgents: this.deps.acpAgents,
       customSystemPrompts: this.deps.customSystemPrompts,
       schedules: createScheduleRuntime({
         store: this.deps.scheduleStore,

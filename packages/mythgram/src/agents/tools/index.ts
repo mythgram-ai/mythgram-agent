@@ -63,6 +63,12 @@ import { deleteSkillTool } from "./delete_skill.js";
 import { createAgentTool } from "./create_agent.js";
 import { listAvailableAgentsTool } from "./list_available_agents.js";
 import { deleteAgentTool } from "./delete_agent.js";
+import { connectAcpAgentsTool } from "./connect_acp_agents.js";
+import { listAvailableAcpAgentsTool } from "./list_available_acp_agents.js";
+import { deleteAcpAgentsTool } from "./delete_acp_agents.js";
+import { callConnectedAcpAgentsTool } from "./call_connected_acp_agents.js";
+import { interruptAcpAgentTool } from "./interrupt_acp_agent.js";
+import { startNewAcpAgentSessionTool } from "./start_new_acp_agent_session.js";
 import { delegateTaskOrSendMessageTool } from "./delegate_task_or_send_message.js";
 import { getTeamMembersStatusTool } from "./get_team_members_status.js";
 import { sendMessageToTeamTool } from "./send_message_to_team.js";
@@ -140,6 +146,9 @@ export type {
   CustomAgentInfo,
   CustomAgentCreateInput,
   CustomAgentsRuntime,
+  AcpAgentsRuntime,
+  AcpAgentsConnectInput,
+  AcpAgentsCallParam,
   ScheduleAgentIdentity,
   ScheduleCreateCadence,
   ScheduleCreateInput,
@@ -237,6 +246,17 @@ export {
   isCustomAgentManagementTool,
   requireCustomAgents,
 } from "./customAgentManagement.js";
+export { connectAcpAgentsTool } from "./connect_acp_agents.js";
+export { listAvailableAcpAgentsTool } from "./list_available_acp_agents.js";
+export { deleteAcpAgentsTool } from "./delete_acp_agents.js";
+export { callConnectedAcpAgentsTool } from "./call_connected_acp_agents.js";
+export { interruptAcpAgentTool } from "./interrupt_acp_agent.js";
+export { startNewAcpAgentSessionTool } from "./start_new_acp_agent_session.js";
+export {
+  ACP_AGENT_MANAGEMENT_TOOL_NAMES,
+  isAcpAgentManagementTool,
+  requireAcpAgents,
+} from "./acpAgentManagement.js";
 export { delegateTaskOrSendMessageTool } from "./delegate_task_or_send_message.js";
 export { getTeamMembersStatusTool } from "./get_team_members_status.js";
 export { sendMessageToTeamTool } from "./send_message_to_team.js";
@@ -408,6 +428,12 @@ export function createToolRegistry(): ToolRegistry {
     createAgentTool,
     listAvailableAgentsTool,
     deleteAgentTool,
+    connectAcpAgentsTool,
+    listAvailableAcpAgentsTool,
+    deleteAcpAgentsTool,
+    callConnectedAcpAgentsTool,
+    interruptAcpAgentTool,
+    startNewAcpAgentSessionTool,
     delegateTaskOrSendMessageTool,
     getTeamMembersStatusTool,
     sendMessageToTeamTool,
@@ -526,6 +552,12 @@ export const tools = {
   createAgentTool,
   listAvailableAgentsTool,
   deleteAgentTool,
+  connectAcpAgentsTool,
+  listAvailableAcpAgentsTool,
+  deleteAcpAgentsTool,
+  callConnectedAcpAgentsTool,
+  interruptAcpAgentTool,
+  startNewAcpAgentSessionTool,
   delegateTaskOrSendMessageTool,
   getTeamMembersStatusTool,
   sendMessageToTeamTool,

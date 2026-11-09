@@ -410,6 +410,58 @@ export interface CustomAgentsRuntime {
 }
 
 /**
+ * One ACP agent to call in a `call_connected_acp_agents` invocation. Each entry names the connected
+ * ACP agent by its unique id, carries its own prompt, and independently chooses whether the calling
+ * agent waits for the final output (`wait_for_output`, default true) or launches it detached in the
+ * background (false), writing its output to a ".mythgram/acp" file.
+ */
+export interface AcpAgentsCallParam {
+  /** The unique id of the connected ACP-compatible agent (from list_available_acp_agents). */
+  acp_agent_id: string;
+  /** The task instructions or prompt to send to the ACP agent. */
+  prompt: string;
+  /** When true (default) wait for the agent's final output; when false run it in the background. */
+  wait_for_output?: boolean;
+}
+
+/** Fields accepted by the connect_acp_agents operation (mirrors the tool's zod schema). */
+export interface AcpAgentsConnectInput {
+  /** A human-readable name for the ACP-compatible agent. */
+  name: string;
+  /** The executable command used to launch the ACP agent (arguments excluded). */
+  command: string;
+  /** Command-line arguments passed to the executable (the command itself excluded). */
+  args: string[];
+}
+
+/**
+ * Runtime bridge injected into the ToolContext for the top-level agent surfaces that may drive
+ * external ACP-compatible agents (the built-in Main Agent, Custom Agents, and every agent inside a
+ * multi-agent team or CEO system). It is backed by the SAME in-app AcpClientManager the console's
+ * ACP panel uses, so the agent can self-connect to ACP agents, list them, delegate prompts, read
+ * their output, interrupt them, and start fresh sessions.
+ *
+ * Sessions are bound per (Mythgram chat, ACP agent): the first call in a chat creates a session and
+ * later calls reuse it so the external agent keeps its context, unless a new session is explicitly
+ * started. Absent from the sub-agent, chat-mode, and memory-agent tool contexts, so those surfaces
+ * can never drive external ACP agents.
+ */
+export interface AcpAgentsRuntime {
+  /** List every connected ACP agent as id + name + availability/status (no secrets). */
+  list(): ToolResult;
+  /** Connect (create + spawn) a new ACP-compatible agent; emits `acp_agents_updated` on success. */
+  connect(input: AcpAgentsConnectInput, ctx: ToolContext): Promise<ToolResult>;
+  /** Disconnect and remove a connected ACP agent by its unique id; emits `acp_agents_updated`. */
+  remove(agentId: string, ctx: ToolContext): Promise<ToolResult>;
+  /** Call one or more connected ACP agents, returning outputs or background file paths. */
+  call(input: { agents: AcpAgentsCallParam[] }, ctx: ToolContext): Promise<ToolResult>;
+  /** Interrupt a running ACP agent task and send a new prompt. */
+  interrupt(agentId: string, prompt: string, ctx: ToolContext): Promise<ToolResult>;
+  /** Start a fresh session for an existing connected ACP agent (rebinds the chat's session). */
+  startNewSession(agentId: string, ctx: ToolContext): Promise<ToolResult>;
+}
+
+/**
  * Role of an agent inside a multi-agent collaboration team. The single "leader" (head) delegates
  * tasks and reviews work; every other agent is a "member" specialist.
  */
@@ -939,6 +991,12 @@ export interface ToolContext {
    * chat mode, and the memory agent, which is why the custom-agent management tools are
    * unavailable there. */
   customAgents?: CustomAgentsRuntime;
+  /** ACP-agents runtime — present ONLY for the top-level surfaces that may drive external
+   * ACP-compatible agents (Main Agent, Custom Agents, team agents, and the CEO system agents).
+   * Lets the agent self-connect to, list, call, interrupt, and start new sessions for connected ACP
+   * agents. Absent for sub-agents, chat mode, and the memory agent, which is why the ACP-agent tools
+   * are unavailable there. */
+  acpAgents?: AcpAgentsRuntime;
   /** Custom-system-prompts runtime — present ONLY for the top-level surfaces that may manage the
    * user's saved custom system prompts (Main Agent, Custom Agents, team agents, and the CEO system
    * agents). Absent for sub-agents, chat mode, and the memory agent, which is why the

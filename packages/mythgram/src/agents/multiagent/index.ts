@@ -13,6 +13,7 @@ import { mergeDefaultSkills, resolveDefaultSkills } from "../skills/index.js";
 import { createTodoRuntime } from "../todos.js";
 import { createPromptLibraryRuntime } from "../promptLibrary.js";
 import { createCustomAgentsRuntime } from "../customAgents.js";
+import { createAcpAgentsRuntime } from "../acpAgents.js";
 import { createCustomSystemPromptsRuntime } from "../customSystemPrompts.js";
 import { resolveDefaultSubAgents } from "../sub-agents/index.js";
 import { ConnectorRuntime } from "../connectors/index.js";
@@ -63,6 +64,7 @@ export class MultiAgentRunner {
   private channelManager?: import("../../channels/manager.js").ChannelManager;
   private promptLibrary?: import("../tools/types.js").PromptLibraryRuntime;
   private customAgents?: import("../tools/types.js").CustomAgentsRuntime;
+  private acpAgents?: import("../tools/types.js").AcpAgentsRuntime;
   private customSystemPrompts?: import("../tools/types.js").CustomSystemPromptsRuntime;
   private speech?: import("../tools/types.js").SpeechRuntime;
   private image?: import("../tools/types.js").ImageRuntime;
@@ -106,6 +108,19 @@ export class MultiAgentRunner {
     manager?: import("../customagent/index.js").CustomAgentManager,
   ): void {
     this.customAgents = manager ? createCustomAgentsRuntime(manager) : undefined;
+  }
+
+  /**
+   * Attach the in-app ACP client manager (called once at boot). When set, every team agent
+   * (head/leader + members) granted the ACP-agent tools can self-connect to and drive external
+   * ACP-compatible agents.
+   */
+  setAcpAgents(
+    manager?: import("../../acp-client/manager.js").AcpClientManager,
+  ): void {
+    this.acpAgents = manager
+      ? createAcpAgentsRuntime(manager, this.config.workspaceRoot)
+      : undefined;
   }
 
   /**
@@ -247,6 +262,7 @@ export class MultiAgentRunner {
         knowledge,
         promptLibrary: this.promptLibrary,
         customAgents: this.customAgents,
+        acpAgents: this.acpAgents,
         customSystemPrompts: this.customSystemPrompts,
         speech: this.speech,
         image: this.image,

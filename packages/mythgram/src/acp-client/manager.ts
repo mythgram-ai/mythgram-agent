@@ -411,6 +411,83 @@ export class AcpClientManager {
     }
   }
 
+  /**
+   * Resolve the application-owned ACP session bound to a Mythgram chat for one connected agent.
+   *
+   * Agent tool calls (`call_connected_acp_agents`) reuse a single session per (chat, agent) pair so
+   * the external ACP agent keeps its conversation context across calls inside the same Mythgram
+   * chat. A brand-new session is created only the first time this is requested (or when `forceNew`
+   * is set, e.g. by the `start_new_acp_agent_session` tool). The binding is persisted on the
+   * session's `meta.mythgram_chat_id`, so it survives a backend restart; at most one session per
+   * (chat, agent) is bound at a time.
+   */
+  async ensureChatSession(
+    clientId: string,
+    chatId: string,
+    opts: { forceNew?: boolean; title?: string } = {},
+  ): Promise<AcpSessionPublic> {
+    this.requireClientRow(clientId);
+    const tag = (chatId ?? "").trim();
+    if (!tag) {
+      throw new AcpClientError("A chat id is required to bind an ACP session.", 400, "acp_chat_id_required");
+    }
+    if (!opts.forceNew) {
+      const existing = this.findChatSession(clientId, tag);
+      if (existing) return publicSession(existing.record, existing.runtime);
+    }
+    const session = await this.createSession(clientId, { title: opts.title });
+    this.bindSessionToChat(clientId, tag, session.id);
+    const record = this.db.acpClients.getSession(session.id);
+    if (!record) {
+      throw new AcpClientError("Could not bind an ACP session to this chat.", 500, "acp_session_bind_failed");
+    }
+    return publicSession(record, this.sessions.get(session.id));
+  }
+
+  /** The most recently created chat-bound session for a client, if any (skips closed sessions). */
+  private findChatSession(
+    clientId: string,
+    tag: string,
+  ): { record: AcpSessionRow; runtime: SessionRuntime | undefined } | null {
+    for (const row of this.db.acpClients.listSessions(clientId)) {
+      if (row.status === "closed") continue;
+      const meta = (row.meta ?? {}) as AcpSessionMeta;
+      if (meta.mythgram_chat_id !== tag) continue;
+      let runtime = this.sessions.get(row.id);
+      if (!runtime) {
+        runtime = this.createSessionRuntime(row);
+        this.sessions.set(row.id, runtime);
+      }
+      return { record: row, runtime };
+    }
+    return null;
+  }
+
+  /** Tag one session as the chat's bound session and untag any other session bound to the chat. */
+  private bindSessionToChat(clientId: string, tag: string, sessionId: string): void {
+    const now = Date.now();
+    for (const row of this.db.acpClients.listSessions(clientId)) {
+      const meta = (row.meta ?? {}) as AcpSessionMeta;
+      const isTarget = row.id === sessionId;
+      const isBound = meta.mythgram_chat_id === tag;
+      if (!isTarget && !isBound) continue;
+      const nextMeta: AcpSessionMeta = { ...meta };
+      if (isTarget) nextMeta.mythgram_chat_id = tag;
+      else delete nextMeta.mythgram_chat_id;
+      const next: AcpSessionRow = {
+        ...row,
+        meta: nextMeta,
+        updatedAt: isTarget ? row.updatedAt : now,
+      };
+      this.db.acpClients.saveSession(next);
+      const runtime = this.sessions.get(row.id);
+      if (runtime) {
+        runtime.record = { ...runtime.record, meta: nextMeta, updatedAt: next.updatedAt };
+        runtime.meta = nextMeta;
+      }
+    }
+  }
+
   getSession(clientId: string, sessionId: string): AcpSessionDetail {
     this.requireClientRow(clientId);
     const record = this.requireSessionRow(clientId, sessionId);

@@ -34,6 +34,9 @@
  *      list_available_custom_system_prompt
  *  - Agent-driven custom-agent management tools (only for main/custom/team/CEO agents):
  *      create_agent, list_available_agents, delete_agent
+ *  - Agent-driven external ACP-agent tools (only for main/custom/team/CEO agents):
+ *      connect_acp_agents, list_available_acp_agents, delete_acp_agents,
+ *      call_connected_acp_agents, Interrupt_acp_agent, start_new_acp_agent_session
  *  - Slide tools (only for main/custom/team/CEO agents):
  *      organize_slides, get_available_slides_template, present_slides,
  *      ask_user_to_choose_slides_template, read_slides_template, manage_slides,
@@ -119,6 +122,13 @@ export const SUB_AGENT_RESTRICTED_TOOLS: readonly string[] = [
   "create_agent",
   "list_available_agents",
   "delete_agent",
+  // Agent-driven external ACP-agent tools — only for main/custom/team/CEO agents, never sub-agents.
+  "connect_acp_agents",
+  "list_available_acp_agents",
+  "delete_acp_agents",
+  "call_connected_acp_agents",
+  "Interrupt_acp_agent",
+  "start_new_acp_agent_session",
   // Slide tools — only for main/custom/team/CEO agents, never sub-agents.
   "organize_slides",
   "get_available_slides_template",

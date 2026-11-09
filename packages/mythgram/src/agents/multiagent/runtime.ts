@@ -104,6 +104,8 @@ export interface TeamOrchestratorDeps {
   promptLibrary?: PromptLibraryRuntime;
   /** The persistent custom-agents runtime — lets every team agent manage custom agents. */
   customAgents?: import("../tools/types.js").CustomAgentsRuntime;
+  /** The ACP-agents runtime — lets every team agent drive external ACP-compatible agents. */
+  acpAgents?: import("../tools/types.js").AcpAgentsRuntime;
   /** The persistent custom-system-prompts runtime — lets every team agent manage saved system prompts. */
   customSystemPrompts?: import("../tools/types.js").CustomSystemPromptsRuntime;
   /** Speech runtime — lets every team agent granted generate_speech synthesize audio. */
@@ -513,6 +515,7 @@ export class TeamOrchestrator {
       slides: this.deps.slides,
       promptLibrary: this.deps.promptLibrary,
       customAgents: this.deps.customAgents,
+      acpAgents: this.deps.acpAgents,
       customSystemPrompts: this.deps.customSystemPrompts,
       schedules: createScheduleRuntime({
         store: this.deps.scheduleStore,

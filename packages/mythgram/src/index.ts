@@ -203,6 +203,15 @@ function main(): void {
   multiAgent.setCustomAgents(customAgents);
   ceoAgent.setCustomAgents(customAgents);
 
+  // Attach the in-app ACP client manager to every agent surface that may drive external ACP
+  // agents: the built-in Main Agent (and every Custom Agent through the same core runtime), the
+  // multi-agent team agents (head + members), and the CEO-system agents (CEO + leaders + members).
+  // Sub-agents, chat mode, and the background memory agent never receive it, so the ACP-agent tools
+  // are unavailable there.
+  agent.setAcpAgents(acpClients);
+  multiAgent.setAcpAgents(acpClients);
+  ceoAgent.setAcpAgents(acpClients);
+
   // Custom System Prompts (the SAME store the Custom system prompts panel reads):
   // the save_custom_system_prompt / list_available_custom_system_prompt /
   // delete_custom_system_prompt tools write straight into `mainAgentPrompts`, so a prompt the

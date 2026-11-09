@@ -27,6 +27,7 @@ import { createMemoryRuntime } from "./memory.js";
 import { createKnowledgeRuntime } from "./knowledge.js";
 import { createPromptLibraryRuntime } from "./promptLibrary.js";
 import { createCustomAgentsRuntime } from "./customAgents.js";
+import { createAcpAgentsRuntime } from "./acpAgents.js";
 import { createCustomSystemPromptsRuntime } from "./customSystemPrompts.js";
 import { activeProfileInfo, createAgentInfoRuntimeFrom } from "./agentInfo.js";
 import type { KnowledgeFile, MemoryFile, MemoryRuntime, TodoItem } from "./tools/types.js";
@@ -305,6 +306,19 @@ export class AgentRunner {
   private customAgentsManager?: import("./customagent/index.js").CustomAgentManager;
 
   /**
+   * Attach the in-app ACP client manager (called once at boot). When set, the ACP-agent tools
+   * (connect_acp_agents / list_available_acp_agents / delete_acp_agents /
+   * call_connected_acp_agents / Interrupt_acp_agent / start_new_acp_agent_session) let the Main
+   * Agent and every Custom Agent (both run through this core runtime) self-connect to and drive
+   * external ACP-compatible agents. When unset, the tools return a structured "unavailable" error.
+   */
+  setAcpAgents(manager?: import("../acp-client/manager.js").AcpClientManager): void {
+    this.acpAgentsManager = manager;
+  }
+
+  private acpAgentsManager?: import("../acp-client/manager.js").AcpClientManager;
+
+  /**
    * Attach the persistent custom-system-prompt store (called once at boot). When set, the
    * custom-system-prompt tools (save_custom_system_prompt / list_available_custom_system_prompt /
    * delete_custom_system_prompt) can save, list, and delete reusable system prompts for the Main
@@ -442,6 +456,15 @@ export class AgentRunner {
       // memory agent.
       const customAgentsRuntime = this.customAgentsManager
         ? createCustomAgentsRuntime(this.customAgentsManager)
+        : undefined;
+
+      // ACP-agents runtime for this turn — a bridge over the SAME in-app AcpClientManager the
+      // console's ACP panel uses, so the Main Agent and every Custom Agent can self-connect to and
+      // drive external ACP-compatible agents (list/connect/delete/call/interrupt/new-session).
+      // Present for the Main Agent and Custom Agents, and team/CEO agents through their own setters
+      // — never for sub-agents, chat mode, or the memory agent.
+      const acpAgentsRuntime = this.acpAgentsManager
+        ? createAcpAgentsRuntime(this.acpAgentsManager, this.config.workspaceRoot)
         : undefined;
 
       // Custom-system-prompts runtime for this turn — a bridge over the persistent store
@@ -827,6 +850,7 @@ export class AgentRunner {
               slides: this.slidesRuntime,
               promptLibrary: promptLibraryRuntime,
               customAgents: customAgentsRuntime,
+              acpAgents: acpAgentsRuntime,
               customSystemPrompts: customSystemPromptsRuntime,
               schedules: scheduleRuntime,
               toolCallId: toolCall.id ?? undefined,
