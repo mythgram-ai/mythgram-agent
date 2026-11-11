@@ -1141,6 +1141,21 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
       break;
     }
 
+    case "fallback": {
+      // Every retry of the current provider failed and a fallback target has
+      // taken over: record it on the message so the UI can show a dedicated card.
+      s.registerFallback(convId, msgId, {
+        method: data.fallback_method === "provider" ? "provider" : "api",
+        index: Number(data.fallback_index ?? 0),
+        total: Number(data.fallback_total ?? 0),
+        provider: typeof data.fallback_provider === "string" ? data.fallback_provider : "",
+        model: typeof data.fallback_model === "string" ? data.fallback_model : "",
+        error: typeof data.error === "string" ? data.error : "",
+        scope: typeof data.scope === "string" ? data.scope : undefined,
+      });
+      break;
+    }
+
     case "error":
       s.applyAssistantDelta(convId, msgId, {
         contentDelta: `\n\n⚠️ ${String(data.message ?? "Agent error")}`,

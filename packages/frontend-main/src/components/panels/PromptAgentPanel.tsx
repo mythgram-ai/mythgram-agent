@@ -221,6 +221,14 @@ export function PromptAgentPanel() {
         firecrawl_api_key: settings.firecrawlApiKey || undefined,
         skills,
         retry: settings.retry,
+        fallback: settings.fallback
+          ? {
+              ...settings.fallback,
+              apis: settings.fallback.apis.filter(
+                (t) => !t.provider || t.provider === settings.provider,
+              ),
+            }
+          : undefined,
       },
       signal: controller.signal,
       onEvent,

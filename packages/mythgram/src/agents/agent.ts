@@ -3,7 +3,8 @@ import { buildSystemPrompt } from "./systemprompt.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import { resolveProvider } from "./providers/registry.js";
 import type { Provider } from "./providers/types.js";
-import { retryEventPayload, withRetry } from "../retry/index.js";
+import { retryEventPayload } from "../retry/index.js";
+import { fallbackEventPayload, withFallback } from "../fallback/index.js";
 import type { ToolRegistry } from "./tools/index.js";
 import {
   buildImageMessage,
@@ -196,6 +197,12 @@ export interface RunAgentRequest {
    * omitted the server default applies (retry ON). See src/retry.
    */
   retry?: import("../retry/index.js").RetrySettings;
+  /**
+   * Fallback policy for this turn's provider requests (from Settings). When
+   * enabled, requests fail over to a configured fallback provider/api once every
+   * retry attempt is exhausted. See src/fallback.
+   */
+  fallback?: import("../fallback/index.js").FallbackSettings;
 }
 
 /** Lightweight identity of the Custom Agent handling a turn (see agents/customagent/configuration). */
@@ -429,11 +436,20 @@ export class AgentRunner {
         // agent, its sub-agents, and its context-summarization handoffs (all of which
         // share this provider) — is retried on any failure per the turn's retry policy.
         const scope = request.customAgent ? "custom" : "main";
-        provider = withRetry(
+        provider = withFallback(
           resolveProvider(this.providers, request.provider, request.customProvider),
           {
-            settings: request.retry,
+            settings: request.fallback,
+            retry: request.retry,
+            providerId: request.provider,
+            model: request.model,
+            apiKey: request.apiKey,
+            baseUrl: request.baseUrl,
+            customProvider: request.customProvider,
+            resolve: (target) => resolveProvider(this.providers, target.provider, target.customProvider),
             onRetry: (info) => send("retry", retryEventPayload(info, scope)),
+            onFallback: (event) => send("fallback", fallbackEventPayload(event, scope)),
+            scope,
           },
         );
       } catch (error) {
@@ -1150,6 +1166,7 @@ export class AgentRunner {
             temperature: request.temperature,
             effort: request.effort,
             retry: request.retry,
+            fallback: request.fallback,
           });
           if (runId) {
             send("memory_agent_queued", { run_id: runId, chat_id: request.chatId });

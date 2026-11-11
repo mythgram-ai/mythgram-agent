@@ -10,6 +10,7 @@ import type { SlidesTemplateChoiceStore } from "../slides/choiceStore.js";
 import type { SkillDefinition, SkillFileDefinition, SubAgentDefinition } from "../agents/tools/types.js";
 import { normalizeEffort } from "../agents/providers/reasoning.js";
 import { sanitizeRetrySettings } from "../retry/index.js";
+import { sanitizeFallbackSettings } from "../fallback/index.js";
 import { normalizeTodos } from "../agents/todos.js";
 import { normalizeMemoryFiles } from "../agents/memory.js";
 import { normalizeKnowledgeFiles } from "../agents/knowledge.js";
@@ -259,6 +260,12 @@ interface StreamBody {
    * request retries). When omitted the server default applies (retry ON).
    */
   retry?: unknown;
+  /**
+   * Fallback policy for provider requests this turn (from Settings → Fallback).
+   * When enabled, requests fail over to a configured fallback provider/api once
+   * every retry attempt is exhausted. When omitted fallback is OFF.
+   */
+  fallback?: unknown;
 }
 
 /**
@@ -722,6 +729,7 @@ export function buildChatRouter(
           memoryAgentEnabled: parseMemoryAgentEnabled(body.memory_agent_enabled, config.memoryAgentEnabled),
           memoryAgentInterval: parseMemoryAgentInterval(body.memory_agent_interval, config.memoryAgentInterval),
           retry: sanitizeRetrySettings(body.retry),
+          fallback: sanitizeFallbackSettings(body.fallback),
         };
 
         void chatRunner
@@ -782,6 +790,7 @@ export function buildChatRouter(
             body.sliding_window_truncate_percent,
           ),
           retry: sanitizeRetrySettings(body.retry),
+          fallback: sanitizeFallbackSettings(body.fallback),
         };
 
         void ceoAgent
@@ -841,6 +850,7 @@ export function buildChatRouter(
             body.sliding_window_truncate_percent,
           ),
           retry: sanitizeRetrySettings(body.retry),
+          fallback: sanitizeFallbackSettings(body.fallback),
         };
 
         void multiAgent
@@ -902,6 +912,7 @@ export function buildChatRouter(
           body.sliding_window_truncate_percent,
         ),
         retry: sanitizeRetrySettings(body.retry),
+        fallback: sanitizeFallbackSettings(body.fallback),
       };
 
       // Custom Agent mode: when the active agent is a user-created top-level Custom Agent, run this

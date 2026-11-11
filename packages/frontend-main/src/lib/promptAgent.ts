@@ -1,6 +1,6 @@
 import { API_ROUTES, routeUrl } from "@/app/api/routes";
 import { parseSSEStream } from "@/lib/sse";
-import type { SSEEventData, RetrySettings } from "@/types";
+import type { SSEEventData, RetrySettings, FallbackSettings } from "@/types";
 
 export type PromptAgentMode = "create" | "enhance";
 
@@ -33,6 +33,8 @@ export interface PromptAgentStreamBody {
   skills?: unknown[];
   /** Retry policy for provider requests (from Settings). Default ON. */
   retry?: RetrySettings;
+  /** Fallback policy for provider requests (from Settings). Default OFF. */
+  fallback?: FallbackSettings;
   since_event_id?: number;
 }
 

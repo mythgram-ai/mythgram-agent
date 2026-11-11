@@ -674,6 +674,8 @@ export interface ChatMessage {
   team?: TeamRunState;
   /** Present while/after the provider retried a failed request for this message. */
   retry?: RetryActivity;
+  /** Present after the request failed over to a fallback provider/api for this message. */
+  fallback?: FallbackActivity;
   /**
    * Set when this assistant turn stopped before finishing — stopped by the user, or cut
    * short by the system (provider failure, lost run, backend restart). The latest
@@ -992,6 +994,72 @@ export function defaultRetrySettings(): RetrySettings {
   };
 }
 
+/** Which fallback strategy is active: switch provider or switch API key. */
+export type FallbackMethod = "provider" | "api";
+
+/**
+ * One fallback target. The same shape serves both strategies:
+ *  - `provider` method: a different provider/model (built-in, local, or custom).
+ *  - `api` method: the same provider with an alternate API key.
+ */
+export interface FallbackTarget {
+  /** Stable id (React key / removal). */
+  id: string;
+  /** Provider id: a built-in id, `"local"`, or a `"custom_"`-prefixed id. */
+  provider: string;
+  /** Model id for this target (empty → the primary model). */
+  model: string;
+  /** API key for this target (may be empty for local servers). */
+  apiKey: string;
+  /** Optional base URL override. */
+  baseUrl?: string;
+  /** Full custom-provider config, present when `provider` is a custom id. */
+  customProvider?: CustomProviderConfig;
+}
+
+/**
+ * Fallback policy for LLM provider requests. When enabled, a request that fails
+ * every retry attempt fails over to the next configured fallback target and
+ * sticks with it for all later requests. Defaults to OFF.
+ */
+export interface FallbackSettings {
+  /** Master on/off switch (default OFF). */
+  enabled: boolean;
+  /** Selected strategy. Defaults to `"api"`. */
+  method: FallbackMethod;
+  /** Ordered chain used when `method === "provider"`. */
+  providers: FallbackTarget[];
+  /** Ordered chain used when `method === "api"`. */
+  apis: FallbackTarget[];
+}
+
+/** A fresh mutable copy of the default fallback settings (OFF, method "api"). */
+export function defaultFallbackSettings(): FallbackSettings {
+  return { enabled: false, method: "api", providers: [], apis: [] };
+}
+
+/**
+ * Live fallback state for one assistant message, populated from the backend's
+ * `fallback` stream events when a provider/api fallback takes over.
+ */
+export interface FallbackActivity {
+  method: FallbackMethod;
+  /** 1-based number of the fallback target that took over. */
+  index: number;
+  /** Total configured fallback targets. */
+  total: number;
+  /** Provider id of the target that took over. */
+  provider: string;
+  /** Model id of the target that took over. */
+  model: string;
+  /** The error that exhausted the previous target. */
+  error: string;
+  /** Which agent triggered the fallback. */
+  scope?: string;
+  /** Client timestamp (ms) when the fallback activated. */
+  startedAt: number;
+}
+
 export interface Settings {
   provider: string;
   model: string;
@@ -1081,6 +1149,12 @@ export interface Settings {
    * the backend waits and retries so the agent loop keeps working. Default ON.
    */
   retry: RetrySettings;
+  /**
+   * Fallback policy for LLM provider requests. When enabled, a request that
+   * fails every retry attempt fails over to a configured fallback provider/api
+   * and sticks with it for all later requests. Default OFF.
+   */
+  fallback: FallbackSettings;
 }
 
 /** The four built-in reasoning-effort presets shown in Settings. */
@@ -1175,6 +1249,8 @@ export interface StreamRequest {
   sliding_window_truncate_percent?: number;
   /** Retry policy for provider requests this turn (from Settings). Default ON. */
   retry?: RetrySettings;
+  /** Fallback policy for provider requests this turn (from Settings). Default OFF. */
+  fallback?: FallbackSettings;
 }
 
 /** SSE event payloads emitted by the mythgram agent. */
@@ -1207,6 +1283,17 @@ export interface SSEEventData {
   delay_ms?: number;
   /** Scope of the retrying agent ("main", "chat", "team", "ceo", "promptagent", "memoryagent"). */
   scope?: string;
+  // Provider fallback event fields (emitted when a fallback target takes over).
+  /** The strategy that activated ("provider" | "api"). */
+  fallback_method?: FallbackMethod;
+  /** 1-based number of the fallback target that took over. */
+  fallback_index?: number;
+  /** Total configured fallback targets. */
+  fallback_total?: number;
+  /** Provider id of the target that took over. */
+  fallback_provider?: string;
+  /** Model id of the target that took over. */
+  fallback_model?: string;
   // Sub-agent side-channel fields
   agent?: string;
   task?: string;

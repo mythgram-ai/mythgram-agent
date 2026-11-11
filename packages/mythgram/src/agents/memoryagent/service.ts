@@ -1,7 +1,8 @@
 import type { AppConfig } from "../../config.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { resolveProvider } from "../providers/registry.js";
-import { retryEventPayload, withRetry } from "../../retry/index.js";
+import { retryEventPayload } from "../../retry/index.js";
+import { fallbackEventPayload, withFallback } from "../../fallback/index.js";
 import type { ToolRegistry } from "../tools/index.js";
 import type { MemoryFile } from "../tools/types.js";
 import type { MythgramDatabase } from "../../database/index.js";
@@ -144,12 +145,22 @@ export class MemoryAgentService {
     let updatedFiles: string[] = [];
 
     try {
-      // Retry every provider request of the memory build per the inherited policy.
-      const provider = withRetry(
+      // Retry (and fail over) every provider request of the memory build per the
+      // inherited policy.
+      const provider = withFallback(
         resolveProvider(this.providers, request.provider, request.customProvider),
         {
-          settings: request.retry,
+          settings: request.fallback,
+          retry: request.retry,
+          providerId: request.provider,
+          model: request.model,
+          apiKey: request.apiKey,
+          baseUrl: request.baseUrl,
+          customProvider: request.customProvider,
+          resolve: (target) => resolveProvider(this.providers, target.provider, target.customProvider),
           onRetry: (info) => send("retry", retryEventPayload(info, "memoryagent")),
+          onFallback: (event) => send("fallback", fallbackEventPayload(event, "memoryagent")),
+          scope: "memoryagent",
         },
       );
       // Refresh the memory baseline at EXECUTE time: while this request waited in the

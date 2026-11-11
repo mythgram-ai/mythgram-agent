@@ -15,15 +15,21 @@ import {
   OLLAMA_DEFAULT_BASE_URL,
   isCustomProviderId,
   isLocalProviderId,
+  toCustomProviderConfig,
 } from "@/lib/providers";
 import {
   EFFORT_PRESETS,
+  defaultFallbackSettings,
   defaultRetrySettings,
   type CustomHeader,
   type CustomProvider,
+  type FallbackSettings,
+  type FallbackTarget,
+  type ProviderMeta,
   type RetryAttemptSetting,
   type RetrySettings,
 } from "@/types";
+import { uid } from "@/utils/id";
 import { Modal } from "@/components/ui/Modal";
 import { Button, Field, Select, TextInput, Toggle } from "@/components/ui/primitives";
 import { cn } from "@/utils/cn";
@@ -174,12 +180,18 @@ export function SettingsModal() {
                 ) : (
                   <TextInput value={settings.model} onChange={(e) => setSettings({ model: e.target.value })} placeholder="No models yet — add one below" />
                 )}
-                {selectedCustom && (
-                  <button onClick={() => { setEditingId(selectedCustom.id); setEditorOpen(true); }} className="text-xs font-medium text-[var(--secondary)] hover:underline">
-                    Edit or add models
-                  </button>
-                )}
-                <ManualContextLimitField provider={settings.provider} model={settings.model} />
+                 {selectedCustom && (
+                   <button onClick={() => { setEditingId(selectedCustom.id); setEditorOpen(true); }} className="text-xs font-medium text-[var(--secondary)] hover:underline">
+                     Edit or add models
+                   </button>
+                 )}
+                 <FallbackApiKeysField
+                   fallback={settings.fallback ?? defaultFallbackSettings()}
+                   onChange={(fallback) => setSettings({ fallback })}
+                   provider={settings.provider}
+                   model={settings.model}
+                 />
+                 <ManualContextLimitField provider={settings.provider} model={settings.model} />
               </div>
             ) : (
               <>
@@ -190,9 +202,15 @@ export function SettingsModal() {
                     server), then Load models or type the model id below.
                   </div>
                 ) : null}
-                <Field label={isLocal ? `API key (${settings.provider}, optional)` : `API key (${settings.provider})`}>
-                  <TextInput type="password" value={currentKey} onChange={(e) => setApiKey(settings.provider, e.target.value)} placeholder={isLocal ? "Not needed for local servers" : "sk-…"} />
-                </Field>
+                 <Field label={isLocal ? `API key (${settings.provider}, optional)` : `API key (${settings.provider})`}>
+                   <TextInput type="password" value={currentKey} onChange={(e) => setApiKey(settings.provider, e.target.value)} placeholder={isLocal ? "Not needed for local servers" : "sk-..."} />
+                 </Field>
+                 <FallbackApiKeysField
+                   fallback={settings.fallback ?? defaultFallbackSettings()}
+                   onChange={(fallback) => setSettings({ fallback })}
+                   provider={settings.provider}
+                   model={settings.model}
+                 />
                 <Field label={isLocal ? "Server URL (Ollama / LM Studio / any local server)" : "Base URL (optional override)"}>
                   <TextInput value={settings.baseUrl} onChange={(e) => setSettings({ baseUrl: e.target.value })} placeholder={defaultBaseUrl ? `Default: ${defaultBaseUrl}` : "https://…/v1"} />
                   {isLocal && (
@@ -513,6 +531,16 @@ export function SettingsModal() {
             onChange={(retry) => setSettings({ retry })}
           />
 
+          {/* Provider/API fallback */}
+          <FallbackSettingsEditor
+            fallback={settings.fallback ?? defaultFallbackSettings()}
+            onChange={(fallback) => setSettings({ fallback })}
+            builtIns={builtIns}
+            customProviders={customProviders}
+            currentProvider={settings.provider}
+            currentModel={settings.model}
+          />
+
           {/* Multi-agent teams */}
           <section className="space-y-3 border-t border-[var(--border)] pt-5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--subtle)]">Agent teams (multi-agent)</h3>
@@ -768,6 +796,421 @@ function RetrySettingsEditor({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Fallback API-key list shown directly under the active provider's API key field.
+ * A "+" adds one more key for the SAME provider (the required "fallback to api"
+ * flow). Entries are scoped to the current provider and managed in full in the
+ * dedicated Fallback section below.
+ */
+function FallbackApiKeysField({
+  fallback,
+  onChange,
+  provider,
+  model,
+}: {
+  fallback: FallbackSettings;
+  onChange: (fallback: FallbackSettings) => void;
+  provider: string;
+  model: string;
+}) {
+  const entries = fallback.apis.filter((t) => t.provider === provider);
+
+  const add = (): void => {
+    const target: FallbackTarget = {
+      id: uid("fbapi"),
+      provider,
+      model,
+      apiKey: "",
+    };
+    onChange({ ...fallback, enabled: true, method: "api", apis: [...fallback.apis, target] });
+  };
+  const update = (id: string, patch: Partial<FallbackTarget>): void =>
+    onChange({ ...fallback, apis: fallback.apis.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
+  const remove = (id: string): void =>
+    onChange({ ...fallback, apis: fallback.apis.filter((t) => t.id !== id) });
+
+  return (
+    <div className="space-y-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-[var(--muted)]">Fallback API keys</span>
+        <button
+          type="button"
+          onClick={add}
+          title="Add another API key for this provider"
+          className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--fg)] hover:border-[var(--secondary)]"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add
+        </button>
+      </div>
+      {entries.length === 0 ? (
+        <p className="m-0 text-[11px] leading-relaxed text-[var(--subtle)]">
+          No fallback keys. Add one or more alternate API keys for {provider}; when every retry
+          fails, the agent switches to them automatically (Fallback → Fallback to API key).
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {entries.map((entry, index) => (
+            <li key={entry.id} className="flex items-center gap-2">
+              <span className="w-5 shrink-0 text-[11px] tabular-nums text-[var(--subtle)]">{index + 1}</span>
+              <TextInput
+                type="password"
+                value={entry.apiKey}
+                onChange={(e) => update(entry.id, { apiKey: e.target.value })}
+                placeholder="Alternate API key"
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => remove(entry.id)}
+                title="Remove this fallback API key"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-md)] text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--danger)]"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Fallback editor: a master on/off switch plus the chosen strategy. Two mutually
+ * exclusive strategies exist — fall back to another provider/model, or fall back
+ * to another API key of the same provider. Both accept an ordered chain (multiple
+ * targets) so a second fallback can take over when the first also fails.
+ */
+function FallbackSettingsEditor({
+  fallback,
+  onChange,
+  builtIns,
+  customProviders,
+  currentProvider,
+  currentModel,
+}: {
+  fallback: FallbackSettings;
+  onChange: (fallback: FallbackSettings) => void;
+  builtIns: ProviderMeta[];
+  customProviders: CustomProvider[];
+  currentProvider: string;
+  currentModel: string;
+}) {
+  const providerLabel = (id: string): string => {
+    const custom = customProviders.find((p) => p.id === id);
+    if (custom) return custom.name || custom.id;
+    return builtIns.find((p) => p.id === id)?.label ?? id;
+  };
+
+  const setMethod = (method: FallbackSettings["method"]): void => onChange({ ...fallback, method });
+  const chain = fallback.method === "provider" ? fallback.providers : fallback.apis;
+  const setChain = (next: FallbackTarget[]): void =>
+    onChange(fallback.method === "provider" ? { ...fallback, providers: next } : { ...fallback, apis: next });
+
+  const addTarget = (): void => {
+    const target: FallbackTarget =
+      fallback.method === "provider"
+        ? { id: uid("fbprov"), provider: "openrouter", model: "", apiKey: "" }
+        : { id: uid("fbapi"), provider: currentProvider, model: currentModel, apiKey: "" };
+    setChain([...chain, target]);
+  };
+  const updateTarget = (id: string, patch: Partial<FallbackTarget>): void =>
+    setChain(chain.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  const removeTarget = (id: string): void => setChain(chain.filter((t) => t.id !== id));
+
+  const isProvider = fallback.method === "provider";
+
+  return (
+    <section className="space-y-3 border-t border-[var(--border)] pt-5">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--subtle)]">Fallback</h3>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium text-[var(--muted)]">Enable fallback</span>
+        <Toggle
+          checked={fallback.enabled}
+          onChange={(next) => onChange({ ...fallback, enabled: next })}
+          label="Enable fallback"
+        />
+      </div>
+      <p className="text-xs text-[var(--muted)]">
+        When every retry of the current provider (or API key) fails, the agent switches to a
+        fallback target and keeps using it for all later requests. Applies to every agent (main,
+        custom, sub-agents, memory, summarization, chat, prompt agent, teams/CEO) and every
+        provider (local, built-in, custom).
+      </p>
+
+      {fallback.enabled && (
+        <>
+          <Field label="Fallback method" hint="choose one">
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setMethod("api")}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  !isProvider
+                    ? "border-[var(--secondary)] bg-[var(--secondary)] text-[var(--secondary-fg)]"
+                    : "border-[var(--border)] text-[var(--fg)] hover:border-[var(--secondary)]",
+                )}
+              >
+                Fallback to API key
+              </button>
+              <button
+                type="button"
+                onClick={() => setMethod("provider")}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  isProvider
+                    ? "border-[var(--secondary)] bg-[var(--secondary)] text-[var(--secondary-fg)]"
+                    : "border-[var(--border)] text-[var(--fg)] hover:border-[var(--secondary)]",
+                )}
+              >
+                Fallback to provider
+              </button>
+            </div>
+          </Field>
+          <p className="text-xs text-[var(--muted)]">
+            {isProvider
+              ? "Switch to a different provider/model when the primary and its retries fail. Add one or more, in order."
+              : "Switch to another API key of the same provider when the primary key and its retries fail. Add one or more, in order."}
+          </p>
+
+          <Field label={isProvider ? "Fallback providers" : "Fallback API keys"} hint="in order">
+            <div className="space-y-2">
+              {chain.map((target, index) => (
+                <div
+                  key={target.id}
+                  className="space-y-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--bg)] text-[11px] font-semibold tabular-nums text-[var(--muted)]">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--fg)]">
+                      {providerLabel(target.provider)}
+                      {target.model ? (
+                        <span className="text-[var(--subtle)]"> · {target.model}</span>
+                      ) : isProvider ? (
+                        <span className="text-[var(--danger)]"> · model required</span>
+                      ) : null}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeTarget(target.id)}
+                      title="Remove this fallback"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-md)] text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--danger)]"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {isProvider ? (
+                    <FallbackProviderCard
+                      target={target}
+                      builtIns={builtIns}
+                      customProviders={customProviders}
+                      onChange={(patch) => updateTarget(target.id, patch)}
+                    />
+                  ) : (
+                    <>
+                      <TextInput
+                        type="password"
+                        value={target.apiKey}
+                        onChange={(e) => updateTarget(target.id, { apiKey: e.target.value })}
+                        placeholder="Alternate API key"
+                        className="font-mono text-xs"
+                      />
+                      <TextInput
+                        value={target.model}
+                        onChange={(e) => updateTarget(target.id, { model: e.target.value })}
+                        placeholder="Model override (optional — defaults to the current model)"
+                        className="font-mono text-xs"
+                      />
+                    </>
+                  )}
+                </div>
+              ))}
+              {chain.length === 0 && (
+                <p className="text-xs text-[var(--muted)]">
+                  No fallback {isProvider ? "providers" : "API keys"} yet — add at least one for
+                  fallback to take effect.
+                </p>
+              )}
+            </div>
+          </Field>
+
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={addTarget}>
+              <Plus className="h-4 w-4" /> Add {isProvider ? "fallback provider" : "fallback API key"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onChange(defaultFallbackSettings())}
+            >
+              <RefreshCw className="h-4 w-4" /> Reset to defaults
+            </Button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Editor for a single provider-method fallback target: choose the provider, its
+ * API key, and its model. The model can be picked from the provider's live model
+ * list (fetched on demand) or typed in manually — and it is REQUIRED, because a
+ * fallback to another provider without a model is meaningless.
+ */
+function FallbackProviderCard({
+  target,
+  builtIns,
+  customProviders,
+  onChange,
+}: {
+  target: FallbackTarget;
+  builtIns: ProviderMeta[];
+  customProviders: CustomProvider[];
+  onChange: (patch: Partial<FallbackTarget>) => void;
+}) {
+  const selectedCustom = customProviders.find((p) => p.id === target.provider);
+  const isLocal = isLocalProviderId(target.provider);
+  // Latest load result, tagged with the provider it belongs to so switching the
+  // provider in the UI never shows another provider's stale model list.
+  const [result, setResult] = useState<{ provider: string; models: string[]; error: string | null } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Seed from a custom provider's stored catalog (no network call needed).
+  const seeded = selectedCustom ? selectedCustom.models.filter((m) => m.trim()) : [];
+  const fresh = result && result.provider === target.provider ? result : null;
+  const models = fresh ? fresh.models : seeded;
+  const error = fresh ? fresh.error : null;
+  const loadedProvider = fresh || selectedCustom ? target.provider : null;
+
+  const handleProvider = (value: string): void => {
+    const custom = customProviders.find((p) => p.id === value);
+    const model = custom ? (custom.models.find((m) => m.trim()) ?? "") : "";
+    onChange({
+      provider: value,
+      model,
+      apiKey: custom ? custom.apiKey : "",
+      baseUrl: undefined,
+      customProvider: custom ? toCustomProviderConfig(custom, model) : undefined,
+    });
+  };
+
+  const handleModel = (model: string): void => {
+    onChange({
+      model,
+      ...(selectedCustom ? { customProvider: toCustomProviderConfig(selectedCustom, model) } : {}),
+    });
+  };
+
+  const loadModels = async (): Promise<void> => {
+    setLoading(true);
+    try {
+      const infos = selectedCustom
+        ? await fetchCustomProviderModels({
+            id: selectedCustom.id,
+            name: selectedCustom.name,
+            baseUrl: selectedCustom.baseUrl,
+            apiKey: target.apiKey || selectedCustom.apiKey,
+            modelsUrl: selectedCustom.modelsUrl,
+            headers: selectedCustom.headers,
+          })
+        : await fetchModels(target.provider, target.apiKey ?? "", target.baseUrl || undefined);
+      const ids = infos.map((m) => m.id).filter((id): id is string => Boolean(id && id.trim()));
+      setResult({
+        provider: target.provider,
+        models: ids,
+        error: ids.length > 0 ? null : "No models returned — type one in manually.",
+      });
+    } catch (e) {
+      setResult({
+        provider: target.provider,
+        models: [],
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Keep the current model selectable even when it was typed manually.
+  const options = Array.from(new Set([...(target.model ? [target.model] : []), ...models]));
+  const modelMissing = !target.model.trim();
+
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Select value={target.provider} onChange={(e) => handleProvider(e.target.value)} className="text-xs">
+          <optgroup label="Providers">
+            {builtIns.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </optgroup>
+          {customProviders.length > 0 && (
+            <optgroup label="Custom providers">
+              {customProviders.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || p.id}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </Select>
+        <TextInput
+          type="password"
+          value={target.apiKey}
+          onChange={(e) => onChange({ apiKey: e.target.value })}
+          placeholder={selectedCustom ? "API key (defaults to the provider's key)" : "API key (blank for local)"}
+          className="font-mono text-xs"
+        />
+      </div>
+
+      <Field
+        label="Model *"
+        hint={modelMissing ? "required" : loadedProvider === target.provider ? `${options.length} available` : undefined}
+        hintError={modelMissing}
+      >
+        <div className="flex gap-2">
+          <Select value={target.model} onChange={(e) => handleModel(e.target.value)} className="flex-1 text-xs">
+            <option value="">
+              {options.length > 0 ? "Select a model…" : "Load models or type below…"}
+            </option>
+            {options.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+          <Button type="button" variant="outline" onClick={loadModels} disabled={loading}>
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Load
+          </Button>
+        </div>
+      </Field>
+      <TextInput
+        value={target.model}
+        onChange={(e) => handleModel(e.target.value)}
+        placeholder="Or type a model id"
+        className="font-mono text-xs"
+      />
+      {error && <p className="m-0 text-[11px] text-[var(--danger)]">{error}</p>}
+
+      {!selectedCustom && (
+        <TextInput
+          value={target.baseUrl ?? ""}
+          onChange={(e) => onChange({ baseUrl: e.target.value })}
+          placeholder={isLocal ? "Server URL (e.g. http://localhost:11434/v1)" : "Base URL override (optional)"}
+          className="font-mono text-xs"
+        />
+      )}
+    </div>
   );
 }
 

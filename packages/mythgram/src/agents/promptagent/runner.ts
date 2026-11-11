@@ -3,7 +3,8 @@ import type { AppConfig } from "../../config.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { resolveProvider } from "../providers/registry.js";
 import type { Provider } from "../providers/types.js";
-import { retryEventPayload, withRetry } from "../../retry/index.js";
+import { retryEventPayload } from "../../retry/index.js";
+import { fallbackEventPayload, withFallback } from "../../fallback/index.js";
 import type { ToolRegistry } from "../tools/index.js";
 import type { ToolCall, ToolCallDelta } from "../providers/types.js";
 import type { ChatSession, StoredMessage } from "../../services/sessionStore.js";
@@ -59,12 +60,21 @@ export class PromptAgentRunner {
     try {
       let provider: Provider;
       try {
-        // Retry every provider request of this prompt-agent turn per the turn's policy.
-        provider = withRetry(
+        // Retry (and fail over) every provider request of this prompt-agent turn.
+        provider = withFallback(
           resolveProvider(this.providers, request.provider, request.customProvider),
           {
-            settings: request.retry,
+            settings: request.fallback,
+            retry: request.retry,
+            providerId: request.provider,
+            model: request.model,
+            apiKey: request.apiKey,
+            baseUrl: request.baseUrl,
+            customProvider: request.customProvider,
+            resolve: (target) => resolveProvider(this.providers, target.provider, target.customProvider),
             onRetry: (info) => send("retry", retryEventPayload(info, "promptagent")),
+            onFallback: (event) => send("fallback", fallbackEventPayload(event, "promptagent")),
+            scope: "promptagent",
           },
         );
       } catch (error) {

@@ -47,4 +47,6 @@ export interface MemoryAgentBuildRequest {
   effort?: string;
   /** Retry policy inherited from the turn that triggered this memory build. See src/retry. */
   retry?: import("../../retry/index.js").RetrySettings;
+  /** Fallback policy inherited from the turn that triggered this memory build. See src/fallback. */
+  fallback?: import("../../fallback/index.js").FallbackSettings;
 }

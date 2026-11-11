@@ -37,6 +37,9 @@ import type {
   PromptLibraryItem,
   ProviderMeta,
   RetrySettings,
+  FallbackMethod,
+  FallbackSettings,
+  FallbackTarget,
   SearchProvider,
   Settings,
   Skill,
@@ -86,7 +89,12 @@ import {
 } from "@/lib/taskModes";
 import { normalizePromptLibrary, newPromptLibraryId } from "@/lib/promptLibrary";
 import { manualLimitKey, sanitizeManualContextLimits } from "@/lib/contextMeter";
-import { defaultRetrySettings } from "@/types";
+import { defaultFallbackSettings, defaultRetrySettings } from "@/types";
+
+/** Coerce an unknown value to a trimmed-safe string (non-strings become ""). */
+function asText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
 
 /** Boolean coercion that understands the frontend's "yes"/"no" settings shape. */
 function toBool(value: unknown, fallback: boolean): boolean {
@@ -135,6 +143,52 @@ function sanitizeRetrySettings(raw: unknown): RetrySettings {
       record.restartOnPartialStream ?? record.restart_on_partial_stream,
       defaults.restartOnPartialStream,
     ),
+  };
+}
+
+/**
+ * Defensively normalize one fallback target. Requires a provider id; every
+ * other field is coerced to a string. Returns null for unusable entries.
+ */
+function sanitizeFallbackTarget(raw: unknown, index: number): FallbackTarget | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const provider = asText(record.provider).trim();
+  if (!provider) return null;
+  const baseUrl = asText(record.baseUrl ?? record.base_url).trim();
+  return {
+    id: asText(record.id).trim() || `fallback_${index}`,
+    provider,
+    model: asText(record.model).trim(),
+    apiKey: asText(record.apiKey ?? record.api_key),
+    baseUrl: baseUrl || undefined,
+    customProvider: (record.customProvider ?? record.custom_provider) as FallbackTarget["customProvider"],
+  };
+}
+
+/**
+ * Defensively normalize a persisted/loaded fallback policy. Absent or malformed
+ * input falls back to the defaults (fallback OFF, method "api"), so an older
+ * persisted Settings document upgrades transparently.
+ */
+function sanitizeFallbackSettings(raw: unknown): FallbackSettings {
+  const defaults = defaultFallbackSettings();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaults;
+  const record = raw as Record<string, unknown>;
+  const targets = (value: unknown): FallbackTarget[] => {
+    if (!Array.isArray(value)) return [];
+    const out: FallbackTarget[] = [];
+    for (let i = 0; i < value.length && out.length < 20; i++) {
+      const target = sanitizeFallbackTarget(value[i], i);
+      if (target) out.push(target);
+    }
+    return out;
+  };
+  return {
+    enabled: toBool(record.enabled, defaults.enabled),
+    method: record.method === "provider" ? "provider" : "api",
+    providers: targets(record.providers),
+    apis: targets(record.apis),
   };
 }
 
@@ -410,6 +464,20 @@ interface AppState {
   recoverRetry: (convId: string, msgId: string) => void;
   /** Remove the retry block (used when the turn ends while still waiting). */
   clearRetry: (convId: string, msgId: string) => void;
+  /** Record that a fallback provider/api has taken over for this message. */
+  registerFallback: (
+    convId: string,
+    msgId: string,
+    info: {
+      method: FallbackMethod;
+      index: number;
+      total: number;
+      provider: string;
+      model: string;
+      error: string;
+      scope?: string;
+    },
+  ) => void;
 
   // Active run (resumable streaming)
   setActiveRun: (run: ActiveRun | null) => void;
@@ -886,6 +954,7 @@ const defaultSettings: Settings = {
   contextManagementMethod: "summarization",
   slidingWindowTruncatePercent: 0.3,
   retry: defaultRetrySettings(),
+  fallback: defaultFallbackSettings(),
 };
 
 function touch(conv: Conversation): Conversation {
@@ -1337,6 +1406,11 @@ export const useStore = create<AppState>()(
             retry: sanitizeRetrySettings(
               (p.settings as { retry?: unknown } | undefined)?.retry,
             ),
+            // Fallback policy from older clients may be absent/malformed — normalize
+            // so a corrupt chain can never break provider requests (defaults to OFF).
+            fallback: sanitizeFallbackSettings(
+              (p.settings as { fallback?: unknown } | undefined)?.fallback,
+            ),
           },
           subAgents: mergeSubAgentsWithDefaults(
             Array.isArray(p.subAgents) ? p.subAgents : defaults.subAgents,
@@ -1656,7 +1730,7 @@ export const useStore = create<AppState>()(
                   ...c,
                   messages: c.messages.map((m) =>
                     m.id === msgId
-                      ? { ...m, content: "", reasoning: "", tools: [], team: undefined, retry: undefined, streaming: true }
+                      ? { ...m, content: "", reasoning: "", tools: [], team: undefined, retry: undefined, fallback: undefined, streaming: true }
                       : m,
                   ),
                 }
@@ -1778,6 +1852,34 @@ export const useStore = create<AppState>()(
           });
           return changed ? { conversations } : {};
         }),
+
+      registerFallback: (convId, msgId, info) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === msgId
+                      ? {
+                          ...m,
+                          fallback: {
+                            method: info.method,
+                            index: info.index,
+                            total: info.total,
+                            provider: info.provider,
+                            model: info.model,
+                            error: info.error,
+                            scope: info.scope,
+                            startedAt: Date.now(),
+                          },
+                        }
+                      : m,
+                  ),
+                }
+              : c,
+          ),
+        })),
 
       setActiveRun: (activeRun) => set({ activeRun }),
       setActiveRunCursor: (lastEventId) =>

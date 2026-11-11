@@ -76,4 +76,6 @@ export interface RunPromptAgentRequest {
   skills?: SkillDefinition[];
   /** Retry policy for this turn's provider requests (from Settings). See src/retry. */
   retry?: import("../../retry/index.js").RetrySettings;
+  /** Fallback policy for this turn's provider requests (from Settings). See src/fallback. */
+  fallback?: import("../../fallback/index.js").FallbackSettings;
 }

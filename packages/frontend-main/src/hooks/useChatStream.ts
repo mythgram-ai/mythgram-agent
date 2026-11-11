@@ -222,6 +222,13 @@ function buildStartRequest(convId: string, text: string): StreamRequest {
     context_management_method: settings.contextManagementMethod ?? "summarization",
     sliding_window_truncate_percent: settings.slidingWindowTruncatePercent ?? 0.3,
     retry: settings.retry,
+    // API-key fallbacks are scoped to the active provider; provider fallbacks are global.
+    fallback: settings.fallback
+      ? {
+          ...settings.fallback,
+          apis: settings.fallback.apis.filter((t) => !t.provider || t.provider === settings.provider),
+        }
+      : undefined,
   };
 }
 
