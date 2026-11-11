@@ -54,7 +54,7 @@ export function App() {
   const currentId = useStore((s) => s.currentId);
   const hydrated = useStore((s) => s.hydrated);
   const setProviders = useStore((s) => s.setProviders);
-  const { send, resume, stop } = useChatStream();
+  const { send, resume, stop, continueTask } = useChatStream();
   const bootedRef = useRef(false);
 
   useConnectionWatch();
@@ -167,7 +167,7 @@ export function App() {
         <TopBar />
 
         <main className="relative flex min-h-0 flex-1 flex-col">
-          {section === "chat" && <ChatPanel onSend={send} />}
+          {section === "chat" && <ChatPanel onSend={send} onContinue={continueTask} />}
           {section !== "chat" && (
             <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6 max-[640px]:px-4">
               {section === "memory" && <MemoryPanel />}

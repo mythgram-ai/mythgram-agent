@@ -12,7 +12,13 @@ const PROMPTS = [
   "Capture this to memory",
 ];
 
-export function ChatPanel({ onSend }: { onSend: (text: string) => void }) {
+export function ChatPanel({
+  onSend,
+  onContinue,
+}: {
+  onSend: (text: string) => void;
+  onContinue?: (convId: string) => void;
+}) {
   const conversations = useStore((s) => s.conversations);
   const currentId = useStore((s) => s.currentId);
   const activeUserProfileId = useStore((s) => s.activeUserProfileId);
@@ -38,7 +44,12 @@ export function ChatPanel({ onSend }: { onSend: (text: string) => void }) {
   );
 
   if (messages.length > 0) {
-    return <MessageList messages={messages} />;
+    return (
+      <MessageList
+        messages={messages}
+        onContinue={onContinue && currentId ? () => onContinue(currentId) : undefined}
+      />
+    );
   }
 
   return (

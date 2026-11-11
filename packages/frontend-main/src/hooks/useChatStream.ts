@@ -19,11 +19,28 @@ import type {
   BackendSkill,
   BackendSubAgent,
   ChatMessage,
+  SSEEventData,
+  TurnInterruption,
   KnowledgeFile,
   MemoryFile,
   StreamRequest,
   TodoItem,
 } from "@/types";
+
+/** Prompt sent when the user continues an interrupted turn. */
+export const CONTINUE_PROMPT =
+  "Continue the task from where you left off. You were interrupted before finishing — pick up from the last completed step and don't repeat work that is already done.";
+
+/**
+ * Classify how a turn ended. Anything short of a clean `done { ok: true }` is an
+ * interruption: an explicit Stop is the user's, everything else is the system's.
+ */
+function interruptionOf(result: StreamResult, done: SSEEventData | null): TurnInterruption["reason"] | null {
+  if (result === "aborted") return "user";
+  if (result === "gone" || result === "error") return "system";
+  if (!done || done.ok === true) return null;
+  return done.aborted === true || done.interrupted_by === "user" ? "user" : "system";
+}
 
 function phaseToConnection(phase: StreamPhase): void {
   const setConnection = useStore.getState().setConnection;
@@ -231,14 +248,17 @@ export function useChatStream(onFilesChanged?: () => void) {
       useStore.getState().setConnection(navigator.onLine === false ? "offline" : "online");
 
       let result: StreamResult = "aborted";
+      let doneData: SSEEventData | null = null;
       try {
         result = await runChatStream({
           chatId: convId,
           start,
           initialSinceId: -1,
           signal: controller.signal,
-          onEvent: (event, data) =>
-            dispatchStreamEvent(event, data, { convId, msgId: assistantId, batcher, onFilesChanged, resume: resumeFlag }),
+          onEvent: (event, data) => {
+            if (event === "done") doneData = data;
+            dispatchStreamEvent(event, data, { convId, msgId: assistantId, batcher, onFilesChanged, resume: resumeFlag });
+          },
           onPhase: phaseToConnection,
           onCursor: (id) => useStore.getState().setActiveRunCursor(id),
         });
@@ -261,7 +281,11 @@ export function useChatStream(onFilesChanged?: () => void) {
           }
         }
 
-        store.updateMessage(convId, assistantId, { streaming: false });
+        const reason = interruptionOf(result, doneData);
+        store.updateMessage(convId, assistantId, {
+          streaming: false,
+          interrupted: reason ? { reason, at: Date.now() } : undefined,
+        });
         // Drop a still-waiting retry block (e.g. the turn was aborted mid-backoff);
         // a recovered retry is kept as a compact history line.
         store.clearRetry(convId, assistantId);
@@ -399,7 +423,18 @@ export function useChatStream(onFilesChanged?: () => void) {
     store.setStreaming(false);
   }, []);
 
-  return { send, resume, stop, isRunning: () => runningRef.current };
+  /** Resume an interrupted task by asking the agent to carry on in the same conversation. */
+  const continueTask = useCallback(
+    async (convId: string) => {
+      if (runningRef.current) return;
+      const store = useStore.getState();
+      if (store.currentId !== convId) store.selectConversation(convId);
+      await send(CONTINUE_PROMPT);
+    },
+    [send],
+  );
+
+  return { send, resume, stop, continueTask, isRunning: () => runningRef.current };
 }
 
 /** Keep the global connection indicator honest even when no stream is active. */

@@ -674,6 +674,18 @@ export interface ChatMessage {
   team?: TeamRunState;
   /** Present while/after the provider retried a failed request for this message. */
   retry?: RetryActivity;
+  /**
+   * Set when this assistant turn stopped before finishing — stopped by the user, or cut
+   * short by the system (provider failure, lost run, backend restart). The latest
+   * interrupted message offers a "Continue" button that resumes the task.
+   */
+  interrupted?: TurnInterruption;
+}
+
+export interface TurnInterruption {
+  /** "user": the user pressed Stop. "system": the app/backend ended the turn early. */
+  reason: "user" | "system";
+  at: number;
 }
 
 export interface Conversation {
@@ -1184,6 +1196,8 @@ export interface SSEEventData {
   reasoning?: string | null;
   iteration_count?: number;
   aborted?: boolean;
+  /** On `done`: who ended the turn early ("user" Stop, or a "system" failure). */
+  interrupted_by?: "user" | "system";
   // Provider retry event fields (emitted while the backend retries a failed request).
   /** 1-based retry attempt number. */
   attempt?: number;

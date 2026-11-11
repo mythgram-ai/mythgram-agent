@@ -12,6 +12,7 @@ import { PresentSlidesBlock } from "./PresentSlidesBlock";
 import { ShowArtifactBlock } from "./ShowArtifactBlock";
 import { TeamRunView } from "./TeamRunView";
 import { RetryBlock } from "./RetryBlock";
+import { InterruptedBlock } from "./InterruptedBlock";
 import { SavePromptModal } from "@/components/panels/PromptLibraryPanel";
 
 /** Tools that render as full-width blocks instead of inline chips. */
@@ -26,7 +27,16 @@ function isBlockTool(name: string): boolean {
   );
 }
 
-function MessageItemImpl({ message }: { message: ChatMessage }) {
+function MessageItemImpl({
+  message,
+  canContinue = false,
+  onContinue,
+}: {
+  message: ChatMessage;
+  /** True for the latest message of an idle conversation — the only one that may continue. */
+  canContinue?: boolean;
+  onContinue?: () => void;
+}) {
   const [showReasoning, setShowReasoning] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
 
@@ -146,6 +156,13 @@ function MessageItemImpl({ message }: { message: ChatMessage }) {
           >
             {message.content}
           </div>
+        )}
+
+        {message.interrupted && !message.streaming && (
+          <InterruptedBlock
+            interruption={message.interrupted}
+            onContinue={canContinue ? onContinue : undefined}
+          />
         )}
       </div>
     </div>

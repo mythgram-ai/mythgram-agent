@@ -63,6 +63,7 @@ import {
   shouldTriggerSlidingWindow,
   slidingWindowUtilizationOf,
 } from "./slidingWindow.js";
+import { pushPartialAssistant, repairInterruptedToolCalls } from "./interruption.js";
 
 export interface RunAgentRequest {
   chatId: string;
@@ -715,7 +716,7 @@ export class AgentRunner {
       // eslint-disable-next-line no-constant-condition
       while (true) {
         if (signal.aborted) {
-          send("done", { ok: false, aborted: true });
+          send("done", { ok: false, aborted: true, interrupted_by: "user" });
           return;
         }
 
@@ -770,12 +771,14 @@ export class AgentRunner {
             if (usage) requestUsage = usage;
           }
         } catch (error) {
+          // Keep what was already streamed so the user can continue the task later.
+          pushPartialAssistant(session.messages, answerParts, reasoningParts);
           if (signal.aborted) {
-            send("done", { ok: false, aborted: true });
+            send("done", { ok: false, aborted: true, interrupted_by: "user" });
             return;
           }
           send("error", { code: "provider_api_error", message: `Provider API error: ${messageOf(error)}` });
-          send("done", { ok: false });
+          send("done", { ok: false, interrupted_by: "system" });
           return;
         }
 
@@ -1164,7 +1167,7 @@ export class AgentRunner {
 
   private buildProviderMessages(systemPrompt: string, messages: StoredMessage[]): Array<Record<string, unknown>> {
     const built: Array<Record<string, unknown>> = [{ role: "system", content: systemPrompt }];
-    for (const message of messages) {
+    for (const message of repairInterruptedToolCalls(messages)) {
       const entry: Record<string, unknown> = { role: message.role };
       if (message.content !== undefined && message.content !== null) entry.content = message.content;
       else if (message.role === "assistant" && message.tool_calls) entry.content = null;
