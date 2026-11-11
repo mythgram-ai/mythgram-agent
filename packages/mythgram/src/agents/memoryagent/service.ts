@@ -1,6 +1,7 @@
 import type { AppConfig } from "../../config.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { resolveProvider } from "../providers/registry.js";
+import { retryEventPayload, withRetry } from "../../retry/index.js";
 import type { ToolRegistry } from "../tools/index.js";
 import type { MemoryFile } from "../tools/types.js";
 import type { MythgramDatabase } from "../../database/index.js";
@@ -143,7 +144,14 @@ export class MemoryAgentService {
     let updatedFiles: string[] = [];
 
     try {
-      const provider = resolveProvider(this.providers, request.provider, request.customProvider);
+      // Retry every provider request of the memory build per the inherited policy.
+      const provider = withRetry(
+        resolveProvider(this.providers, request.provider, request.customProvider),
+        {
+          settings: request.retry,
+          onRetry: (info) => send("retry", retryEventPayload(info, "memoryagent")),
+        },
+      );
       // Refresh the memory baseline at EXECUTE time: while this request waited in the
       // queue, earlier runs may already have updated some files — their newer state must
       // not be clobbered by this request's older snapshot.

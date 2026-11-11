@@ -133,6 +133,7 @@ const SETTING_OPTIONS: Array<{ key: string; label: string; keywords: string; hin
   { key: "enableSendMessageToTeam", label: "Agent-to-agent messaging", keywords: "send message team peer", hint: "Open settings" },
   { key: "enableCeoAgents", label: "Enable CEO agents", keywords: "ceo enable organization", hint: "Open settings" },
   { key: "memoryAgentEnabled", label: "Memory agent", keywords: "memory agent background enable", hint: "Open settings" },
+  { key: "retry", label: "Provider request retries", keywords: "retry attempts backoff failed error network provider", hint: "Open settings → retries" },
   { key: "memoryAgentInterval", label: "Memory agent interval", keywords: "memory interval tasks", hint: "Open settings" },
   { key: "agentMode", label: "Agent / chat mode", keywords: "agent chat mode conversational", hint: "Switch mode in sidebar" },
 ];

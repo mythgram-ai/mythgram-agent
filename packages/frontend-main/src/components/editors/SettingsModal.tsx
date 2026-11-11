@@ -16,9 +16,16 @@ import {
   isCustomProviderId,
   isLocalProviderId,
 } from "@/lib/providers";
-import { EFFORT_PRESETS, type CustomHeader, type CustomProvider } from "@/types";
+import {
+  EFFORT_PRESETS,
+  defaultRetrySettings,
+  type CustomHeader,
+  type CustomProvider,
+  type RetryAttemptSetting,
+  type RetrySettings,
+} from "@/types";
 import { Modal } from "@/components/ui/Modal";
-import { Button, Field, Select, TextInput } from "@/components/ui/primitives";
+import { Button, Field, Select, TextInput, Toggle } from "@/components/ui/primitives";
 import { cn } from "@/utils/cn";
 
 export function SettingsModal() {
@@ -500,6 +507,12 @@ export function SettingsModal() {
             )}
           </section>
 
+          {/* Provider request retries */}
+          <RetrySettingsEditor
+            retry={settings.retry ?? defaultRetrySettings()}
+            onChange={(retry) => setSettings({ retry })}
+          />
+
           {/* Multi-agent teams */}
           <section className="space-y-3 border-t border-[var(--border)] pt-5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--subtle)]">Agent teams (multi-agent)</h3>
@@ -642,6 +655,119 @@ export function SettingsModal() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * Provider request retry editor: a master on/off switch plus a fully editable
+ * retry schedule (add/remove/edit attempts, keep retrying forever, retry after
+ * partial streaming). The backend retries any failed LLM request — any error,
+ * any agent, any provider — after each configured delay so the autonomous loop
+ * keeps working through provider outages.
+ */
+function RetrySettingsEditor({
+  retry,
+  onChange,
+}: {
+  retry: RetrySettings;
+  onChange: (retry: RetrySettings) => void;
+}) {
+  const attempts = retry.attempts;
+  const setAttempts = (next: RetryAttemptSetting[]): void => onChange({ ...retry, attempts: next });
+  const updateDelay = (index: number, seconds: number): void => {
+    const safeSeconds = Number.isFinite(seconds) ? Math.min(3600, Math.max(1, Math.round(seconds))) : 5;
+    setAttempts(attempts.map((a, i) => (i === index ? { delayMs: safeSeconds * 1000 } : a)));
+  };
+  const addAttempt = (): void => {
+    const last = attempts.length > 0 ? attempts[attempts.length - 1]!.delayMs : 120_000;
+    setAttempts([...attempts, { delayMs: Math.min(3_600_000, Math.max(1_000, last)) }]);
+  };
+  const removeAttempt = (index: number): void => setAttempts(attempts.filter((_, i) => i !== index));
+
+  return (
+    <section className="space-y-3 border-t border-[var(--border)] pt-5">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--subtle)]">
+        Provider request retries
+      </h3>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium text-[var(--muted)]">Retry failed provider requests</span>
+        <Toggle
+          checked={retry.enabled}
+          onChange={(next) => onChange({ ...retry, enabled: next })}
+          label="Retry failed provider requests"
+        />
+      </div>
+      <p className="text-xs text-[var(--muted)]">
+        When a model request fails for any reason — HTTP error, network drop, timeout — the agent
+        waits and retries automatically, so its autonomous loop keeps working. Applies to every agent
+        (main, custom, sub-agents, memory, summarization, chat, prompt agent, teams/CEO) and every
+        provider (local, built-in, custom).
+      </p>
+      {retry.enabled && (
+        <>
+          <Field label="Retry schedule" hint="delay before each attempt">
+            <div className="space-y-2">
+              {attempts.map((attempt, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs text-[var(--muted)]">Attempt {index + 1}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={3600}
+                    step={1}
+                    value={Math.round(attempt.delayMs / 1000)}
+                    onChange={(e) => updateDelay(index, Number(e.target.value))}
+                    className="w-24 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-sm text-[var(--fg)] outline-none focus:border-[var(--secondary)]"
+                  />
+                  <span className="text-xs text-[var(--muted)]">seconds</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttempt(index)}
+                    className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] text-[var(--muted)] hover:bg-[var(--chip)] hover:text-[var(--fg)]"
+                    title="Remove this attempt"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {attempts.length === 0 && (
+                <p className="text-xs text-[var(--muted)]">
+                  No attempts configured — the default schedule is used.
+                </p>
+              )}
+            </div>
+          </Field>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={addAttempt}>
+              <Plus className="h-4 w-4" /> Add attempt
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => onChange(defaultRetrySettings())}>
+              <RefreshCw className="h-4 w-4" /> Reset to defaults
+            </Button>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-[var(--muted)]">Keep retrying forever</span>
+            <Toggle
+              checked={retry.infinite}
+              onChange={(next) => onChange({ ...retry, infinite: next })}
+              label="Keep retrying forever"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-[var(--muted)]">Retry after partial streaming</span>
+            <Toggle
+              checked={retry.restartOnPartialStream}
+              onChange={(next) => onChange({ ...retry, restartOnPartialStream: next })}
+              label="Retry after partial streaming"
+            />
+          </div>
+          <p className="text-xs text-[var(--muted)]">
+            Default schedule: retry after 5s, 10s, 15s, 25s, 30s, 1 min, then every 2 min forever.
+            Delays are entered in seconds; up to 100 attempts.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 

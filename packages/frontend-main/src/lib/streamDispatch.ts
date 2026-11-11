@@ -1098,6 +1098,21 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
       break;
     }
 
+    case "retry": {
+      // The backend is retrying a failed provider request. Surface it in the
+      // thinking trace (never the final answer) so the turn visibly keeps going.
+      const attempt = Number(data.attempt ?? 0);
+      const maxAttempts = data.max_attempts;
+      const delaySec = Math.max(0, Math.round(Number(data.delay_ms ?? 0) / 1000));
+      const scope = typeof data.scope === "string" && data.scope ? ` (${data.scope})` : "";
+      const total = maxAttempts === null || maxAttempts === undefined ? "" : `/${maxAttempts}`;
+      const detail = typeof data.error === "string" && data.error ? ` — ${data.error}` : "";
+      s.applyAssistantDelta(convId, msgId, {
+        reasoningDelta: `\n\n⟳ Provider request failed${scope}; retrying in ${delaySec}s (attempt ${attempt}${total})${detail}\n`,
+      });
+      break;
+    }
+
     case "error":
       s.applyAssistantDelta(convId, msgId, {
         contentDelta: `\n\n⚠️ ${String(data.message ?? "Agent error")}`,

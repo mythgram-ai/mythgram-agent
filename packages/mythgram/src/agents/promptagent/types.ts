@@ -74,4 +74,6 @@ export interface RunPromptAgentRequest {
   firecrawlApiKey?: string;
   /** User-defined skills available this turn (defaults resolved underneath). */
   skills?: SkillDefinition[];
+  /** Retry policy for this turn's provider requests (from Settings). See src/retry. */
+  retry?: import("../../retry/index.js").RetrySettings;
 }

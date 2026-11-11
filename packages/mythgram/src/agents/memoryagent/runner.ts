@@ -32,10 +32,6 @@ export interface RunMemoryAgentParams {
   onMemoryChanged: (files: MemoryFile[]) => void;
 }
 
-/** Transient provider failures are retried this many times before the run fails. */
-const PROVIDER_MAX_ATTEMPTS = 3;
-const PROVIDER_RETRY_DELAY_MS = 2_000;
-
 /**
  * Execute one full memory-agent run: an autonomous Thought -> Action -> Observation loop
  * over the memory operation tools ONLY, with NO iteration limit (unlike the main agent) —
@@ -86,39 +82,34 @@ export async function runMemoryAgent(params: RunMemoryAgentParams): Promise<Memo
     let finishReason: string | null = null;
 
     try {
-      await streamWithRetry(async () => {
-        answerParts.length = 0;
-        reasoningParts.length = 0;
-        toolCalls = [];
-        finishReason = null;
-
-        const stream = provider.streamChatCompletion({
-          apiKey: request.apiKey,
-          model: request.model,
-          messages: buildProviderMessages(systemPrompt, messages),
-          tools: toolSchemas,
-          baseUrl: request.baseUrl,
-          temperature: request.temperature,
-          effort: request.effort,
-        });
-
-        for await (const delta of stream) {
-          if (delta.reasoning) {
-            const cleaned = normalize(delta.reasoning);
-            reasoningParts.push(cleaned);
-            send("reasoning", { value: cleaned });
-          }
-          if (delta.text) {
-            const cleaned = normalize(delta.text);
-            answerParts.push(cleaned);
-            send("token", { value: cleaned });
-          }
-          if (delta.toolCalls) {
-            toolCalls = mergeToolCalls(toolCalls, delta.toolCalls);
-          }
-          if (delta.finishReason) finishReason = delta.finishReason;
-        }
+      // Retries are handled centrally by the retry-wrapped provider (see src/retry),
+      // so the loop simply consumes the resilient stream.
+      const stream = provider.streamChatCompletion({
+        apiKey: request.apiKey,
+        model: request.model,
+        messages: buildProviderMessages(systemPrompt, messages),
+        tools: toolSchemas,
+        baseUrl: request.baseUrl,
+        temperature: request.temperature,
+        effort: request.effort,
       });
+
+      for await (const delta of stream) {
+        if (delta.reasoning) {
+          const cleaned = normalize(delta.reasoning);
+          reasoningParts.push(cleaned);
+          send("reasoning", { value: cleaned });
+        }
+        if (delta.text) {
+          const cleaned = normalize(delta.text);
+          answerParts.push(cleaned);
+          send("token", { value: cleaned });
+        }
+        if (delta.toolCalls) {
+          toolCalls = mergeToolCalls(toolCalls, delta.toolCalls);
+        }
+        if (delta.finishReason) finishReason = delta.finishReason;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       send("error", { code: "provider_api_error", message: `Provider API error: ${message}` });
@@ -226,23 +217,6 @@ export async function runMemoryAgent(params: RunMemoryAgentParams): Promise<Memo
 /** True for the memory tools that mutate a file (used to track which paths a run touched). */
 function isMemoryMutation(name: string): boolean {
   return name === "memory_write" || name === "memory_edit" || name === "memory_delete";
-}
-
-/** Run `attempt` with bounded retries + linear backoff for transient provider failures. */
-async function streamWithRetry(attempt: () => Promise<void>): Promise<void> {
-  let lastError: unknown;
-  for (let i = 1; i <= PROVIDER_MAX_ATTEMPTS; i += 1) {
-    try {
-      await attempt();
-      return;
-    } catch (error) {
-      lastError = error;
-      if (i < PROVIDER_MAX_ATTEMPTS) {
-        await new Promise((resolve) => setTimeout(resolve, PROVIDER_RETRY_DELAY_MS * i));
-      }
-    }
-  }
-  throw lastError;
 }
 
 function buildProviderMessages(

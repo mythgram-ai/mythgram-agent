@@ -914,6 +914,45 @@ export interface BrowserPreview {
   open: boolean;
 }
 
+/** One scheduled retry attempt for a failed LLM provider request. */
+export interface RetryAttemptSetting {
+  /** Delay in milliseconds to wait before this retry attempt is issued. */
+  delayMs: number;
+}
+
+/**
+ * Retry policy for LLM provider requests. When a provider request fails for ANY
+ * reason (HTTP error, network drop, timeout, ...) the backend waits for the
+ * configured delay and retries, so the agent's autonomous loop keeps working.
+ * Sent with every turn; defaults to ON.
+ */
+export interface RetrySettings {
+  /** Master on/off switch (default ON). */
+  enabled: boolean;
+  /**
+   * Ordered retry schedule. `attempts[i].delayMs` is the wait before retry
+   * attempt `i + 1`. Exhausted lists reuse the last delay while `infinite` is on.
+   */
+  attempts: RetryAttemptSetting[];
+  /** Keep retrying forever after the schedule is exhausted (default ON). */
+  infinite: boolean;
+  /** Retry even when a streaming request already emitted partial output (default ON). */
+  restartOnPartialStream: boolean;
+}
+
+/** Factory-default retry delays (ms): 5s, 10s, 15s, 25s, 30s, 1m, 2m. */
+export const DEFAULT_RETRY_DELAYS_MS = [5_000, 10_000, 15_000, 25_000, 30_000, 60_000, 120_000] as const;
+
+/** A fresh mutable copy of the default retry settings. */
+export function defaultRetrySettings(): RetrySettings {
+  return {
+    enabled: true,
+    attempts: DEFAULT_RETRY_DELAYS_MS.map((delayMs) => ({ delayMs })),
+    infinite: true,
+    restartOnPartialStream: true,
+  };
+}
+
 export interface Settings {
   provider: string;
   model: string;
@@ -998,6 +1037,11 @@ export interface Settings {
    * Default 0.3 (30%). Only used when contextManagementMethod is sliding_window.
    */
   slidingWindowTruncatePercent: number;
+  /**
+   * Retry policy for LLM provider requests. When a request fails for any reason
+   * the backend waits and retries so the agent loop keeps working. Default ON.
+   */
+  retry: RetrySettings;
 }
 
 /** The four built-in reasoning-effort presets shown in Settings. */
@@ -1090,6 +1134,8 @@ export interface StreamRequest {
   context_management_method?: "summarization" | "sliding_window";
   /** Fraction freed per sliding-window trigger (0.05..0.9, default 0.3). */
   sliding_window_truncate_percent?: number;
+  /** Retry policy for provider requests this turn (from Settings). Default ON. */
+  retry?: RetrySettings;
 }
 
 /** SSE event payloads emitted by the mythgram agent. */
@@ -1111,6 +1157,15 @@ export interface SSEEventData {
   reasoning?: string | null;
   iteration_count?: number;
   aborted?: boolean;
+  // Provider retry event fields (emitted while the backend retries a failed request).
+  /** 1-based retry attempt number. */
+  attempt?: number;
+  /** Total configured attempts, or null when retrying indefinitely. */
+  max_attempts?: number | null;
+  /** Milliseconds until the next attempt. */
+  delay_ms?: number;
+  /** Scope of the retrying agent ("main", "chat", "team", "ceo", "promptagent", "memoryagent"). */
+  scope?: string;
   // Sub-agent side-channel fields
   agent?: string;
   task?: string;

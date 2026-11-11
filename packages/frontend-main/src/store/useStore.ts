@@ -36,6 +36,7 @@ import type {
   PlanApprovalStatus,
   PromptLibraryItem,
   ProviderMeta,
+  RetrySettings,
   SearchProvider,
   Settings,
   Skill,
@@ -85,6 +86,57 @@ import {
 } from "@/lib/taskModes";
 import { normalizePromptLibrary, newPromptLibraryId } from "@/lib/promptLibrary";
 import { manualLimitKey, sanitizeManualContextLimits } from "@/lib/contextMeter";
+import { defaultRetrySettings } from "@/types";
+
+/** Boolean coercion that understands the frontend's "yes"/"no" settings shape. */
+function toBool(value: unknown, fallback: boolean): boolean {
+  if (value === true || value === "yes" || value === "on" || value === 1) return true;
+  if (value === false || value === "no" || value === "off" || value === 0) return false;
+  return fallback;
+}
+
+/** Coerce one retry delay (ms) into the accepted 1s..1h range, or null when invalid. */
+function coerceRetryDelayMs(value: unknown): number | null {
+  const n =
+    typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.min(3_600_000, Math.max(1_000, Math.round(n)));
+}
+
+/**
+ * Defensively normalize a persisted/loaded retry policy. Absent or malformed
+ * input falls back to the defaults (retry ON), so an older persisted Settings
+ * document upgrades transparently.
+ */
+function sanitizeRetrySettings(raw: unknown): RetrySettings {
+  const defaults = defaultRetrySettings();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaults;
+  const record = raw as Record<string, unknown>;
+
+  const attempts: RetrySettings["attempts"] = [];
+  if (Array.isArray(record.attempts)) {
+    for (const item of record.attempts) {
+      let candidate: unknown = item;
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const entry = item as Record<string, unknown>;
+        candidate = entry.delayMs ?? entry.delay_ms ?? entry.delay ?? entry.ms;
+      }
+      const delayMs = coerceRetryDelayMs(candidate);
+      if (delayMs !== null) attempts.push({ delayMs });
+      if (attempts.length >= 100) break;
+    }
+  }
+
+  return {
+    enabled: toBool(record.enabled, defaults.enabled),
+    attempts: attempts.length > 0 ? attempts : defaults.attempts,
+    infinite: toBool(record.infinite, defaults.infinite),
+    restartOnPartialStream: toBool(
+      record.restartOnPartialStream ?? record.restart_on_partial_stream,
+      defaults.restartOnPartialStream,
+    ),
+  };
+}
 
 function sanitizeContextManagementMethod(raw: unknown): "summarization" | "sliding_window" {
   const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
@@ -823,6 +875,7 @@ const defaultSettings: Settings = {
   manualContextLimits: {},
   contextManagementMethod: "summarization",
   slidingWindowTruncatePercent: 0.3,
+  retry: defaultRetrySettings(),
 };
 
 function touch(conv: Conversation): Conversation {
@@ -1268,6 +1321,11 @@ export const useStore = create<AppState>()(
             slidingWindowTruncatePercent: sanitizeSlidingWindowTruncatePercent(
               (p.settings as { slidingWindowTruncatePercent?: unknown } | undefined)
                 ?.slidingWindowTruncatePercent,
+            ),
+            // Retry policy from older clients may be absent/malformed — normalize so a
+            // corrupt schedule can never break provider requests (defaults to ON).
+            retry: sanitizeRetrySettings(
+              (p.settings as { retry?: unknown } | undefined)?.retry,
             ),
           },
           subAgents: mergeSubAgentsWithDefaults(

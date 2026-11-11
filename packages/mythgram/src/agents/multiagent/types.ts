@@ -100,6 +100,8 @@ export interface RunTeamRequest {
   contextManagementMethod?: string;
   /** Fraction freed per sliding-window trigger (default 0.3). */
   slidingWindowTruncatePercent?: number;
+  /** Retry policy for this turn's provider requests (from Settings). See src/retry. */
+  retry?: import("../../retry/index.js").RetrySettings;
 }
 
 /**

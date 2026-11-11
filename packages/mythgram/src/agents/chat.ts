@@ -2,6 +2,7 @@ import type { AppConfig } from "../config.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import { resolveProvider } from "./providers/registry.js";
 import type { Provider } from "./providers/types.js";
+import { retryEventPayload, withRetry } from "../retry/index.js";
 import type { ToolRegistry } from "./tools/index.js";
 import type { ToolCall, ToolCallDelta } from "./providers/types.js";
 import type { ChatSession, StoredMessage } from "../services/sessionStore.js";
@@ -173,6 +174,11 @@ export interface RunChatRequest {
    * After how many completed user tasks the background memory agent runs. Defaults to 3.
    */
   memoryAgentInterval?: number;
+  /**
+   * Retry policy for this turn's provider requests (from Settings). When
+   * omitted the server default applies (retry ON). See src/retry.
+   */
+  retry?: import("../retry/index.js").RetrySettings;
 }
 
 export class ChatRunner {
@@ -218,7 +224,14 @@ export class ChatRunner {
     try {
       let provider: Provider;
       try {
-        provider = resolveProvider(this.providers, request.provider, request.customProvider);
+        // Retry every provider request of this chat turn per the turn's policy.
+        provider = withRetry(
+          resolveProvider(this.providers, request.provider, request.customProvider),
+          {
+            settings: request.retry,
+            onRetry: (info) => send("retry", retryEventPayload(info, "chat")),
+          },
+        );
       } catch (error) {
         send("error", { code: "provider_error", message: messageOf(error) });
         send("done", { ok: false });
@@ -475,6 +488,7 @@ export class ChatRunner {
             customProvider: request.customProvider,
             temperature: request.temperature,
             effort: request.effort,
+            retry: request.retry,
           });
           if (runId) {
             send("memory_agent_queued", { run_id: runId, chat_id: request.chatId });

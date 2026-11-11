@@ -89,6 +89,8 @@ export interface RunCeoRequest {
   contextManagementMethod?: string;
   /** Fraction freed per sliding-window trigger (default 0.3). */
   slidingWindowTruncatePercent?: number;
+  /** Retry policy for this turn's provider requests (from Settings). See src/retry. */
+  retry?: import("../../../retry/index.js").RetrySettings;
 }
 
 /** Role of an agent inside a CEO multi-agent system. */

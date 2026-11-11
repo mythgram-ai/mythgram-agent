@@ -9,6 +9,7 @@ import type { AskRequestStore } from "../services/askRequestStore.js";
 import type { SlidesTemplateChoiceStore } from "../slides/choiceStore.js";
 import type { SkillDefinition, SkillFileDefinition, SubAgentDefinition } from "../agents/tools/types.js";
 import { normalizeEffort } from "../agents/providers/reasoning.js";
+import { sanitizeRetrySettings } from "../retry/index.js";
 import { normalizeTodos } from "../agents/todos.js";
 import { normalizeMemoryFiles } from "../agents/memory.js";
 import { normalizeKnowledgeFiles } from "../agents/knowledge.js";
@@ -253,6 +254,11 @@ interface StreamBody {
    * default 0.3). From Settings → Sliding-window truncate percent.
    */
   sliding_window_truncate_percent?: unknown;
+  /**
+   * Retry policy for provider requests this turn (from Settings → Provider
+   * request retries). When omitted the server default applies (retry ON).
+   */
+  retry?: unknown;
 }
 
 /**
@@ -715,6 +721,7 @@ export function buildChatRouter(
           knowledge: normalizeKnowledgeFiles(body.knowledge),
           memoryAgentEnabled: parseMemoryAgentEnabled(body.memory_agent_enabled, config.memoryAgentEnabled),
           memoryAgentInterval: parseMemoryAgentInterval(body.memory_agent_interval, config.memoryAgentInterval),
+          retry: sanitizeRetrySettings(body.retry),
         };
 
         void chatRunner
@@ -774,6 +781,7 @@ export function buildChatRouter(
           slidingWindowTruncatePercent: sanitizeSlidingWindowTruncatePercent(
             body.sliding_window_truncate_percent,
           ),
+          retry: sanitizeRetrySettings(body.retry),
         };
 
         void ceoAgent
@@ -832,6 +840,7 @@ export function buildChatRouter(
           slidingWindowTruncatePercent: sanitizeSlidingWindowTruncatePercent(
             body.sliding_window_truncate_percent,
           ),
+          retry: sanitizeRetrySettings(body.retry),
         };
 
         void multiAgent
@@ -892,6 +901,7 @@ export function buildChatRouter(
         slidingWindowTruncatePercent: sanitizeSlidingWindowTruncatePercent(
           body.sliding_window_truncate_percent,
         ),
+        retry: sanitizeRetrySettings(body.retry),
       };
 
       // Custom Agent mode: when the active agent is a user-created top-level Custom Agent, run this

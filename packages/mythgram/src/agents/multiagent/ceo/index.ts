@@ -2,6 +2,7 @@ import type { AppConfig } from "../../../config.js";
 import type { ProviderRegistry } from "../../providers/registry.js";
 import { resolveProvider } from "../../providers/registry.js";
 import type { Provider } from "../../providers/types.js";
+import { retryEventPayload, withRetry } from "../../../retry/index.js";
 import type { ToolRegistry } from "../../tools/index.js";
 import type { ChatSession } from "../../../services/sessionStore.js";
 import type { SessionEventBuffer } from "../../../services/eventBuffer.js";
@@ -187,7 +188,15 @@ export class CeoAgentRunner {
     try {
       let provider: Provider;
       try {
-        provider = resolveProvider(this.providers, request.provider, request.customProvider);
+        // Retry provider requests for the whole organization (CEO, leaders, members,
+        // their sub-agents, and summarization handoffs) sharing this provider.
+        provider = withRetry(
+          resolveProvider(this.providers, request.provider, request.customProvider),
+          {
+            settings: request.retry,
+            onRetry: (info) => send("retry", retryEventPayload(info, "ceo")),
+          },
+        );
       } catch (error) {
         send("error", { code: "provider_error", message: messageOf(error) });
         send("done", { ok: false });

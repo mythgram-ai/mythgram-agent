@@ -3,6 +3,7 @@ import { buildSystemPrompt } from "./systemprompt.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import { resolveProvider } from "./providers/registry.js";
 import type { Provider } from "./providers/types.js";
+import { retryEventPayload, withRetry } from "../retry/index.js";
 import type { ToolRegistry } from "./tools/index.js";
 import {
   buildImageMessage,
@@ -189,6 +190,11 @@ export interface RunAgentRequest {
    * Defaults to 0.3 (30%). Per-turn override from Settings.
    */
   slidingWindowTruncatePercent?: number;
+  /**
+   * Retry policy for this turn's provider requests (from Settings). When
+   * omitted the server default applies (retry ON). See src/retry.
+   */
+  retry?: import("../retry/index.js").RetrySettings;
 }
 
 /** Lightweight identity of the Custom Agent handling a turn (see agents/customagent/configuration). */
@@ -418,7 +424,17 @@ export class AgentRunner {
     try {
       let provider: Provider;
       try {
-        provider = resolveProvider(this.providers, request.provider, request.customProvider);
+        // Wrap the resolved provider so EVERY provider request of this turn — the main
+        // agent, its sub-agents, and its context-summarization handoffs (all of which
+        // share this provider) — is retried on any failure per the turn's retry policy.
+        const scope = request.customAgent ? "custom" : "main";
+        provider = withRetry(
+          resolveProvider(this.providers, request.provider, request.customProvider),
+          {
+            settings: request.retry,
+            onRetry: (info) => send("retry", retryEventPayload(info, scope)),
+          },
+        );
       } catch (error) {
         send("error", { code: "provider_error", message: messageOf(error) });
         send("done", { ok: false });
@@ -1130,6 +1146,7 @@ export class AgentRunner {
             customProvider: request.customProvider,
             temperature: request.temperature,
             effort: request.effort,
+            retry: request.retry,
           });
           if (runId) {
             send("memory_agent_queued", { run_id: runId, chat_id: request.chatId });

@@ -204,6 +204,7 @@ function buildStartRequest(convId: string, text: string): StreamRequest {
       ).limit ?? undefined,
     context_management_method: settings.contextManagementMethod ?? "summarization",
     sliding_window_truncate_percent: settings.slidingWindowTruncatePercent ?? 0.3,
+    retry: settings.retry,
   };
 }
 

@@ -220,6 +220,7 @@ export function PromptAgentPanel() {
         fetch_provider: settings.fetchProvider,
         firecrawl_api_key: settings.firecrawlApiKey || undefined,
         skills,
+        retry: settings.retry,
       },
       signal: controller.signal,
       onEvent,

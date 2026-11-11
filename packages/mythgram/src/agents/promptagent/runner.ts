@@ -3,6 +3,7 @@ import type { AppConfig } from "../../config.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { resolveProvider } from "../providers/registry.js";
 import type { Provider } from "../providers/types.js";
+import { retryEventPayload, withRetry } from "../../retry/index.js";
 import type { ToolRegistry } from "../tools/index.js";
 import type { ToolCall, ToolCallDelta } from "../providers/types.js";
 import type { ChatSession, StoredMessage } from "../../services/sessionStore.js";
@@ -58,7 +59,14 @@ export class PromptAgentRunner {
     try {
       let provider: Provider;
       try {
-        provider = resolveProvider(this.providers, request.provider, request.customProvider);
+        // Retry every provider request of this prompt-agent turn per the turn's policy.
+        provider = withRetry(
+          resolveProvider(this.providers, request.provider, request.customProvider),
+          {
+            settings: request.retry,
+            onRetry: (info) => send("retry", retryEventPayload(info, "promptagent")),
+          },
+        );
       } catch (error) {
         send("error", { code: "provider_error", message: messageOf(error) });
         send("done", { ok: false });

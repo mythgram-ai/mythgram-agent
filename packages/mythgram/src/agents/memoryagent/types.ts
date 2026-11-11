@@ -45,4 +45,6 @@ export interface MemoryAgentBuildRequest {
   customProvider?: unknown;
   temperature?: number;
   effort?: string;
+  /** Retry policy inherited from the turn that triggered this memory build. See src/retry. */
+  retry?: import("../../retry/index.js").RetrySettings;
 }

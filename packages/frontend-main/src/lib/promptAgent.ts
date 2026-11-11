@@ -1,6 +1,6 @@
 import { API_ROUTES, routeUrl } from "@/app/api/routes";
 import { parseSSEStream } from "@/lib/sse";
-import type { SSEEventData } from "@/types";
+import type { SSEEventData, RetrySettings } from "@/types";
 
 export type PromptAgentMode = "create" | "enhance";
 
@@ -31,6 +31,8 @@ export interface PromptAgentStreamBody {
   fetch_provider?: string;
   firecrawl_api_key?: string;
   skills?: unknown[];
+  /** Retry policy for provider requests (from Settings). Default ON. */
+  retry?: RetrySettings;
   since_event_id?: number;
 }
 

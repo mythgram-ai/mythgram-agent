@@ -6,6 +6,7 @@ import { SessionEventBuffer } from "../services/eventBuffer.js";
 import type { SessionStore, StoredMessage } from "../services/sessionStore.js";
 import type { SkillDefinition } from "../agents/tools/types.js";
 import { normalizeEffort } from "../agents/providers/reasoning.js";
+import { sanitizeRetrySettings } from "../retry/index.js";
 import { initSSE, formatSSE } from "../utils/sse.js";
 
 /** Extract a string field from an untrusted object. */
@@ -54,6 +55,8 @@ interface StreamBody {
   fetch_provider?: "builtin" | "firecrawl";
   firecrawl_api_key?: string;
   skills?: unknown;
+  /** Retry policy for provider requests this turn (from Settings). */
+  retry?: unknown;
 }
 
 /** Defensively coerce the client-provided skill definitions. */
@@ -177,6 +180,7 @@ export function buildPromptAgentRouter(
         fetchProvider: body.fetch_provider,
         firecrawlApiKey: body.firecrawl_api_key,
         skills: normalizeSkills(body.skills),
+        retry: sanitizeRetrySettings(body.retry),
       };
 
       void runner
