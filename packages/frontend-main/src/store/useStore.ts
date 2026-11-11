@@ -400,6 +400,16 @@ interface AppState {
   /** Batched hot-path append: content + reasoning deltas and the resume cursor in one write. */
   applyAssistantDelta: (convId: string, msgId: string, delta: StreamDelta) => void;
   upsertTool: (convId: string, msgId: string, tool: ToolActivity) => void;
+  /** Record that a failed provider request is being retried (starts/syncs the countdown block). */
+  registerRetry: (
+    convId: string,
+    msgId: string,
+    info: { attempt: number; maxAttempts: number | null; delayMs: number; error: string; scope?: string },
+  ) => void;
+  /** Mark the active retry as recovered once the provider served the request again. */
+  recoverRetry: (convId: string, msgId: string) => void;
+  /** Remove the retry block (used when the turn ends while still waiting). */
+  clearRetry: (convId: string, msgId: string) => void;
 
   // Active run (resumable streaming)
   setActiveRun: (run: ActiveRun | null) => void;
@@ -1646,7 +1656,7 @@ export const useStore = create<AppState>()(
                   ...c,
                   messages: c.messages.map((m) =>
                     m.id === msgId
-                      ? { ...m, content: "", reasoning: "", tools: [], team: undefined, streaming: true }
+                      ? { ...m, content: "", reasoning: "", tools: [], team: undefined, retry: undefined, streaming: true }
                       : m,
                   ),
                 }
@@ -1704,6 +1714,70 @@ export const useStore = create<AppState>()(
               : c,
           ),
         })),
+
+      registerRetry: (convId, msgId, info) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === msgId
+                      ? {
+                          ...m,
+                          retry: {
+                            attempt: info.attempt,
+                            maxAttempts: info.maxAttempts,
+                            delayMs: info.delayMs,
+                            error: info.error,
+                            scope: info.scope,
+                            startedAt: Date.now(),
+                            status: "waiting" as const,
+                            total: (m.retry?.total ?? 0) + 1,
+                          },
+                        }
+                      : m,
+                  ),
+                }
+              : c,
+          ),
+        })),
+
+      recoverRetry: (convId, msgId) =>
+        set((s) => {
+          let changed = false;
+          const conversations = s.conversations.map((c) => {
+            if (c.id !== convId) return c;
+            const messages = c.messages.map((m) => {
+              if (m.id === msgId && m.retry && m.retry.status === "waiting") {
+                changed = true;
+                return { ...m, retry: { ...m.retry, status: "recovered" as const } };
+              }
+              return m;
+            });
+            return changed ? { ...c, messages } : c;
+          });
+          return changed ? { conversations } : {};
+        }),
+
+      clearRetry: (convId, msgId) =>
+        set((s) => {
+          let changed = false;
+          const conversations = s.conversations.map((c) => {
+            if (c.id !== convId) return c;
+            const messages = c.messages.map((m) => {
+              // Only drop a retry that is still WAITING (e.g. the turn was aborted
+              // mid-backoff). A recovered retry is kept as a compact history line.
+              if (m.id === msgId && m.retry && m.retry.status === "waiting") {
+                changed = true;
+                return { ...m, retry: undefined };
+              }
+              return m;
+            });
+            return changed ? { ...c, messages } : c;
+          });
+          return changed ? { conversations } : {};
+        }),
 
       setActiveRun: (activeRun) => set({ activeRun }),
       setActiveRunCursor: (lastEventId) =>

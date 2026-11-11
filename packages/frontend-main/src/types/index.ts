@@ -637,6 +637,31 @@ export interface TeamRunState {
   monitor: TeamMonitorEntry[];
 }
 
+/**
+ * Live retry state for one assistant message. Populated from the backend's
+ * `retry` stream events while a failed LLM provider request is being retried,
+ * so the UI can render a dedicated countdown block instead of hiding the retry
+ * inside the reasoning trace.
+ */
+export interface RetryActivity {
+  /** 1-based retry attempt currently being scheduled. */
+  attempt: number;
+  /** Total configured attempts, or null when the policy retries indefinitely. */
+  maxAttempts: number | null;
+  /** Milliseconds to wait before this attempt is issued (drives the countdown). */
+  delayMs: number;
+  /** The error that triggered this retry. */
+  error: string;
+  /** Which agent triggered the retry ("main", "custom", "chat", "team", "ceo", "promptagent", "memoryagent"). */
+  scope?: string;
+  /** Client timestamp (ms) when this attempt's countdown began. */
+  startedAt: number;
+  /** "waiting" while the countdown runs; "recovered" once the provider served the request again. */
+  status: "waiting" | "recovered";
+  /** Cumulative retry count across the whole turn (including recovered attempts). */
+  total: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -647,6 +672,8 @@ export interface ChatMessage {
   createdAt: number;
   /** Present when this assistant message is the container for a multi-agent team turn. */
   team?: TeamRunState;
+  /** Present while/after the provider retried a failed request for this message. */
+  retry?: RetryActivity;
 }
 
 export interface Conversation {

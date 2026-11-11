@@ -262,6 +262,9 @@ export function useChatStream(onFilesChanged?: () => void) {
         }
 
         store.updateMessage(convId, assistantId, { streaming: false });
+        // Drop a still-waiting retry block (e.g. the turn was aborted mid-backoff);
+        // a recovered retry is kept as a compact history line.
+        store.clearRetry(convId, assistantId);
         store.setStreaming(false);
         store.setActiveRun(null);
         store.setConnection(navigator.onLine === false ? "offline" : "online");

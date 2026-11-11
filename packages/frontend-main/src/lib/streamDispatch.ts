@@ -164,6 +164,23 @@ function agentOf(data: SSEEventData): {
 }
 
 /**
+ * Message ids with an in-flight provider retry, keyed by `<convId>::<msgId>`. The
+ * high-frequency token/reasoning events consult this set to mark the retry as
+ * recovered in O(1) — no per-delta store scan or extra re-render.
+ */
+const activeRetryKeys = new Set<string>();
+
+function retryKey(convId: string, msgId: string): string {
+  return `${convId}::${msgId}`;
+}
+
+/** Mark a message's waiting retry as recovered (its request has resumed streaming). */
+function recoverActiveRetry(convId: string, msgId: string): void {
+  if (!activeRetryKeys.delete(retryKey(convId, msgId))) return;
+  useStore.getState().recoverRetry(convId, msgId);
+}
+
+/**
  * Apply a single SSE event to the store. Token/reasoning events go through the batcher
  * (rAF-coalesced); everything else is applied immediately after flushing the batcher so
  * ordering between streamed text and structured events is preserved.
@@ -176,7 +193,20 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
   // full replay rebuilds it deterministically — no duplicated or missing tokens.
   if (ctx.resume.pending) {
     ctx.resume.pending = false;
+    activeRetryKeys.delete(retryKey(convId, msgId));
     s.resetMessageStream(convId, msgId);
+  }
+
+  // A provider retry resolves as soon as any other event arrives for the message
+  // (the request succeeded and normal streaming resumed). Retry and terminal events
+  // are handled explicitly: a new retry refreshes the countdown, while a terminal
+  // event clears a still-waiting retry (e.g. the turn was aborted mid-backoff).
+  if (event === "retry") {
+    activeRetryKeys.add(retryKey(convId, msgId));
+  } else if (event === "error" || event === "done") {
+    if (activeRetryKeys.delete(retryKey(convId, msgId))) s.clearRetry(convId, msgId);
+  } else {
+    recoverActiveRetry(convId, msgId);
   }
 
   switch (event) {
@@ -1099,16 +1129,14 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
     }
 
     case "retry": {
-      // The backend is retrying a failed provider request. Surface it in the
-      // thinking trace (never the final answer) so the turn visibly keeps going.
-      const attempt = Number(data.attempt ?? 0);
-      const maxAttempts = data.max_attempts;
-      const delaySec = Math.max(0, Math.round(Number(data.delay_ms ?? 0) / 1000));
-      const scope = typeof data.scope === "string" && data.scope ? ` (${data.scope})` : "";
-      const total = maxAttempts === null || maxAttempts === undefined ? "" : `/${maxAttempts}`;
-      const detail = typeof data.error === "string" && data.error ? ` — ${data.error}` : "";
-      s.applyAssistantDelta(convId, msgId, {
-        reasoningDelta: `\n\n⟳ Provider request failed${scope}; retrying in ${delaySec}s (attempt ${attempt}${total})${detail}\n`,
+      // A failed provider request is being retried: refresh the dedicated countdown
+      // block for this message (never the reasoning trace / final answer).
+      s.registerRetry(convId, msgId, {
+        attempt: Number(data.attempt ?? 0),
+        maxAttempts: data.max_attempts === undefined ? null : data.max_attempts,
+        delayMs: Math.max(0, Number(data.delay_ms ?? 0)),
+        error: typeof data.error === "string" ? data.error : "",
+        scope: typeof data.scope === "string" ? data.scope : undefined,
       });
       break;
     }

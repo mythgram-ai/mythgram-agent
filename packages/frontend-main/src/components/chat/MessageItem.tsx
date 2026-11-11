@@ -11,6 +11,7 @@ import { AskSlidesTemplateBlock } from "./AskSlidesTemplateBlock";
 import { PresentSlidesBlock } from "./PresentSlidesBlock";
 import { ShowArtifactBlock } from "./ShowArtifactBlock";
 import { TeamRunView } from "./TeamRunView";
+import { RetryBlock } from "./RetryBlock";
 import { SavePromptModal } from "@/components/panels/PromptLibraryPanel";
 
 /** Tools that render as full-width blocks instead of inline chips. */
@@ -65,7 +66,9 @@ function MessageItemImpl({ message }: { message: ChatMessage }) {
 
   const hasContent = message.content.trim().length > 0;
   const isTeam = Boolean(message.team);
-  const showThinking = message.streaming && !hasContent && tools.length === 0 && !isTeam;
+  // A retry block replaces the generic thinking indicator so the user sees the
+  // actual provider-retry state (attempt, countdown) while the request is retried.
+  const showThinking = message.streaming && !hasContent && tools.length === 0 && !isTeam && !message.retry;
 
   return (
     <div className="flex gap-3 fade-in">
@@ -80,6 +83,14 @@ function MessageItemImpl({ message }: { message: ChatMessage }) {
 
       <div className="min-w-0 flex-1 space-y-2.5">
         {isTeam && message.team && <TeamRunView team={message.team} />}
+
+        {message.retry && (
+          <RetryBlock
+            key={`${message.retry.startedAt}-${message.retry.attempt}`}
+            retry={message.retry}
+            streaming={message.streaming === true}
+          />
+        )}
 
         {message.reasoning && message.reasoning.trim().length > 0 && (
           <div className="overflow-hidden rounded-[var(--radius-md)] bg-[var(--chip)]">
