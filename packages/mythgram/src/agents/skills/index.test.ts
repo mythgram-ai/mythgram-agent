@@ -9,6 +9,7 @@ import {
 import type { SkillDefinition } from "../tools/types.js";
 
 const EXPECTED_SKILLS = [
+  "agent-browser",
   "article-writer",
   "coder",
   "code-reviewer",
@@ -26,6 +27,7 @@ const EXPECTED_SKILLS = [
   "mobile-app-designer",
   "music-generator",
   "pdf-creator",
+  "playwright-cli",
   "pptx-creator",
   "problem-solver",
   "professional-writer",
