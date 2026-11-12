@@ -7,7 +7,7 @@ import { createProviderRegistry } from "./agents/providers/registry.js";
 import { createToolRegistry } from "./agents/tools/index.js";
 import { AgentRunner } from "./agents/agent.js";
 import { ChatRunner } from "./agents/chat.js";
-import { SessionStore } from "./services/sessionStore.js";
+import { SessionManager } from "./session/index.js";
 import { PlanApprovalStore } from "./services/planApprovalStore.js";
 import { QuestionStore } from "./services/questionStore.js";
 import { AskRequestStore } from "./services/askRequestStore.js";
@@ -74,7 +74,9 @@ function main(): void {
 
   const providers = createProviderRegistry();
   const tools = createToolRegistry();
-  const store = new SessionStore();
+  // Multi-session system: every chat runs independently, so multiple sessions can
+  // stream at once. `store` is the run registry + in-memory transcript map.
+  const store = new SessionManager();
   const planApprovals = new PlanApprovalStore();
   const askQuestions = new QuestionStore();
   // Human-in-the-loop information requests (ask_for_something): the tool registers a pending form
@@ -359,7 +361,18 @@ function main(): void {
   app.use("/api/workspace", buildWorkspaceRouter());
   app.use("/api/scrape", buildScrapeRouter(config));
   app.use("/api/state", buildStateRouter(db));
-  app.use("/api/sessions", buildSessionsRouter(db, { store, config, mainAgentPrompts, customAgents, multiAgent, ceoAgent }));
+  app.use(
+    "/api/sessions",
+    buildSessionsRouter(db, {
+      store,
+      sessionManager: store,
+      config,
+      mainAgentPrompts,
+      customAgents,
+      multiAgent,
+      ceoAgent,
+    }),
+  );
   app.use("/api/memory-agent", buildMemoryAgentRouter(memoryAgent));
   app.use("/api/connectors", buildConnectorsRouter(connectors, config));
   app.use("/api/mcp", buildMcpRouter(mcp));

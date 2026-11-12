@@ -7,6 +7,7 @@ import {
 } from "../database/index.js";
 import type { AppConfig } from "../config.js";
 import type { SessionStore, StoredMessage } from "../services/sessionStore.js";
+import type { SessionManager } from "../session/index.js";
 import { buildSystemPrompt } from "../agents/systemprompt.js";
 import { buildChatSystemPrompt } from "../agents/chat.js";
 import { subAgentSessionStore } from "../agents/subAgentSessionStore.js";
@@ -67,6 +68,8 @@ export function buildSessionsRouter(
   db: MythgramDatabase,
   deps?: {
     store?: SessionStore;
+    /** Multi-session run registry (the live "which chats are running" source). */
+    sessionManager?: SessionManager;
     config?: AppConfig;
     mainAgentPrompts?: MainAgentPromptManager;
     customAgents?: CustomAgentManager;
@@ -82,6 +85,15 @@ export function buildSessionsRouter(
     const title = typeof body.title === "string" ? body.title.slice(0, 200) : "";
     const session = db.sessions.create(title);
     res.json({ ok: true, id: session.id, session });
+  });
+
+  /**
+   * Every chat session the backend is CURRENTLY streaming. The client uses this to
+   * re-attach to all concurrent runs after a refresh — not just one. Declared before
+   * `/:id` so the literal path wins over the parameterized route.
+   */
+  router.get("/running", (_req: Request, res: Response) => {
+    res.json({ ok: true, running: deps?.sessionManager?.runningSessions() ?? [] });
   });
 
   router.get("/", (_req: Request, res: Response) => {

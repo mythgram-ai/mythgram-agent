@@ -2,7 +2,8 @@ import { Router, type Request, type Response } from "express";
 import type { AppConfig } from "../config.js";
 import { AgentRunner, type RunAgentRequest } from "../agents/agent.js";
 import { SessionEventBuffer } from "../services/eventBuffer.js";
-import type { SessionStore, StoredMessage } from "../services/sessionStore.js";
+import type { StoredMessage } from "../services/sessionStore.js";
+import type { SessionManager } from "../session/index.js";
 import type { PlanApprovalStore } from "../services/planApprovalStore.js";
 import type { QuestionStore } from "../services/questionStore.js";
 import type { AskRequestStore } from "../services/askRequestStore.js";
@@ -514,7 +515,7 @@ function normalizeRoles(raw: unknown): RoleDefinition[] {
 
 export function buildChatRouter(
   agent: AgentRunner,
-  store: SessionStore,
+  sessions: SessionManager,
   config: AppConfig,
   planApprovals: PlanApprovalStore,
   askQuestions: QuestionStore,
@@ -597,6 +598,8 @@ export function buildChatRouter(
     buffer: SessionEventBuffer,
   ): void => {
     if (session.eventBuffer !== buffer) return;
+    // Release this run from the multi-session registry (idempotent for aborts).
+    sessions.finishRun(chatId, buffer);
     try {
       db.queue.enqueueMessages(chatId, session.messages);
       db.sessions.finishTurn(chatId, buffer.lastEventId);
@@ -607,15 +610,15 @@ export function buildChatRouter(
 
   router.post("/abort/:chatId", (req: Request, res: Response) => {
     const chatId = String(req.params.chatId);
-    const session = store.get(chatId);
+    const session = sessions.get(chatId);
     if (!session) {
       res.json({ ok: false });
       return;
     }
-    session.abortController?.abort();
-    session.eventBuffer?.setDone();
-    session.running = false;
-    if (session.eventBuffer) settleTurn(chatId, session, session.eventBuffer);
+    // Stop ONLY this chat's turn — every other running session keeps streaming.
+    const buffer = session.eventBuffer;
+    sessions.abortRun(chatId);
+    if (buffer) settleTurn(chatId, session, buffer);
     res.json({ ok: true });
   });
 
@@ -760,19 +763,12 @@ export function buildChatRouter(
     );
 
     if (startNew) {
-      // Cancel any in-flight turn for this chat before starting a fresh one.
-      const existing = store.get(chatId);
-      if (existing?.running) {
-        existing.abortController?.abort();
-        existing.eventBuffer?.setDone();
-      }
-
       // Transcript source of truth, in order of fidelity:
       //   1. the in-memory session (full provider transcript incl. tool calls/results),
       //   2. the SQLite transcript (survives backend restarts with full fidelity),
       //   3. the client-sent history (lossy, text-only — last resort for fresh installs).
       // Never let the lossy client history overwrite a richer stored transcript.
-      const session = store.getOrCreate(chatId);
+      const session = sessions.getOrCreate(chatId);
       if (session.messages.length === 0) {
         const persisted = db.messages.list(chatId);
         session.messages =
@@ -780,19 +776,25 @@ export function buildChatRouter(
         session.updatedAt = Date.now();
       }
 
-      // Register the turn in the database (creates the session row on first use) and
-      // wire every SSE event — main agent AND sub-agents — into the batched write queue.
+      // Replace only THIS chat's in-flight turn (if any) before registering the new
+      // one; every other running session is left untouched.
+      sessions.abortRun(chatId);
+
+      // Register the turn in the database (creates the session row on first use).
       const title = (body.user_message ?? "").trim().slice(0, 80);
       const turn = db.sessions.startTurn(chatId, title);
       // Connected app connectors for this turn (Composio key + account references).
       const { apiKey: composioApiKey, refs: connectorRefs } = resolveConnectors(body);
-      const buffer = new SessionEventBuffer((id, event, data) => {
-        db.queue.enqueueEvent(chatId, turn, id, event, data);
+
+      // Multi-session: start this chat's run through the session manager. Only the SAME
+      // chat's previous turn is replaced; every OTHER running session keeps streaming,
+      // so starting a new task never interrupts a session that is already running. The
+      // sink wires every SSE event (main agent AND sub-agents) into the batched write queue.
+      const { buffer, abortController } = sessions.startRun(chatId, {
+        sink: (id, event, data) => {
+          db.queue.enqueueEvent(chatId, turn, id, event, data);
+        },
       });
-      const abortController = new AbortController();
-      session.eventBuffer = buffer;
-      session.abortController = abortController;
-      session.running = true;
 
       // Chat mode: lightweight conversational assistant with only memory + knowledge + web
       // tools. Takes precedence over CEO / team / Custom Agent modes — a chat turn never
@@ -1060,7 +1062,7 @@ export function buildChatRouter(
     }
 
     // Reconnect path: attach to an existing buffer and replay from since_event_id.
-    const session = store.get(chatId);
+    const session = sessions.get(chatId);
     if (session?.eventBuffer) {
       await streamFromBuffer(res, session.eventBuffer, body.since_event_id ?? -1);
       return;

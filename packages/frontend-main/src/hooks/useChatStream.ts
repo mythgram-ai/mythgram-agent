@@ -299,13 +299,14 @@ function buildStartRequest(convId: string, text: string): StreamRequest {
 }
 
 export function useChatStream(onFilesChanged?: () => void) {
-  const abortRef = useRef<AbortController | null>(null);
-  const runningRef = useRef(false);
+  // Multi-session: one abort controller per conversation. Any number of chats can
+  // stream at once; only the same conversation's own turn is ever replaced.
+  const runsRef = useRef<Map<string, AbortController>>(new Map());
   // Queue plumbing: refs let the queue drain call back into the latest `sendTo`
   // without making `drive`/`drainQueue` depend on each other's identity.
   const sendToRef = useRef<(convId: string, text: string) => Promise<void>>(async () => {});
   const drainRef = useRef<((preferredConvId?: string) => void) | null>(null);
-  const drainingRef = useRef(false);
+  const drainingRef = useRef<Set<string>>(new Set());
 
   const drive = useCallback(
     async (params: {
@@ -316,13 +317,12 @@ export function useChatStream(onFilesChanged?: () => void) {
     }) => {
       const { convId, assistantId, start, resume } = params;
       const controller = new AbortController();
-      abortRef.current = controller;
-      runningRef.current = true;
+      runsRef.current.set(convId, controller);
 
       const batcher = new StreamBatcher(convId, assistantId);
       const resumeFlag = { pending: resume };
 
-      useStore.getState().setStreaming(true);
+      useStore.getState().setChatStreaming(convId, true);
       useStore.getState().setConnection(navigator.onLine === false ? "offline" : "online");
 
       let result: StreamResult = "aborted";
@@ -338,14 +338,14 @@ export function useChatStream(onFilesChanged?: () => void) {
             dispatchStreamEvent(event, data, { convId, msgId: assistantId, batcher, onFilesChanged, resume: resumeFlag });
           },
           onPhase: phaseToConnection,
-          onCursor: (id) => useStore.getState().setActiveRunCursor(id),
+          onCursor: (id) => useStore.getState().setRunCursor(convId, id),
         });
       } catch {
         result = "aborted";
       } finally {
         batcher.dispose();
-        runningRef.current = false;
-        abortRef.current = null;
+        // Only drop this chat's controller; sibling sessions keep streaming.
+        if (runsRef.current.get(convId) === controller) runsRef.current.delete(convId);
 
         const store = useStore.getState();
         // "gone": the backend no longer has this run. If nothing was produced, leave a marker.
@@ -367,8 +367,8 @@ export function useChatStream(onFilesChanged?: () => void) {
         // Drop a still-waiting retry block (e.g. the turn was aborted mid-backoff);
         // a recovered retry is kept as a compact history line.
         store.clearRetry(convId, assistantId);
-        store.setStreaming(false);
-        store.setActiveRun(null);
+        store.setChatStreaming(convId, false);
+        store.clearActiveRun(convId);
         store.setConnection(navigator.onLine === false ? "offline" : "online");
         onFilesChanged?.();
 
@@ -389,46 +389,42 @@ export function useChatStream(onFilesChanged?: () => void) {
   );
 
   /**
-   * Send the next queued prompt (for `preferredConvId` first, else any queue in the
-   * active profile). Runs one turn at a time; each finished turn re-invokes this so
-   * multiple prompts drain one after another with no user interaction. A no-op while
-   * a turn is already running. Never sends another profile's queued prompts.
+   * Drain queued prompts. Multi-session: each conversation drains its OWN queue
+   * independently, so a queue staged in one chat keeps flowing while other chats run.
+   * A conversation that is already streaming (or already draining) is skipped so it is
+   * never sent two turns at once. Never sends another profile's queued prompts.
    */
   const drainQueue = useCallback((preferredConvId?: string) => {
-    if (runningRef.current || drainingRef.current) return;
     const store = useStore.getState();
     const active = store.activeUserProfileId ?? DEFAULT_PROFILE_ID;
-    const drainable = (convId: string): boolean => {
+    const candidates = preferredConvId ? [preferredConvId] : Object.keys(store.promptQueues);
+    for (const convId of candidates) {
       const list = store.promptQueues[convId];
-      if (!list || list.length === 0) return false;
+      if (!list || list.length === 0) continue;
+      if (runsRef.current.has(convId) || drainingRef.current.has(convId)) continue;
       const conv = store.conversations.find((c) => c.id === convId);
-      if (!conv) return false;
-      return (conv.profileId ?? DEFAULT_PROFILE_ID) === active;
-    };
-    const candidate =
-      (preferredConvId && drainable(preferredConvId) ? preferredConvId : null) ??
-      Object.keys(store.promptQueues).find(drainable) ??
-      null;
-    if (!candidate) return;
+      if (!conv || (conv.profileId ?? DEFAULT_PROFILE_ID) !== active) continue;
 
-    drainingRef.current = true;
-    void (async () => {
-      try {
-        // A queued prompt restored from the database may target a not-yet-loaded
-        // stub; pull its history first so the turn's context is complete.
+      drainingRef.current.add(convId);
+      void (async () => {
         try {
-          await loadConversationIfNeeded(candidate);
-        } catch {
-          // best effort — send with whatever is in memory
+          // A queued prompt restored from the database may target a not-yet-loaded
+          // stub; pull its history first so the turn's context is complete.
+          try {
+            await loadConversationIfNeeded(convId);
+          } catch {
+            // best effort — send with whatever is in memory
+          }
+          if (runsRef.current.has(convId)) return;
+          const text = useStore.getState().dequeuePrompt(convId);
+          if (text) await sendToRef.current(convId, text);
+        } finally {
+          drainingRef.current.delete(convId);
+          // Continue with this conversation's remaining queue.
+          drainRef.current?.(convId);
         }
-        const text = useStore.getState().dequeuePrompt(candidate);
-        if (text) await sendToRef.current(candidate, text);
-      } finally {
-        drainingRef.current = false;
-        // Continue with the remaining queue (the finished turn triggers the next pass).
-        drainRef.current?.(candidate);
-      }
-    })();
+      })();
+    }
   }, []);
 
   /**
@@ -439,7 +435,9 @@ export function useChatStream(onFilesChanged?: () => void) {
   const sendTo = useCallback(
     async (convId: string, text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || runningRef.current) return;
+      // Only this conversation's own running turn blocks a new send; other sessions
+      // may keep streaming in parallel.
+      if (!trimmed || runsRef.current.has(convId)) return;
 
       const store = useStore.getState();
       // Main-agent context-limit gate: without an effective limit (provider
@@ -513,7 +511,7 @@ export function useChatStream(onFilesChanged?: () => void) {
   /** Send a prompt into the current conversation (the composer's Send action). */
   const send = useCallback(
     async (text: string) => {
-      if (!text.trim() || runningRef.current) return;
+      if (!text.trim()) return;
       const convId = useStore.getState().ensureConversation();
       await sendTo(convId, text);
     },
@@ -527,11 +525,12 @@ export function useChatStream(onFilesChanged?: () => void) {
    */
   const resume = useCallback(
     async (run: ActiveRun) => {
-      if (runningRef.current) return;
+      // Already streaming this chat (e.g. two boot resumes): don't double-attach.
+      if (runsRef.current.has(run.chatId)) return;
       const store = useStore.getState();
       const conv = store.conversations.find((c) => c.id === run.chatId);
       if (!conv) {
-        store.setActiveRun(null);
+        store.clearActiveRun(run.chatId);
         return;
       }
       let assistantId = run.assistantId;
@@ -565,18 +564,20 @@ export function useChatStream(onFilesChanged?: () => void) {
 
   const stop = useCallback(async () => {
     const store = useStore.getState();
-    const run = store.activeRun;
+    // Stop ONLY the conversation on screen — other running sessions keep going.
+    const target = store.currentId ?? store.activeRun?.chatId ?? null;
+    if (!target) return;
     // Explicit user cancellation — this is the ONLY thing that stops the backend agent.
-    abortRef.current?.abort();
-    if (run?.chatId) await abortChat(run.chatId);
-    store.setActiveRun(null);
-    store.setStreaming(false);
+    runsRef.current.get(target)?.abort();
+    await abortChat(target);
+    store.clearActiveRun(target);
+    store.setChatStreaming(target, false);
   }, []);
 
   /** Resume an interrupted task by asking the agent to carry on in the same conversation. */
   const continueTask = useCallback(
     async (convId: string) => {
-      if (runningRef.current) return;
+      if (runsRef.current.has(convId)) return;
       const store = useStore.getState();
       if (store.currentId !== convId) store.selectConversation(convId);
       await send(CONTINUE_PROMPT);
@@ -584,7 +585,17 @@ export function useChatStream(onFilesChanged?: () => void) {
     [send],
   );
 
-  return { send, resume, stop, continueTask, drainQueue, isRunning: () => runningRef.current };
+  return {
+    send,
+    resume,
+    stop,
+    continueTask,
+    drainQueue,
+    isRunning: () => {
+      const id = useStore.getState().currentId;
+      return id ? runsRef.current.has(id) : false;
+    },
+  };
 }
 
 /** Keep the global connection indicator honest even when no stream is active. */

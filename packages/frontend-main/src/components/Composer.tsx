@@ -16,7 +16,9 @@ import { cn } from "@/utils/cn";
 
 export function Composer({ onSend, onStop }: { onSend: (text: string) => void; onStop: () => void }) {
   const [value, setValue] = useState("");
-  const streaming = useStore((s) => s.streaming);
+  // Multi-session: "streaming" is scoped to the conversation on screen, so a running
+  // session elsewhere never turns Send into Queue here.
+  const streaming = useStore((s) => (s.currentId ? Boolean(s.streamingChats[s.currentId]) : false));
   const settings = useStore((s) => s.settings);
   const customProviders = useStore((s) => s.customProviders);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);

@@ -122,27 +122,26 @@ export function App() {
       // queue is still executing (the agent keeps running regardless of the browser).
       void attachLatestMemoryAgentRun();
 
-      // Re-attach to a still-running stream (survives refresh/close/reconnect) —
-      // but only when that run belongs to the active profile. Profiles are strictly
-      // isolated: another profile's running turn must never surface here.
-      const running = payload.sessions.find((s) => s.running);
-      if (running) {
-        const peer = useStore.getState();
+      // Re-attach to EVERY still-running stream (survives refresh/close/reconnect) —
+      // multi-session: several chats may be streaming at once. Only runs that belong to
+      // the active profile are resumed; profiles are strictly isolated.
+      const peer = useStore.getState();
+      const activePid = peer.activeUserProfileId ?? null;
+      const runningSessions = payload.sessions.filter((s) => s.running);
+      for (const running of runningSessions) {
         const owner = peer.conversations.find((c) => c.id === running.id);
-        if (owner && (owner.profileId ?? null) === (peer.activeUserProfileId ?? null)) {
-          await loadConversationIfNeeded(running.id);
-          void resume({
-            chatId: running.id,
-            assistantId: "", // rebuilt by resume(): a fresh placeholder receives the replay
-            lastEventId: -1,
-            startedAt: Date.now(),
-          });
-        }
-      } else {
-        // No turn is running: flush any prompt queue restored from the database so
-        // staged prompts continue automatically (the queue works in the background).
-        drainQueue();
+        if (!owner || (owner.profileId ?? null) !== activePid) continue;
+        await loadConversationIfNeeded(running.id);
+        void resume({
+          chatId: running.id,
+          assistantId: "", // rebuilt by resume(): a fresh placeholder receives the replay
+          lastEventId: -1,
+          startedAt: Date.now(),
+        });
       }
+      // Flush any prompt queue restored from the database so staged prompts continue
+      // automatically. Sessions that are already streaming are skipped by the drain.
+      drainQueue();
     })();
   }, [resume, setProviders, drainQueue]);
 

@@ -10,7 +10,8 @@ export function MessageList({
   messages: ChatMessage[];
   onContinue?: () => void;
 }) {
-  const streaming = useStore((s) => s.streaming);
+  // Per-session: another chat streaming in the background never hides Continue here.
+  const streaming = useStore((s) => (s.currentId ? Boolean(s.streamingChats[s.currentId]) : false));
   // A cheap streaming signal: message count + the tail message's size. Avoids scanning the
   // whole conversation on every token.
   const last = messages[messages.length - 1];

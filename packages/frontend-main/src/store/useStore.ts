@@ -435,7 +435,21 @@ interface AppState {
    * background. Persisted with the backend so a queue survives a refresh.
    */
   promptQueues: Record<string, string[]>;
+  /**
+   * The most recently started run, kept for the focused-session UI. When several
+   * sessions stream at once the per-chat map below is the source of truth.
+   */
   activeRun: ActiveRun | null;
+  /**
+   * Multi-session: every currently active run keyed by chat id. Several chats can
+   * stream at the same time; each keeps its own resume cursor for reconnect.
+   */
+  activeRuns: Record<string, ActiveRun>;
+  /**
+   * Multi-session: which conversations are streaming right now, keyed by chat id.
+   * Drives per-thread UI (composer Send vs Queue, Stop button, Continue button).
+   */
+  streamingChats: Record<string, boolean>;
 
   // Ephemeral UI
   /** True once the store has been hydrated from the backend database. */
@@ -595,9 +609,13 @@ interface AppState {
     },
   ) => void;
 
-  // Active run (resumable streaming)
+  // Active run (resumable streaming). Multi-session: runs are tracked per chat id.
   setActiveRun: (run: ActiveRun | null) => void;
-  setActiveRunCursor: (lastEventId: number) => void;
+  clearActiveRun: (chatId: string) => void;
+  /** Advance one conversation's resume cursor (multi-session aware). */
+  setRunCursor: (chatId: string, lastEventId: number) => void;
+  /** Mark one conversation as streaming (or not) — never touches sibling sessions. */
+  setChatStreaming: (convId: string, streaming: boolean) => void;
 
   // submit_plan review
   setPlanPending: (
@@ -1429,6 +1447,8 @@ export const useStore = create<AppState>()(
       profileSessions: {},
       promptQueues: {},
       activeRun: null,
+      activeRuns: {},
+      streamingChats: {},
 
       hydrated: false,
       section: "chat",
@@ -1819,6 +1839,10 @@ export const useStore = create<AppState>()(
           const conversations = s.conversations.filter((c) => c.id !== id);
           const currentId = s.currentId === id ? (conversations[0]?.id ?? null) : s.currentId;
           const activeRun = s.activeRun?.chatId === id ? null : s.activeRun;
+          const activeRuns = { ...s.activeRuns };
+          delete activeRuns[id];
+          const streamingChats = { ...s.streamingChats };
+          delete streamingChats[id];
           // Drop the meter readings with the thread so a recycled id can never show stale usage.
           const contextUsage = { ...s.contextUsage };
           delete contextUsage[id];
@@ -1841,7 +1865,7 @@ export const useStore = create<AppState>()(
           // Drop the thread's pending prompt queue along with it.
           const promptQueues = { ...s.promptQueues };
           delete promptQueues[id];
-          return { conversations, currentId, activeRun, contextUsage, customContextUsage, chatContextUsage, subAgentUsage, teamUsage, ceoUsage, summaryHandoffs, summaryHistory, subAgentSummaries, promptQueues };
+          return { conversations, currentId, activeRun, activeRuns, streamingChats, contextUsage, customContextUsage, chatContextUsage, subAgentUsage, teamUsage, ceoUsage, summaryHandoffs, summaryHistory, subAgentSummaries, promptQueues };
         }),
 
       // ---- Prompt queue -----------------------------------------------------------
@@ -1924,15 +1948,24 @@ export const useStore = create<AppState>()(
 
       applyAssistantDelta: (convId, msgId, delta) =>
         set((s) => {
+          // Keep this chat's resume cursor current, independently of any sibling run.
+          const run = s.activeRuns[convId];
+          const activeRuns =
+            delta.lastEventId != null && run
+              ? { ...s.activeRuns, [convId]: { ...run, lastEventId: delta.lastEventId } }
+              : s.activeRuns;
           const activeRun =
             delta.lastEventId != null && s.activeRun && s.activeRun.chatId === convId
               ? { ...s.activeRun, lastEventId: delta.lastEventId }
               : s.activeRun;
           if (!delta.contentDelta && !delta.reasoningDelta) {
-            return activeRun === s.activeRun ? {} : { activeRun };
+            return activeRuns === s.activeRuns && activeRun === s.activeRun
+              ? {}
+              : { activeRuns, activeRun };
           }
           return {
             activeRun,
+            activeRuns,
             conversations: s.conversations.map((c) =>
               c.id === convId
                 ? {
@@ -2094,9 +2127,45 @@ export const useStore = create<AppState>()(
           ),
         })),
 
-      setActiveRun: (activeRun) => set({ activeRun }),
-      setActiveRunCursor: (lastEventId) =>
-        set((s) => (s.activeRun ? { activeRun: { ...s.activeRun, lastEventId } } : {})),
+      // Multi-session: registering a run records it in the per-chat map so several
+      // sessions can stream at once; `activeRun` stays the focused pointer.
+      setActiveRun: (activeRun) =>
+        set((s) =>
+          activeRun
+            ? {
+                activeRun,
+                activeRuns: { ...s.activeRuns, [activeRun.chatId]: activeRun },
+              }
+            : { activeRun: null },
+        ),
+      clearActiveRun: (chatId) =>
+        set((s) => {
+          if (!s.activeRuns[chatId] && s.activeRun?.chatId !== chatId) return {};
+          const activeRuns = { ...s.activeRuns };
+          delete activeRuns[chatId];
+          return { activeRuns, activeRun: s.activeRun?.chatId === chatId ? null : s.activeRun };
+        }),
+      setRunCursor: (chatId, lastEventId) =>
+        set((s) => {
+          const run = s.activeRuns[chatId];
+          if (!run || run.lastEventId === lastEventId) return {};
+          const next = { ...run, lastEventId };
+          return {
+            activeRuns: { ...s.activeRuns, [chatId]: next },
+            activeRun: s.activeRun?.chatId === chatId ? next : s.activeRun,
+          };
+        }),
+      // Derive the global `streaming` flag from the per-chat map so existing global
+      // consumers (network banner, profile guards) keep working while the composer and
+      // message list use the per-chat value for thread-scoped UI.
+      setChatStreaming: (convId, streaming) =>
+        set((s) => {
+          if (Boolean(s.streamingChats[convId]) === streaming) return {};
+          const streamingChats = { ...s.streamingChats };
+          if (streaming) streamingChats[convId] = true;
+          else delete streamingChats[convId];
+          return { streamingChats, streaming: Object.values(streamingChats).some(Boolean) };
+        }),
 
       setPlanPending: (convId, msgId, toolId, info) =>
         set((s) => ({

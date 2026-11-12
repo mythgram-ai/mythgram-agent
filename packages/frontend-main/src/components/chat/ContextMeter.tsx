@@ -186,7 +186,8 @@ function ContextMeterBody({
   onViewRaw: (t: RawTarget) => void;
 }) {
   const scope = useActiveScope();
-  const streaming = useStore((s) => s.streaming);
+  // Per-session: the meter reflects whether THIS thread is streaming.
+  const streaming = useStore((s) => (currentId ? Boolean(s.streamingChats[currentId]) : false));
   const models = useStore((s) => s.models);
   const modelsLoading = useStore((s) => s.modelsLoading);
   const settings = useStore((s) => s.settings);
