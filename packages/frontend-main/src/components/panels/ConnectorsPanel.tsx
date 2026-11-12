@@ -38,6 +38,9 @@ const STATUS_STYLE: Record<ConnectorStatus, { label: string; cls: string }> = {
 const ZAPPER_NOTICE_URL = "https://zapier.com/mcp";
 const ZAPPER_LOGO_URL = "https://cdn.simpleicons.org/zapier";
 
+/** The Composio logo, served from Composio's own logo CDN. */
+const COMPOSIO_LOGO_URL = "https://logos.composio.dev/api/composio";
+
 /**
  * Connectors page.
  *
@@ -334,6 +337,30 @@ export function ConnectorsPanel() {
   );
 }
 
+/** The Composio logo badge, with a key-icon fallback if the logo URL fails to load. */
+function ComposioBadge() {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--secondary)] text-[var(--secondary-fg)]">
+        <KeyRound className="h-5 w-5" />
+      </span>
+    );
+  }
+  return (
+    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] border border-[var(--border)] bg-white p-1.5">
+      <img
+        src={COMPOSIO_LOGO_URL}
+        alt="Composio logo"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="h-full w-full object-contain"
+      />
+    </span>
+  );
+}
+
 /**
  * The first-run guide shown until a Composio API key is configured. It explains what the key is
  * for and lets the user paste and save it right on the Connectors page (the connectors load
@@ -358,9 +385,7 @@ function ComposioKeyGuide({
       style={{ boxShadow: "var(--shadow-chip)" }}
     >
       <div className="flex items-start gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--secondary)] text-[var(--secondary-fg)]">
-          <KeyRound className="h-5 w-5" />
-        </span>
+        <ComposioBadge />
         <div className="min-w-0 flex-1">
           <h3 className="m-0 text-base font-semibold text-[var(--fg)]">
             Add your Composio API key to get connectors
