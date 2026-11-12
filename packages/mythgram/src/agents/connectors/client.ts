@@ -81,11 +81,31 @@ export interface ComposioToolkitInfo {
   toolsCount: number;
 }
 
+/**
+ * One toolkit as returned by `GET /toolkits` — the live, connectable app catalog. Only
+ * toolkits whose authentication includes OAuth are surfaced by the connectors feature.
+ */
+export interface ComposioToolkitSummary {
+  slug: string;
+  name: string;
+  description: string;
+  /** Official toolkit logo URL (Composio artwork). */
+  logo: string;
+  homepage: string;
+  /** Raw auth-scheme identifiers reported by Composio (e.g. OAUTH2, API_KEY, BEARER_TOKEN). */
+  authSchemes: string[];
+  /** True when any auth scheme supports an OAuth flow (the only kind we connect via). */
+  oauthCapable: boolean;
+  toolsCount: number;
+}
+
 export type ComposioFetch = typeof fetch;
 
 const REQUEST_TIMEOUT_MS = 30_000;
 /** Page size for catalog listing — pagination continues until exhausted (no tool cap). */
 const TOOLS_PAGE_SIZE = 1000;
+/** Page size for toolkit listing (the connectable app catalog). */
+const TOOLKITS_PAGE_SIZE = 100;
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -336,6 +356,33 @@ export class ComposioClient {
       return null;
     }
   }
+
+  /**
+   * The full live toolkit catalog (`GET /toolkits`), cursor-paginated until exhausted. Each entry
+   * carries the official name, description, logo URL, homepage, auth schemes, and tools count. The
+   * connectors feature keeps only the OAuth-capable ones (see `oauthCapable`).
+   */
+  async listToolkits(): Promise<ComposioToolkitSummary[]> {
+    const out: ComposioToolkitSummary[] = [];
+    let cursor: string | null = null;
+    for (;;) {
+      const params = new URLSearchParams({ limit: String(TOOLKITS_PAGE_SIZE) });
+      if (cursor) params.set("cursor", cursor);
+      const payload = await this.request<{ items?: unknown[]; next_cursor?: unknown }>(
+        "GET",
+        `/toolkits?${params.toString()}`,
+      );
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      for (const item of items) {
+        const parsed = parseToolkitSummary(item);
+        if (parsed) out.push(parsed);
+      }
+      const next = str(payload.next_cursor);
+      if (!next || items.length === 0) break;
+      cursor = next;
+    }
+    return out;
+  }
 }
 
 /** Best-effort message extraction from an error payload (string | {message|error|detail}). */
@@ -386,6 +433,48 @@ function parseConnectedAccount(raw: unknown, fallbackId: string): ComposioConnec
     status,
     toolkitSlug: str(toolkit.slug ?? r.toolkit_slug ?? connection.toolkitSlug),
     userId: str(r.user_id ?? r.userId),
+  };
+}
+
+/** Collect auth-scheme identifier strings from any shape Composio reports them in. */
+function collectAuthSchemes(r: Record<string, unknown>, meta: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const push = (value: unknown): void => {
+    if (typeof value === "string" && value.trim()) out.push(value.trim());
+    else if (value && typeof value === "object") {
+      const o = value as Record<string, unknown>;
+      for (const key of ["auth_mode", "authMode", "mode", "scheme", "name", "type", "auth_scheme"]) {
+        const v = o[key];
+        if (typeof v === "string" && v.trim()) out.push(v.trim());
+      }
+    }
+  };
+  const candidates = [r.auth_schemes, meta.auth_schemes, r.composio_managed_auth_schemes, r.auth_scheme];
+  for (const c of candidates) {
+    if (Array.isArray(c)) c.forEach(push);
+    else if (c !== undefined) push(c);
+  }
+  return [...new Set(out.map((s) => s.toUpperCase()))];
+}
+
+function parseToolkitSummary(raw: unknown): ComposioToolkitSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const slug = str(r.slug).trim();
+  if (!slug) return null;
+  const meta = r.meta && typeof r.meta === "object" ? (r.meta as Record<string, unknown>) : {};
+  const authSchemes = collectAuthSchemes(r, meta);
+  const oauthCapable = authSchemes.some((s) => s.includes("OAUTH"));
+  const toolsCountRaw = meta.tools_count ?? r.tools_count ?? r.toolsCount;
+  return {
+    slug: slug.toLowerCase(),
+    name: str(r.name) || str(meta.name) || slug,
+    description: str(meta.description) || str(r.description),
+    logo: str(meta.logo) || str(r.logo) || str(meta.logo_url) || str(r.logo_url),
+    homepage: str(meta.website) || str(meta.homepage) || str(r.homepage),
+    authSchemes,
+    oauthCapable,
+    toolsCount: typeof toolsCountRaw === "number" ? toolsCountRaw : 0,
   };
 }
 

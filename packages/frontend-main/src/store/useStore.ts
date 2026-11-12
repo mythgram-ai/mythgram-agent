@@ -80,8 +80,9 @@ import {
 } from "@/lib/defaultMemory";
 import { hasUnsafeSegment, normalizeKnowledgePath, sanitizeKnowledge } from "@/lib/defaultKnowledge";
 import { enforceSingleActive, mergeTeamsWithDefaults } from "@/lib/defaultTeams";
-import { enforceSingleActiveCeo, normalizeCeoAgents } from "@/lib/defaultCeo";
-import { MAIN_AGENT_ID, normalizeCustomAgents } from "@/lib/customAgents";
+import { enforceSingleActiveCeo, mergeCeosWithDefaults } from "@/lib/defaultCeo";
+import { mergeCustomAgentsWithDefaults } from "@/lib/defaultCustomAgents";
+import { MAIN_AGENT_ID } from "@/lib/customAgents";
 import { normalizeConnectors } from "@/lib/connectors";
 import { normalizeMcpServers } from "@/lib/mcp";
 import { normalizeMainAgentPrompts, newMainAgentPromptId } from "@/lib/mainAgentPrompts";
@@ -1285,8 +1286,8 @@ function freshProfileSnapshot(): ProfileSnapshot {
     knowledgeSources: {},
     customProviders: [],
     agentTeams: mergeTeamsWithDefaults([]),
-    ceoAgents: [],
-    customAgents: [],
+    ceoAgents: mergeCeosWithDefaults([]),
+    customAgents: mergeCustomAgentsWithDefaults([]),
     activeCustomAgentId: null,
     mainAgentPrompts: [],
     activeMainAgentPromptId: null,
@@ -1357,8 +1358,8 @@ export const useStore = create<AppState>()(
       knowledgeSources: {},
       customProviders: [],
       agentTeams: mergeTeamsWithDefaults([]),
-      ceoAgents: [],
-      customAgents: [],
+      ceoAgents: mergeCeosWithDefaults([]),
+      customAgents: mergeCustomAgentsWithDefaults([]),
       activeCustomAgentId: null,
       mainAgentPrompts: [],
       activeMainAgentPromptId: null,
@@ -1545,10 +1546,10 @@ export const useStore = create<AppState>()(
               ? ((p as { agentTeams?: AgentTeam[] }).agentTeams as AgentTeam[])
               : defaults.agentTeams,
           ),
-          ceoAgents: normalizeCeoAgents(
+          ceoAgents: mergeCeosWithDefaults(
             (p as { ceoAgents?: unknown }).ceoAgents ?? defaults.ceoAgents,
           ),
-          customAgents: normalizeCustomAgents(
+          customAgents: mergeCustomAgentsWithDefaults(
             (p as { customAgents?: unknown }).customAgents ?? defaults.customAgents,
           ),
           activeCustomAgentId:
@@ -1620,8 +1621,8 @@ export const useStore = create<AppState>()(
           agentTeams: mergeTeamsWithDefaults(
             Array.isArray(snap.agentTeams) ? (snap.agentTeams as AgentTeam[]) : base.agentTeams,
           ),
-          ceoAgents: normalizeCeoAgents(snap.ceoAgents ?? base.ceoAgents),
-          customAgents: normalizeCustomAgents(snap.customAgents ?? base.customAgents),
+          ceoAgents: mergeCeosWithDefaults(snap.ceoAgents ?? base.ceoAgents),
+          customAgents: mergeCustomAgentsWithDefaults(snap.customAgents ?? base.customAgents),
           activeCustomAgentId:
             typeof snap.activeCustomAgentId === "string" ? snap.activeCustomAgentId : null,
           mainAgentPrompts: normalizeMainAgentPrompts(snap.mainAgentPrompts ?? base.mainAgentPrompts),
@@ -2592,7 +2593,7 @@ export const useStore = create<AppState>()(
       // refresh on open fetches the same truth — so the panel converges immediately.
       setCustomAgents: (agents) =>
         set((s) => {
-          const normalized = normalizeCustomAgents(agents);
+          const normalized = mergeCustomAgentsWithDefaults(agents);
           const ids = new Set(normalized.map((a) => a.id));
           return {
             customAgents: normalized,
@@ -2868,8 +2869,8 @@ export const useStore = create<AppState>()(
           memory: mergeMemoryWithDefaults(next.memory),
           knowledge: sanitizeKnowledge(next.knowledge),
           agentTeams: mergeTeamsWithDefaults(next.agentTeams),
-          ceoAgents: normalizeCeoAgents(next.ceoAgents),
-          customAgents: normalizeCustomAgents(next.customAgents),
+          ceoAgents: mergeCeosWithDefaults(next.ceoAgents),
+          customAgents: mergeCustomAgentsWithDefaults(next.customAgents),
           mainAgentPrompts: normalizeMainAgentPrompts(next.mainAgentPrompts),
           taskModes: normalizeTaskModes(next.taskModes),
           promptLibrary: normalizePromptLibrary(
@@ -2927,8 +2928,8 @@ export const useStore = create<AppState>()(
           memory: mergeMemoryWithDefaults(next.memory),
           knowledge: sanitizeKnowledge(next.knowledge),
           agentTeams: mergeTeamsWithDefaults(next.agentTeams),
-          ceoAgents: normalizeCeoAgents(next.ceoAgents),
-          customAgents: normalizeCustomAgents(next.customAgents),
+          ceoAgents: mergeCeosWithDefaults(next.ceoAgents),
+          customAgents: mergeCustomAgentsWithDefaults(next.customAgents),
           mainAgentPrompts: normalizeMainAgentPrompts(next.mainAgentPrompts),
           taskModes: normalizeTaskModes(next.taskModes),
           promptLibrary: normalizePromptLibrary(
@@ -3026,8 +3027,8 @@ export const useStore = create<AppState>()(
           memory: mergeMemoryWithDefaults(snap.memory),
           knowledge: sanitizeKnowledge(snap.knowledge),
           agentTeams: mergeTeamsWithDefaults(snap.agentTeams),
-          ceoAgents: normalizeCeoAgents(snap.ceoAgents),
-          customAgents: normalizeCustomAgents(snap.customAgents),
+          ceoAgents: mergeCeosWithDefaults(snap.ceoAgents),
+          customAgents: mergeCustomAgentsWithDefaults(snap.customAgents),
           mainAgentPrompts: normalizeMainAgentPrompts(snap.mainAgentPrompts),
           taskModes: normalizeTaskModes(snap.taskModes),
           promptLibrary: normalizePromptLibrary(
@@ -3111,8 +3112,8 @@ export const useStore = create<AppState>()(
           memory: mergeMemoryWithDefaults(fresh.memory),
           knowledge: sanitizeKnowledge(fresh.knowledge),
           agentTeams: mergeTeamsWithDefaults(fresh.agentTeams),
-          ceoAgents: normalizeCeoAgents(fresh.ceoAgents),
-          customAgents: normalizeCustomAgents(fresh.customAgents),
+          ceoAgents: mergeCeosWithDefaults(fresh.ceoAgents),
+          customAgents: mergeCustomAgentsWithDefaults(fresh.customAgents),
           mainAgentPrompts: normalizeMainAgentPrompts(fresh.mainAgentPrompts),
           taskModes: normalizeTaskModes(fresh.taskModes),
           promptLibrary: normalizePromptLibrary(

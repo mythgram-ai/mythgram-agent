@@ -138,6 +138,70 @@ function makeFakeComposio(options: FakeComposioOptions = {}): FakeComposio {
     async getToolkit() {
       return null;
     },
+    async listToolkits() {
+      return [
+        {
+          slug: "github",
+          name: "GitHub",
+          description: "Repositories, issues, and pull requests.",
+          logo: "https://logo.example/github.png",
+          homepage: "https://github.com",
+          authSchemes: ["OAUTH2"],
+          oauthCapable: true,
+          toolsCount: 2,
+        },
+        {
+          slug: "slack",
+          name: "Slack",
+          description: "Channels and messages.",
+          logo: "https://logo.example/slack.png",
+          homepage: "https://slack.com",
+          authSchemes: ["OAUTH2"],
+          oauthCapable: true,
+          toolsCount: 2,
+        },
+        {
+          slug: "notion",
+          name: "Notion",
+          description: "Pages and databases.",
+          logo: "https://logo.example/notion.png",
+          homepage: "https://notion.so",
+          authSchemes: ["OAUTH2"],
+          oauthCapable: true,
+          toolsCount: 2,
+        },
+        {
+          slug: "gmail",
+          name: "Gmail",
+          description: "Email.",
+          logo: "https://logo.example/gmail.png",
+          homepage: "https://mail.google.com",
+          authSchemes: ["OAUTH2"],
+          oauthCapable: true,
+          toolsCount: 2,
+        },
+        {
+          slug: "outlook",
+          name: "Outlook",
+          description: "Mail and calendar.",
+          logo: "https://logo.example/outlook.png",
+          homepage: "https://outlook.live.com",
+          authSchemes: ["OAUTH2"],
+          oauthCapable: true,
+          toolsCount: 2,
+        },
+        {
+          slug: "some_api",
+          name: "Some API",
+          description: "API-key only app.",
+          logo: "",
+          homepage: "",
+          authSchemes: ["API_KEY"],
+          oauthCapable: false,
+          toolsCount: 1,
+        },
+      ];
+    },
   };
   return client as unknown as FakeComposio;
 }
@@ -252,33 +316,37 @@ describe("agent-driven application-connector management tools", () => {
     assert.equal(afterData.connected_count, 1);
   });
 
-  it("normalizes connector names case- and label-insensitively", () => {
+  it("normalizes connector names to valid toolkit slugs", async () => {
     assert.equal(normalizeConnectorName("github"), "github");
     assert.equal(normalizeConnectorName("  GitHub "), "github");
     assert.equal(normalizeConnectorName("NOTION"), "notion");
-    assert.equal(normalizeConnectorName("Git Hub"), "github", "spacing must not block the agent");
+    assert.equal(normalizeConnectorName("google_calendar"), "google_calendar");
     assert.equal(normalizeConnectorName("Slack"), "slack");
-    assert.equal(normalizeConnectorName("nope"), null);
+    // Anything that is not a valid toolkit slug is rejected.
+    assert.equal(normalizeConnectorName("Git Hub"), null);
     assert.equal(normalizeConnectorName("Google Drive"), null);
     assert.equal(normalizeConnectorName(42), null);
     assert.equal(normalizeConnectorName(""), null);
-    // Every catalog entry is reachable by its own exact name.
-    for (const entry of connectorCatalog()) {
+    // Every live catalog entry is reachable by its own exact name; only OAuth apps are listed.
+    const catalog = await connectorCatalog(makeFakeComposio());
+    assert.ok(catalog.length > 0);
+    assert.ok(catalog.every((entry) => entry.connector_name !== "some_api"));
+    for (const entry of catalog) {
       assert.equal(normalizeConnectorName(entry.connector_name), entry.connector_name);
     }
   });
 
-  it("rejects unknown connector names with the list of valid ones", async () => {
+  it("rejects malformed connector names", async () => {
     const { ctx } = await ctxFor();
     for (const tool of [
       "connect_applications_connectors",
       "disconnect_application_connector",
       "get_application_connector_status",
     ]) {
-      const result = await registry.execute(tool, { connector_name: "dropbox" }, ctx);
-      assert.equal(result.ok, false, `${tool} must reject an unknown connector`);
+      const result = await registry.execute(tool, { connector_name: "bad name!" }, ctx);
+      assert.equal(result.ok, false, `${tool} must reject a malformed connector name`);
       assert.equal((result.error as { code: string }).code, "unknown_connector");
-      assert.match((result.error as { message: string }).message, /github/);
+      assert.match((result.error as { message: string }).message, /list_available_application_connectors/);
     }
   });
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getConnector, COMPOSIO_DEFAULT_USER_ID } from "../connectors/index.js";
+import { COMPOSIO_DEFAULT_USER_ID } from "../connectors/index.js";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
 import {
   CONNECTOR_CONNECTION_TIMEOUT_MS,
@@ -48,8 +48,7 @@ export const connectApplicationsConnectorsTool = defineTool({
   schema,
   label: (args: ConnectConnectorArgs) => {
     const connector = normalizeConnectorName(args.connector_name);
-    const label = connector ? (getConnector(connector)?.name ?? connector) : "";
-    return label ? `Connect app: ${label}` : "Connect application connector";
+    return connector ? `Connect app: ${connector}` : "Connect application connector";
   },
   async execute(args: ConnectConnectorArgs, ctx: ToolContext): Promise<ToolResult> {
     const unavailable = requireConnectorManager(ctx);
@@ -69,9 +68,6 @@ export const connectApplicationsConnectorsTool = defineTool({
         },
       };
     }
-    const entry = connectorCatalog().find((c) => c.connector_name === connectorId)!;
-    const definition = getConnector(connectorId)!;
-
     const client = requireComposioClient(ctx);
     if (!client) {
       return {
@@ -84,6 +80,16 @@ export const connectApplicationsConnectorsTool = defineTool({
         },
       };
     }
+
+    const catalog = await connectorCatalog(client);
+    const entry =
+      catalog.find((c) => c.connector_name === connectorId) ?? {
+        connector_name: connectorId,
+        label: connectorId,
+        description: "",
+        homepage: "",
+        toolkit: connectorId,
+      };
 
     // Already authorized: never make the user redo the flow. Just make sure the app's
     // tools are live on this turn (a reconnect may have happened since it was built).
@@ -114,8 +120,8 @@ export const connectApplicationsConnectorsTool = defineTool({
     // Composio link, and persist the pending connection before asking the user to act.
     let link;
     try {
-      const authConfig = (await client.findAuthConfig(definition.toolkitSlug)) ??
-        (await client.createAuthConfig(definition.toolkitSlug));
+      const authConfig = (await client.findAuthConfig(connectorId)) ??
+        (await client.createAuthConfig(connectorId));
       link = await client.createLink(authConfig.id, COMPOSIO_DEFAULT_USER_ID);
     } catch (error) {
       const code = (error as { code?: string }).code;

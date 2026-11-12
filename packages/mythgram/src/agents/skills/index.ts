@@ -114,23 +114,53 @@ async function collectFolderFiles(rootAbs: string): Promise<SkillFileDefinition[
 /**
  * Parse the YAML frontmatter block delimited by `---` at the top of a file, extracting only the
  * `name` and `description` keys. Unknown keys are ignored so skill content can carry extras.
+ *
+ * Supports both single-line scalars (`key: value`) and YAML block scalars (`key: >`, `key: >-`,
+ * `key: |`, `key: |-`) whose indented continuation lines are folded into one value — the format
+ * shipped skills use for long descriptions. Block values are normalized to a single line so callers
+ * always get a clean, display-ready string.
  */
 function parseFrontmatter(content: string): SkillFrontmatter {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(content);
   if (!match) return {};
 
   const meta: SkillFrontmatter = {};
-  for (const line of match[1]!.split(/\r?\n/)) {
+  const lines = match[1]!.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
     const separator = line.indexOf(":");
     if (separator <= 0) continue;
     const key = line.slice(0, separator).trim().toLowerCase();
-    const value = line
-      .slice(separator + 1)
-      .trim()
-      .replace(/^["']|["']$/g, "")
-      .trim();
+    if (key !== "name" && key !== "description") continue;
+
+    const inline = line.slice(separator + 1).trim();
+    let value: string;
+    if (/^[>|][+-]?$/.test(inline)) {
+      // Block scalar: collect the indented (or blank) continuation lines that follow.
+      const blockLines: string[] = [];
+      let j = i + 1;
+      for (; j < lines.length; j += 1) {
+        const next = lines[j]!;
+        if (next.trim().length === 0) {
+          blockLines.push("");
+          continue;
+        }
+        if (/^\s/.test(next)) {
+          blockLines.push(next.replace(/^\s+/, ""));
+          continue;
+        }
+        break;
+      }
+      i = j - 1;
+      const literal = inline.startsWith("|");
+      value = literal ? blockLines.join("\n") : blockLines.join(" ");
+    } else {
+      value = inline.replace(/^["']|["']$/g, "");
+    }
+
+    value = value.replace(/[ \t]+/g, " ").trim();
     if (key === "name") meta.name = value;
-    else if (key === "description") meta.description = value;
+    else meta.description = value;
   }
   return meta;
 }

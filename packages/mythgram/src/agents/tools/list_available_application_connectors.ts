@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
-import { connectorCatalog, publicConnection, requireConnectorManager } from "./connectorManagement.js";
+import {
+  connectorCatalog,
+  publicConnection,
+  requireComposioClient,
+  requireConnectorManager,
+} from "./connectorManagement.js";
 
 const schema = z.object({}).strict();
 
@@ -20,7 +25,20 @@ export const listAvailableApplicationConnectorsTool = defineTool({
     if (unavailable) return unavailable;
     const manager = ctx.connectorManager!;
 
-    const catalog = connectorCatalog();
+    const catalog = await connectorCatalog(requireComposioClient(ctx));
+    if (catalog.length === 0) {
+      return {
+        ok: true,
+        data: {
+          count: 0,
+          connected_count: 0,
+          connectors: [],
+          message:
+            "No application connectors are currently available. This usually means no Composio API key is configured. " +
+            "Ask the user to add one in Settings → Composio, then retry.",
+        },
+      };
+    }
     const connectors = catalog.map((entry) => {
       const connection = publicConnection(manager.get(entry.connector_name));
       return {

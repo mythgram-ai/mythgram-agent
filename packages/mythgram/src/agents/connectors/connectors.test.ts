@@ -4,8 +4,8 @@ import Database from "better-sqlite3";
 import { applySchema } from "../../database/schema.js";
 import { AppStateRepo } from "../../database/repositories/appStateRepo.js";
 import {
-  AVAILABLE_CONNECTORS,
   isConnectorToolName,
+  isToolkitSlug,
   normalizeConnectorConnection,
   normalizeConnectorWire,
 } from "./configuration.js";
@@ -60,17 +60,14 @@ function toolItem(slug: string, toolkit = "github"): Record<string, unknown> {
 /* ------------------------------------------------------------------ configuration */
 
 describe("connectors — configuration", () => {
-  it("ships exactly the five required connectors with toolkit slugs", () => {
-    const ids = AVAILABLE_CONNECTORS.map((c) => c.id).sort();
-    assert.deepEqual(ids, ["github", "gmail", "notion", "outlook", "slack"]);
-    for (const c of AVAILABLE_CONNECTORS) {
-      assert.ok(c.toolkitSlug.length > 0);
-      assert.ok(c.name.length > 0 && c.description.length > 0);
-      assert.ok(c.logoSlug.length > 0 && c.homepage.startsWith("https://"));
-    }
+  it("accepts any valid toolkit slug and rejects malformed ids", () => {
+    assert.equal(isToolkitSlug("github"), true);
+    assert.equal(isToolkitSlug("google_calendar"), true);
+    assert.equal(isToolkitSlug("bad slug!"), false);
+    assert.equal(isToolkitSlug(""), false);
   });
 
-  it("normalizes stored/wire connections and rejects unknown connectors", () => {
+  it("normalizes stored/wire connections and rejects malformed toolkit ids", () => {
     const ok = normalizeConnectorConnection({
       connector_id: "GitHub",
       connected_account_id: "acc_1",
@@ -81,7 +78,7 @@ describe("connectors — configuration", () => {
     assert.equal(ok!.connectorId, "github");
     assert.equal(ok!.status, "active");
 
-    assert.equal(normalizeConnectorConnection({ connector_id: "nope", connected_account_id: "x" }), null);
+    assert.equal(normalizeConnectorConnection({ connector_id: "bad slug!", connected_account_id: "x" }), null);
     assert.equal(normalizeConnectorConnection({ connector_id: "github" }), null);
     assert.equal(normalizeConnectorConnection(null), null);
   });
@@ -90,6 +87,39 @@ describe("connectors — configuration", () => {
     const ok = normalizeConnectorWire({ connector_id: "slack", connected_account_id: "acc_9" });
     assert.deepEqual(ok, { connectorId: "slack", connectedAccountId: "acc_9" });
     assert.equal(normalizeConnectorWire({ connector_id: "slack" }), null);
+  });
+
+  it("parses the live toolkit catalog and detects OAuth capability", async () => {
+    const { fetchFn } = stubFetch({
+      "/toolkits": () =>
+        jsonResponse({
+          items: [
+            {
+              slug: "github",
+              name: "GitHub",
+              meta: {
+                description: "Repos",
+                logo: "https://logo/github.png",
+                tools_count: 12,
+                auth_schemes: [{ auth_mode: "OAUTH2" }],
+              },
+            },
+            {
+              slug: "some_api",
+              name: "Some API",
+              meta: { description: "Keyed", auth_schemes: [{ auth_mode: "API_KEY" }] },
+            },
+          ],
+          next_cursor: null,
+        }),
+    });
+    const client = new ComposioClient("k", { fetchFn });
+    const toolkits = await client.listToolkits();
+    assert.equal(toolkits.length, 2);
+    const gh = toolkits.find((t) => t.slug === "github")!;
+    assert.equal(gh.oauthCapable, true);
+    assert.equal(gh.logo, "https://logo/github.png");
+    assert.equal(toolkits.find((t) => t.slug === "some_api")!.oauthCapable, false);
   });
 
   it("recognizes Composio tool names without colliding with built-ins", () => {
@@ -304,7 +334,7 @@ describe("connectors — runtime bridge", () => {
     assert.equal(first.type, "function");
     assert.equal((first.function.parameters as { type: string }).type, "object");
     assert.equal(runtime.label("GITHUB_TOOL_0"), "GitHub: Display GITHUB_TOOL_0");
-    assert.ok(runtime.hint().includes("GitHub"));
+    assert.ok(runtime.hint().includes("github"));
   });
 
   it("routes execution to the right connected account per toolkit", async () => {

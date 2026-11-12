@@ -1,9 +1,8 @@
 import {
-  AVAILABLE_CONNECTORS,
-  getConnector,
+  isToolkitSlug,
   type ComposioClient,
+  type ComposioToolkitSummary,
   type ConnectorConnection,
-  type ConnectorId,
 } from "../connectors/index.js";
 import type { ConnectorManager } from "../connectors/manager.js";
 import type { ToolContext, ToolResult } from "./types.js";
@@ -68,48 +67,55 @@ export function requireConnectorManager(ctx: ToolContext): ToolResult | null {
 
 /** One catalog entry as the model sees it in list / status results. */
 export interface ConnectorCatalogEntry {
-  /** The exact name to pass to connect/disconnect/status (lowercase connector id). */
-  connector_name: ConnectorId;
+  /** The exact name to pass to connect/disconnect/status (lowercase toolkit slug). */
+  connector_name: string;
   /** Human display name, e.g. "GitHub". */
   label: string;
   description: string;
   /** The app's homepage, useful when explaining what connecting does. */
   homepage: string;
-  /** Composio toolkit slug that backs this connector (informational). */
+  /** Composio toolkit slug that backs this connector. */
   toolkit: string;
 }
 
-/** The full connectable catalog, in the order the Connectors page renders it. */
-export function connectorCatalog(): ConnectorCatalogEntry[] {
-  return AVAILABLE_CONNECTORS.map((connector) => ({
-    connector_name: connector.id,
-    label: connector.name,
-    description: connector.description,
-    homepage: connector.homepage,
-    toolkit: connector.toolkitSlug,
-  }));
+/**
+ * The live connectable catalog, fetched from Composio (OAuth-capable toolkits only) so the
+ * agent always sees the current apps. Returns [] when no Composio client/key is available.
+ */
+export async function connectorCatalog(client: ComposioClient | null): Promise<ConnectorCatalogEntry[]> {
+  if (!client) return [];
+  let toolkits: ComposioToolkitSummary[];
+  try {
+    toolkits = await client.listToolkits();
+  } catch {
+    return [];
+  }
+  return toolkits
+    .filter((t) => t.oauthCapable)
+    .map((t) => ({
+      connector_name: t.slug,
+      label: t.name || t.slug,
+      description: t.description,
+      homepage: t.homepage,
+      toolkit: t.slug,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /**
- * Normalize an LLM/user-supplied connector name to its canonical id. Accepts the exact
- * catalog name (case/space-insensitive) and the app's display name so the agent is never
- * blocked on capitalization. Returns null when nothing matches.
+ * Normalize an LLM/user-supplied connector name to its canonical toolkit slug. Composio toolkit
+ * slugs are lowercase identifiers (e.g. `github`, `google_calendar`); this validates the shape so
+ * the agent is never blocked on stray whitespace or casing. Returns null when it is not a slug.
  */
-export function normalizeConnectorName(raw: unknown): ConnectorId | null {
+export function normalizeConnectorName(raw: unknown): string | null {
   const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  if (!value) return null;
-  if (getConnector(value)) return value as ConnectorId;
-  const spaced = value.replace(/[\s_-]+/g, "");
-  if (getConnector(spaced)) return spaced as ConnectorId;
-  const byName = AVAILABLE_CONNECTORS.find(
-    (connector) => connector.name.trim().toLowerCase().replace(/[\s_-]+/g, "") === spaced,
-  );
-  return byName ? byName.id : null;
+  if (!isToolkitSlug(value)) return null;
+  return value;
 }
 
-/** Valid connector names for error messages, e.g. "github, slack, notion, gmail, outlook". */
+/** Guidance for error messages when a connector name is unknown. */
 export function validConnectorNames(): string {
-  return AVAILABLE_CONNECTORS.map((c) => c.id).join(", ");
+  return "call list_available_application_connectors to see the exact connector names";
 }
 
 /**
@@ -147,10 +153,9 @@ export function publicConnection(connection: ConnectorConnection | null): Record
       updated_at: null,
     };
   }
-  const definition = getConnector(connection.connectorId);
   return {
     connector_name: connection.connectorId,
-    label: definition?.name ?? connection.connectorId,
+    label: connection.connectorId,
     status: effectiveStatus(connection),
     stored_status: connection.status,
     connected: connection.status === "active",
@@ -291,7 +296,7 @@ function storedStatusOf(remoteStatus: string): "active" | "failed" | "pending" {
 export async function waitForConnectorConnection(
   manager: ConnectorManager,
   client: ComposioClient | null,
-  connectorId: ConnectorId,
+  connectorId: string,
   options?: { timeoutMs?: number; signal?: AbortSignal; pollMs?: number },
 ): Promise<ConnectorConnectOutcome> {
   const timeoutMs = options?.timeoutMs ?? CONNECTOR_CONNECTION_TIMEOUT_MS;
@@ -337,7 +342,7 @@ export async function waitForConnectorConnection(
 export async function refreshConnectorStatus(
   manager: ConnectorManager,
   client: ComposioClient | null,
-  connectorId: ConnectorId,
+  connectorId: string,
 ): Promise<ConnectorConnection | null> {
   const stored = manager.get(connectorId);
   if (!stored || !client) return stored;

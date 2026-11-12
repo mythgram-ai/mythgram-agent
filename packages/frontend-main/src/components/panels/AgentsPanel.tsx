@@ -4,7 +4,7 @@ import { useStore } from "@/store/useStore";
 import { ImportSubAgentsModal } from "@/components/panels/ImportSubAgentsModal";
 
 import { SUB_AGENT_TOOLS, fetchSubAgentTools, type SubAgentToolMeta } from "@/lib/subAgentTools";
-import { AVAILABLE_CONNECTORS, fetchConnectorTools } from "@/lib/connectors";
+import { fetchConnectorTools } from "@/lib/connectors";
 import { fetchMcpEditorTools, humanizeMcpToolName } from "@/lib/mcp";
 import { Modal } from "@/components/ui/Modal";
 import { Button, Field, PanelHeader, TextArea, TextInput, Toggle } from "@/components/ui/primitives";
@@ -29,11 +29,10 @@ function isDefaultSubAgent(id: string): boolean {
 async function connectorTools(signal?: AbortSignal): Promise<SubAgentToolMeta[]> {
   try {
     const tools = await fetchConnectorTools(signal);
-    const byId = new Map(AVAILABLE_CONNECTORS.map((c) => [c.id, c.name]));
     return tools.map((t) => ({
       name: t.name,
       label: t.display || t.name,
-      description: `[${byId.get(t.connector_id) ?? t.connector_id}] ${t.description || t.display || t.name}`,
+      description: `[${t.toolkit || t.connector_id}] ${t.description || t.display || t.name}`,
     }));
   } catch {
     return [];

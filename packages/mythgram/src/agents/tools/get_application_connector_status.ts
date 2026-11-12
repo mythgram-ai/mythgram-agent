@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { getConnector } from "../connectors/index.js";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
 import {
+  connectorCatalog,
   effectiveStatus,
   emitConnectorsUpdated,
   normalizeConnectorName,
@@ -39,8 +39,7 @@ export const getApplicationConnectorStatusTool = defineTool({
   schema,
   label: (args: GetConnectorStatusArgs) => {
     const connectorId = normalizeConnectorName(args.connector_name);
-    const label = connectorId ? (getConnector(connectorId)?.name ?? connectorId) : "";
-    return label ? `App connector status: ${label}` : "Get app connector status";
+    return connectorId ? `App connector status: ${connectorId}` : "Get app connector status";
   },
   async execute(args: GetConnectorStatusArgs, ctx: ToolContext): Promise<ToolResult> {
     const unavailable = requireConnectorManager(ctx);
@@ -60,9 +59,17 @@ export const getApplicationConnectorStatusTool = defineTool({
         },
       };
     }
-    const definition = getConnector(connectorId)!;
+    const client = requireComposioClient(ctx);
+    const entry =
+      (await connectorCatalog(client)).find((c) => c.connector_name === connectorId) ?? {
+        connector_name: connectorId,
+        label: connectorId,
+        description: "",
+        homepage: "",
+        toolkit: connectorId,
+      };
 
-    const refreshed = await refreshConnectorStatus(manager, requireComposioClient(ctx), connectorId);
+    const refreshed = await refreshConnectorStatus(manager, client, connectorId);
     if (refreshed) emitConnectorsUpdated(ctx, manager);
 
     const status = effectiveStatus(refreshed);
@@ -72,9 +79,9 @@ export const getApplicationConnectorStatusTool = defineTool({
       ok: true,
       data: {
         connector_name: connectorId,
-        label: definition.name,
-        description: definition.description,
-        homepage: definition.homepage,
+        label: entry.label,
+        description: entry.description,
+        homepage: entry.homepage,
         available: true,
         status,
         connected,
@@ -85,14 +92,14 @@ export const getApplicationConnectorStatusTool = defineTool({
         connection: refreshed ? publicConnection(refreshed) : null,
         message:
           status === "connected"
-            ? `${definition.name} is connected and its app tools are usable — call them as real function calls.`
+            ? `${entry.label} is connected and its app tools are usable — call them as real function calls.`
             : status === "requires_user_action"
-              ? `${definition.name} has a connection request waiting on the user — they still need to authorize it. ` +
+              ? `${entry.label} has a connection request waiting on the user — they still need to authorize it. ` +
                 `Ask them to press Connect (the button is in this block and on the Connectors page), then re-check with get_application_connector_status using connector_name "${connectorId}".`
               : status === "failed"
-                ? `The ${definition.name} connection failed and is disabled. ` +
+                ? `The ${entry.label} connection failed and is disabled. ` +
                   `Ask the user to reconnect it with connect_applications_connectors using connector_name "${connectorId}".`
-                : `${definition.name} is not connected. ` +
+                : `${entry.label} is not connected. ` +
                   `Use connect_applications_connectors with connector_name "${connectorId}" to ask the user to connect it.`,
       },
     };

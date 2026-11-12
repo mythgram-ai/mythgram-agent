@@ -5,24 +5,20 @@
  * connector is authenticated, every tool of its toolkit becomes a native function
  * tool for ALL agent surfaces (main, custom, sub-agents, teams, CEO).
  *
- *   configuration — static catalog + connection shapes + defensive normalization
- *   client        — minimal Composio v3.1 REST client (auth, tools, execute)
+ *   configuration — connection shapes + defensive normalization (no static catalog)
+ *   client        — minimal Composio v3.1 REST client (live toolkits, auth, tools, execute)
  *   manager       — persistent connection store over the SQLite app_state repo
  *   runtime       — per-turn bridge: catalog cache + native schemas + execution
  */
 export {
-  AVAILABLE_CONNECTORS,
   COMPOSIO_API_BASE,
   COMPOSIO_DEFAULT_USER_ID,
-  CONNECTOR_IDS,
-  getConnector,
-  getConnectorByToolkit,
   isConnectorToolName,
+  isToolkitSlug,
   normalizeConnectorConnection,
   normalizeConnectorWire,
   type ConnectorConnection,
   type ConnectorConnectionWire,
-  type ConnectorDefinition,
   type ConnectorId,
   type ConnectorStatus,
   type ConnectorWire,
@@ -37,6 +33,7 @@ export {
   type ComposioLinkResult,
   type ComposioToolDefinition,
   type ComposioToolkitInfo,
+  type ComposioToolkitSummary,
 } from "./client.js";
 export { ConnectorManager } from "./manager.js";
 export {

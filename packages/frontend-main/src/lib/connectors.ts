@@ -8,70 +8,30 @@ import type {
 } from "@/types";
 
 /**
- * Connectors client — third-party app integrations (GitHub, Slack, Notion, Gmail,
- * Outlook) powered by Composio.
+ * Connectors client — third-party app integrations powered by Composio.
  *
- * Auth never touches tokens in the browser: the backend returns an OAuth `redirect_url`
- * (opened in a new tab), the user authorizes the app there, and this client polls the
- * backend until the connection becomes `active`. Only the connected-account id + status
- * are persisted (backend SQLite `connectors` document, synced like every other slice).
+ * There is no static catalog: the connectable apps are fetched live from the backend, which lists
+ * the Composio project's OAuth-capable toolkits with their official names, descriptions, and logo
+ * URLs. Auth never touches tokens in the browser: the backend returns an OAuth `redirect_url`
+ * (opened in a new tab), the user authorizes the app there, and this client polls the backend until
+ * the connection becomes `active`. Only the connected-account id + status are persisted.
  */
 
-/** Static connector metadata (mirrors the backend catalog order). */
-export interface ConnectorMeta {
-  id: string;
-  name: string;
-  description: string;
-  homepage: string;
-  /** Simple-Icons slug used as the logo fallback. */
-  logoSlug: string;
+/** A toolkit slug (Composio toolkit identifier) is the connector id. */
+const TOOLKIT_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
+
+/** True when a string is a valid connector id (Composio toolkit slug). */
+export function isConnectorId(value: unknown): value is string {
+  return typeof value === "string" && TOOLKIT_SLUG_RE.test(value.trim().toLowerCase());
 }
 
-export const AVAILABLE_CONNECTORS: readonly ConnectorMeta[] = [
-  {
-    id: "github",
-    name: "GitHub",
-    description: "Repositories, issues, pull requests, actions, and code search.",
-    homepage: "https://github.com",
-    logoSlug: "github",
-  },
-  {
-    id: "slack",
-    name: "Slack",
-    description: "Channels, messages, threads, and workspace search.",
-    homepage: "https://slack.com",
-    logoSlug: "slack",
-  },
-  {
-    id: "notion",
-    name: "Notion",
-    description: "Pages, databases, blocks, and workspace search.",
-    homepage: "https://notion.so",
-    logoSlug: "notion",
-  },
-  {
-    id: "gmail",
-    name: "Gmail",
-    description: "Send, read, search, label, and manage email.",
-    homepage: "https://mail.google.com",
-    logoSlug: "gmail",
-  },
-  {
-    id: "outlook",
-    name: "Outlook",
-    description: "Mail, calendar, and contacts via Microsoft 365.",
-    homepage: "https://outlook.live.com",
-    logoSlug: "microsoftoutlook",
-  },
-];
-
 /**
- * Resolve the best logo URL for a connector card: the official toolkit logo from
- * Composio when the backend provides one, else the official Simple-Icons mark.
+ * Resolve the logo URL for a connector card: the official toolkit logo from Composio when the
+ * backend provides one, else null (the card then falls back to the app's initial).
  */
-export function connectorLogo(meta: ConnectorMeta, logoUrl?: string | null): string {
+export function connectorLogo(logoUrl?: string | null): string | null {
   if (logoUrl && /^https?:\/\//i.test(logoUrl.trim())) return logoUrl.trim();
-  return `https://cdn.simpleicons.org/${meta.logoSlug}`;
+  return null;
 }
 
 function statusOf(value: unknown): ConnectorStatus {
@@ -86,8 +46,9 @@ function statusOf(value: unknown): ConnectorStatus {
 export function normalizeConnector(raw: unknown): ConnectorConnection | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  const connectorId = typeof r.connectorId === "string" ? r.connectorId.trim().toLowerCase() : "";
-  if (!AVAILABLE_CONNECTORS.some((c) => c.id === connectorId)) return null;
+  const connectorId =
+    typeof r.connectorId === "string" ? r.connectorId.trim().toLowerCase() : "";
+  if (!isConnectorId(connectorId)) return null;
   const connectedAccountId =
     typeof r.connectedAccountId === "string" ? r.connectedAccountId.trim() : "";
   if (!connectedAccountId) return null;
@@ -119,7 +80,7 @@ export interface ConnectorsOverview {
   connectors: ConnectorOverviewItem[];
 }
 
-/** Catalog + live connection status from the backend. */
+/** Live catalog + connection status from the backend. */
 export async function fetchConnectorsOverview(signal?: AbortSignal): Promise<ConnectorsOverview> {
   const data = await requestJson<{
     configured?: boolean;

@@ -1,103 +1,30 @@
 /**
- * Connectors — configuration shapes for third-party app integrations (GitHub, Slack, ...).
+ * Connectors — configuration shapes for third-party app integrations, powered by Composio
+ * (https://composio.dev).
  *
- * A "connector" is a user-facing integration with an external application, powered by
- * Composio (https://composio.dev). Each connector maps to exactly one Composio toolkit
- * (identified by its lowercase `toolkitSlug`, e.g. `github`). Once the user authenticates a
- * connector (OAuth via Composio), EVERY tool Composio exposes for that toolkit becomes a
- * native function tool for the agent — there is intentionally no allowlist, no per-connector
- * tool subset, and no cap on the number of tools.
+ * There is intentionally NO static/pre-added catalog here. The connectable apps are fetched
+ * LIVE from Composio: the backend lists the project's toolkits and keeps only the OAuth-capable
+ * ones (see `ComposioClient.listToolkits`). A "connector" therefore maps 1:1 to a Composio toolkit
+ * identified by its lowercase `toolkitSlug` (e.g. `github`). Once the user authenticates a
+ * connector (OAuth via Composio), EVERY tool Composio exposes for that toolkit becomes a native
+ * function tool for the agent — there is no allowlist, no per-connector tool subset, and no cap.
  *
- * This file owns the static catalog + the defensive normalization. Adding a future connector
- * is a single entry in AVAILABLE_CONNECTORS (plus its logo slug) — everything else
- * (auth, tool discovery, execution, UI sync) is connector-agnostic and keys off this list.
+ * This file owns the connection shapes + the defensive normalization; the live catalog lives in
+ * the Composio client and the API layer.
  */
-
-/** Stable connector ids — also the keys used in persisted state and on the wire. */
-export const CONNECTOR_IDS = ["github", "slack", "notion", "gmail", "outlook"] as const;
-
-export type ConnectorId = (typeof CONNECTOR_IDS)[number];
-
-/** A single available third-party app integration. */
-export interface ConnectorDefinition {
-  /** Stable id (matches the persisted connection record). */
-  id: ConnectorId;
-  /** Human-readable app name shown on the connector card. */
-  name: string;
-  /** One-line description shown on the connector card. */
-  description: string;
-  /** Composio toolkit slug used for auth-config discovery, tool listing, and execution. */
-  toolkitSlug: string;
-  /** Simple-Icons slug used as the logo fallback (https://cdn.simpleicons.org/<slug>). */
-  logoSlug: string;
-  /** Link to the app's homepage (shown on the connector card). */
-  homepage: string;
-}
 
 /**
- * The full catalog of connectors the app supports. Order here is the order the
- * frontend renders the connector cards. To add a new connector in the future,
- * append one entry — no other code changes are required.
+ * A connector id is now just a Composio toolkit slug (e.g. `github`, `google_calendar`). Kept as
+ * an alias so the rest of the connector surface does not depend on a hardcoded union.
  */
-export const AVAILABLE_CONNECTORS: readonly ConnectorDefinition[] = [
-  {
-    id: "github",
-    name: "GitHub",
-    description: "Repositories, issues, pull requests, actions, and code search.",
-    toolkitSlug: "github",
-    logoSlug: "github",
-    homepage: "https://github.com",
-  },
-  {
-    id: "slack",
-    name: "Slack",
-    description: "Channels, messages, threads, and workspace search.",
-    toolkitSlug: "slack",
-    logoSlug: "slack",
-    homepage: "https://slack.com",
-  },
-  {
-    id: "notion",
-    name: "Notion",
-    description: "Pages, databases, blocks, and workspace search.",
-    toolkitSlug: "notion",
-    logoSlug: "notion",
-    homepage: "https://notion.so",
-  },
-  {
-    id: "gmail",
-    name: "Gmail",
-    description: "Send, read, search, label, and manage email.",
-    toolkitSlug: "gmail",
-    logoSlug: "gmail",
-    homepage: "https://mail.google.com",
-  },
-  {
-    id: "outlook",
-    name: "Outlook",
-    description: "Mail, calendar, and contacts via Microsoft 365.",
-    toolkitSlug: "outlook",
-    logoSlug: "microsoftoutlook",
-    homepage: "https://outlook.live.com",
-  },
-];
+export type ConnectorId = string;
 
-const CONNECTOR_BY_ID = new Map<string, ConnectorDefinition>(
-  AVAILABLE_CONNECTORS.map((c) => [c.id, c]),
-);
+/** Toolkit-slug shape: letters, digits, `_` and `-`, 1–64 chars. */
+const TOOLKIT_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
-const CONNECTOR_BY_TOOLKIT = new Map<string, ConnectorDefinition>(
-  AVAILABLE_CONNECTORS.map((c) => [c.toolkitSlug.toLowerCase(), c]),
-);
-
-/** Look up a connector definition by its stable id (case-insensitive). */
-export function getConnector(id: string): ConnectorDefinition | undefined {
-  return CONNECTOR_BY_ID.get(id.trim().toLowerCase());
-}
-
-/** Look up a connector definition by its Composio toolkit slug (case-insensitive). */
-export function getConnectorByToolkit(toolkitSlug: string): ConnectorDefinition | undefined {
-  return CONNECTOR_BY_TOOLKIT.get(toolkitSlug.trim().toLowerCase());
+/** True when a string looks like a valid Composio toolkit slug. */
+export function isToolkitSlug(value: string): boolean {
+  return TOOLKIT_SLUG_RE.test((value ?? "").trim());
 }
 
 /** Base URL of the Composio REST API (v3.1 is current; it defaults tool versions to latest). */
@@ -162,8 +89,8 @@ function statusOf(value: unknown): ConnectorStatus {
 
 /**
  * Defensively normalize an untrusted connection payload (wire or stored) into a
- * well-formed ConnectorConnection, or `null` when it is unusable (unknown connector
- * or missing connected-account id).
+ * well-formed ConnectorConnection, or `null` when it is unusable (missing/invalid
+ * toolkit slug or missing connected-account id).
  */
 export function normalizeConnectorConnection(
   raw: unknown,
@@ -171,13 +98,13 @@ export function normalizeConnectorConnection(
 ): ConnectorConnection | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as ConnectorConnectionWire;
-  const connector = getConnector(str(r.connectorId) || str(r.connector_id));
-  if (!connector) return null;
+  const connectorId = (str(r.connectorId) || str(r.connector_id)).trim().toLowerCase();
+  if (!isToolkitSlug(connectorId)) return null;
   const connectedAccountId = (str(r.connectedAccountId) || str(r.connected_account_id)).trim();
   if (!connectedAccountId) return null;
   const now = defaults?.now ?? Date.now();
   return {
-    connectorId: connector.id,
+    connectorId,
     connectedAccountId,
     status: statusOf(r.status),
     accountLabel: (str(r.accountLabel) || str(r.account_label)).trim(),
@@ -188,7 +115,7 @@ export function normalizeConnectorConnection(
 
 /**
  * A connector reference as sent with each chat turn (mirrors how sub-agents/skills
- * travel): the connector id plus the Composio connected-account id to execute with.
+ * travel): the toolkit slug plus the Composio connected-account id to execute with.
  */
 export interface ConnectorWire {
   connectorId: ConnectorId;
@@ -199,11 +126,11 @@ export interface ConnectorWire {
 export function normalizeConnectorWire(raw: unknown): ConnectorWire | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as ConnectorConnectionWire;
-  const connector = getConnector(str(r.connectorId) || str(r.connector_id));
-  if (!connector) return null;
+  const connectorId = (str(r.connectorId) || str(r.connector_id)).trim().toLowerCase();
+  if (!isToolkitSlug(connectorId)) return null;
   const connectedAccountId = (str(r.connectedAccountId) || str(r.connected_account_id)).trim();
   if (!connectedAccountId) return null;
-  return { connectorId: connector.id, connectedAccountId };
+  return { connectorId, connectedAccountId };
 }
 
 /**

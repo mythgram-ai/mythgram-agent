@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { fetchCustomAgentTools, fetchMainAgentSystemPrompt, type CustomAgentToolMeta } from "@/lib/customAgentTools";
-import { AVAILABLE_CONNECTORS, fetchConnectorTools } from "@/lib/connectors";
+import { fetchConnectorTools } from "@/lib/connectors";
 import { fetchMcpEditorTools, humanizeMcpToolName } from "@/lib/mcp";
 import { MAIN_AGENT_ID, fetchCustomAgents } from "@/lib/customAgents";
 import { ImportCustomAgentsModal } from "@/components/panels/ImportCustomAgentsModal";
@@ -41,11 +41,10 @@ const empty = (): Draft => ({ id: null, name: "", description: "", systemPrompt:
 async function connectorTools(signal?: AbortSignal): Promise<CustomAgentToolMeta[]> {
   try {
     const tools = await fetchConnectorTools(signal);
-    const byId = new Map(AVAILABLE_CONNECTORS.map((c) => [c.id, c.name]));
     return tools.map((t) => ({
       name: t.name,
       label: t.display || t.name,
-      description: `[${byId.get(t.connector_id) ?? t.connector_id}] ${t.description || t.display || t.name}`,
+      description: `[${t.toolkit || t.connector_id}] ${t.description || t.display || t.name}`,
     }));
   } catch {
     return [];

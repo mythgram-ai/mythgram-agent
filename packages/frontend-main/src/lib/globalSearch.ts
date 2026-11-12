@@ -1,5 +1,4 @@
 import { FALLBACK_PROVIDERS } from "@/lib/providers";
-import { AVAILABLE_CONNECTORS } from "@/lib/connectors";
 import type { Section } from "@/store/useStore";
 
 export type SearchTarget =
@@ -507,19 +506,18 @@ export function searchEverything(rawQuery: string, state: SearchState): SearchRe
     );
   }
 
-  // Connectors (catalog + status)
-  for (const meta of AVAILABLE_CONNECTORS) {
-    const stored = state.connectors.find((c) => c.connectorId === meta.id);
-    const hay = `${meta.name} ${meta.description} ${meta.id} connector ${stored?.status ?? ""} ${stored?.accountLabel ?? ""}`.toLowerCase();
+  // Connectors (connected apps; the live catalog is fetched on the Connectors page)
+  for (const stored of state.connectors) {
+    const hay = `${stored.connectorId} connector ${stored.status} ${stored.accountLabel}`.toLowerCase();
     if (!includes(hay, q)) continue;
     push(
       {
-        id: `connector-${meta.id}`,
+        id: `connector-${stored.connectorId}`,
         group: "Connectors",
-        title: `${meta.name} — ${stored?.status ?? "disconnected"}`,
-        snippet: meta.description,
+        title: `${stored.connectorId} — ${stored.status}`,
+        snippet: stored.accountLabel,
         hint: "Open connectors",
-        target: { kind: "connector", connectorId: meta.id },
+        target: { kind: "connector", connectorId: stored.connectorId },
       },
       2,
     );

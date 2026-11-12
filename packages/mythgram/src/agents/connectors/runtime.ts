@@ -1,6 +1,10 @@
 import type { OpenAIToolSchema } from "../tools/registry.js";
 import type { ToolResult } from "../tools/types.js";
-import { COMPOSIO_DEFAULT_USER_ID, getConnector, type ConnectorWire } from "./configuration.js";
+import {
+  COMPOSIO_DEFAULT_USER_ID,
+  isToolkitSlug,
+  type ConnectorWire,
+} from "./configuration.js";
 import { ComposioClient, ComposioError, type ComposioToolDefinition } from "./client.js";
 
 /**
@@ -145,12 +149,12 @@ export class ConnectorRuntime {
     // De-duplicate by toolkit so two connections to the same app share one catalog read.
     const byToolkit = new Map<string, string>();
     for (const connection of options.connections) {
-      const connector = getConnector(connection.connectorId);
-      if (!connector) continue;
+      const toolkitSlug = (connection.connectorId ?? "").trim().toLowerCase();
+      if (!isToolkitSlug(toolkitSlug)) continue;
       const accountId = connection.connectedAccountId.trim();
       if (!accountId) continue;
-      byToolkit.set(connector.toolkitSlug.toLowerCase(), accountId);
-      if (!runtime.connectorIds.includes(connector.id)) runtime.connectorIds.push(connector.id);
+      byToolkit.set(toolkitSlug, accountId);
+      if (!runtime.connectorIds.includes(toolkitSlug)) runtime.connectorIds.push(toolkitSlug);
     }
     if (byToolkit.size === 0) return runtime;
 
@@ -184,14 +188,13 @@ export class ConnectorRuntime {
     for (const tool of tools) {
       const name = tool.slug.trim();
       if (!name || this.byName.has(name)) continue;
-      const connector = getConnector(tool.toolkitSlug) ?? getConnector(toolkitSlug);
       this.byName.set(name, {
         name,
         displayName: tool.name.trim() || name,
         description: tool.description,
         parameters: toOpenAIParameters(tool.inputParameters),
-        connectorId: connector?.id ?? toolkitSlug,
-        toolkitName: tool.toolkitName || connector?.name || toolkitSlug,
+        connectorId: (tool.toolkitSlug || toolkitSlug).toLowerCase(),
+        toolkitName: tool.toolkitName || toolkitSlug,
       });
     }
   }
@@ -241,7 +244,7 @@ export class ConnectorRuntime {
 
   /** Human-readable names of the apps connected this turn. */
   connectorNames(): string[] {
-    return this.connectorIds.map((id) => getConnector(id)?.name ?? id);
+    return [...this.connectorIds];
   }
 
   /** True when `name` is a connector tool available this turn. */
@@ -342,20 +345,20 @@ export class ConnectorRuntime {
     connectorId: string,
     connectedAccountId: string,
   ): Promise<{ attached: number; tools: string[] }> {
-    const connector = getConnector(connectorId);
+    const toolkitSlug = (connectorId ?? "").trim().toLowerCase();
     const accountId = connectedAccountId.trim();
-    if (!connector || !accountId || !this.apiKey) return { attached: 0, tools: [] };
+    if (!isToolkitSlug(toolkitSlug) || !accountId || !this.apiKey) return { attached: 0, tools: [] };
     // Reconnects replace the previous account binding rather than stacking.
-    this.detachConnector(connector.id);
+    this.detachConnector(toolkitSlug);
     let definitions: ComposioToolDefinition[];
     try {
-      definitions = await this.cache.get(this.client!, this.apiKey, connector.toolkitSlug);
+      definitions = await this.cache.get(this.client!, this.apiKey, toolkitSlug);
     } catch {
       return { attached: 0, tools: [] };
     }
     const before = this.byName.size;
-    this.addToolkit(connector.toolkitSlug, accountId, definitions);
-    if (!this.connectorIds.includes(connector.id)) this.connectorIds.push(connector.id);
+    this.addToolkit(toolkitSlug, accountId, definitions);
+    if (!this.connectorIds.includes(toolkitSlug)) this.connectorIds.push(toolkitSlug);
     const tools = [...this.byName.keys()].slice(before);
     return { attached: this.byName.size - before, tools };
   }
@@ -371,10 +374,9 @@ export class ConnectorRuntime {
         removed += 1;
       }
     }
-    // The execution account lives under the toolkit slug, so drop that binding too —
-    // otherwise a detached tool name could still resolve a stale connected account.
-    const toolkitSlug = getConnector(key)?.toolkitSlug;
-    if (toolkitSlug) this.accountByToolkit.delete(toolkitSlug.toLowerCase());
+    // The execution account lives under the toolkit slug (== the connector id), so drop
+    // that binding too — otherwise a detached tool could still resolve a stale account.
+    this.accountByToolkit.delete(key);
     const index = this.connectorIds.indexOf(key);
     if (index !== -1) this.connectorIds.splice(index, 1);
     return removed;

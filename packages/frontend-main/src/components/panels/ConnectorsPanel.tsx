@@ -13,14 +13,12 @@ import {
 import { useStore } from "@/store/useStore";
 import type { ConnectorOverviewItem, ConnectorStatus } from "@/types";
 import {
-  AVAILABLE_CONNECTORS,
   connectorLogo,
   disconnectConnector,
   fetchConnectorsOverview,
   pollConnectorActive,
   refreshConnectors,
   startConnectorConnect,
-  type ConnectorMeta,
 } from "@/lib/connectors";
 import { Modal } from "@/components/ui/Modal";
 import { Button, EmptyState, PanelHeader } from "@/components/ui/primitives";
@@ -34,14 +32,18 @@ const STATUS_STYLE: Record<ConnectorStatus, { label: string; cls: string }> = {
   disconnected: { label: "Not connected", cls: "bg-[var(--chip)] text-[var(--muted)]" },
 };
 
+/** The Zapier MCP notice shown at the top of the page. */
+const ZAPPER_NOTICE_URL = "https://zapier.com/mcp";
+const ZAPPER_LOGO_URL = "https://cdn.simpleicons.org/zapier";
+
 /**
  * Connectors page.
  *
- * Lists the available third-party app integrations (GitHub, Slack, Notion, Gmail,
- * Outlook) with their official logos. Connecting opens the app's OAuth page (via
- * Composio) in a new tab; this page polls until the connection is active. Once a
- * connector is connected, every one of its tools is available to the agent
- * (main, custom, sub-agents, teams, CEO) as native function calls.
+ * Lists the OAuth-capable app integrations, fetched LIVE from Composio (the backend lists the
+ * project's toolkits and keeps only the ones that authenticate via OAuth), with their official
+ * logos. Connecting opens the app's OAuth page (via Composio) in a new tab; this page polls until
+ * the connection is active. Once a connector is connected, every one of its tools is available to
+ * the agent (main, custom, sub-agents, teams, CEO) as native function calls.
  */
 export function ConnectorsPanel() {
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
@@ -66,7 +68,7 @@ export function ConnectorsPanel() {
       // Mirror the backend truth into the synced store slice (drives chat turns).
       setConnectors(
         overview.connectors
-          .filter((c) => c.status === "active" || c.status === "pending" || c.status === "failed")
+          .filter((c) => c.status !== "disconnected")
           .map((c) => ({
             connectorId: c.id,
             connectedAccountId: c.connected_account_id ?? "",
@@ -144,14 +146,13 @@ export function ConnectorsPanel() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const byId = new Map(items.map((i) => [i.id, i]));
-    const all = AVAILABLE_CONNECTORS.map((meta) => ({ meta, live: byId.get(meta.id) ?? null }));
-    if (!q) return all;
-    return all.filter(
-      ({ meta, live }) =>
-        meta.name.toLowerCase().includes(q) ||
-        meta.description.toLowerCase().includes(q) ||
-        (live?.account_label ?? "").toLowerCase().includes(q),
+    if (!q) return items;
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        (item.description ?? "").toLowerCase().includes(q) ||
+        item.id.toLowerCase().includes(q) ||
+        (item.account_label ?? "").toLowerCase().includes(q),
     );
   }, [items, query]);
 
@@ -160,9 +161,33 @@ export function ConnectorsPanel() {
   return (
     <div className="mx-auto w-full max-w-2xl panel-in">
       <PanelHeader kicker="Apps the agent can use" title="Connectors" />
+
+      <a
+        href={ZAPPER_NOTICE_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="mb-4 flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] p-3 transition-colors hover:border-[var(--secondary)]"
+      >
+        <img
+          src={ZAPPER_LOGO_URL}
+          alt="Zapper logo"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className="h-8 w-8 shrink-0 rounded-[var(--radius-sm)] object-contain"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+        <span className="flex-1 text-sm font-medium text-[var(--fg)]">
+          Use zapper mcp for connecting to 9000+ apps
+        </span>
+        <ExternalLink className="h-4 w-4 shrink-0 text-[var(--subtle)]" />
+      </a>
+
       <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">
         Connect an app once — the agent can then use every one of its tools directly
-        (read and write) as native function calls, in any chat.
+        (read and write) as native function calls, in any chat. Only OAuth-capable apps
+        are shown, fetched live from Composio.
       </p>
 
       {!loading && !configured && (
@@ -171,7 +196,8 @@ export function ConnectorsPanel() {
           <div className="flex-1">
             <p className="m-0 text-[var(--fg)]">Add your Composio API key to enable connectors.</p>
             <p className="m-0 mt-0.5 text-xs text-[var(--muted)]">
-              The key is stored with your settings and only ever sent to the backend.
+              The key is stored with your settings and only ever sent to the backend — the connectable
+              apps are then fetched directly from Composio.
             </p>
           </div>
           <Button variant="outline" onClick={() => setSettingsOpen(true)}>
@@ -185,7 +211,7 @@ export function ConnectorsPanel() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search connectors…"
+          placeholder="Search connectors..."
           aria-label="Search connectors"
           className="w-full bg-transparent text-sm text-[var(--fg)] outline-none placeholder:text-[var(--subtle)]"
         />
@@ -203,31 +229,30 @@ export function ConnectorsPanel() {
 
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-12 text-sm text-[var(--muted)]">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading connectors…
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading connectors from Composio...
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState icon={<ConnectorsIcon className="h-8 w-8" />}>
-          No connectors match “{query}”.
+          {items.length === 0 ? "No connectors available yet." : `No connectors match “${query}”.`}
         </EmptyState>
       ) : (
         <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2">
-          {filtered.map(({ meta, live }) => (
+          {filtered.map((item) => (
             <ConnectorCard
-              key={meta.id}
-              meta={meta}
-              live={live}
-              busy={busyId === meta.id}
+              key={item.id}
+              item={item}
+              busy={busyId === item.id}
               configured={configured}
-              onConnect={() => void connect(meta.id)}
-              onDisconnect={() => setConfirmId(meta.id)}
+              onConnect={() => void connect(item.id)}
+              onDisconnect={() => setConfirmId(item.id)}
             />
           ))}
         </ul>
       )}
 
-      {!loading && (
+      {!loading && items.length > 0 && (
         <p className="mt-4 text-xs text-[var(--subtle)]">
-          {activeCount} of {AVAILABLE_CONNECTORS.length} connected
+          {activeCount} of {items.length} connected
           {activeCount > 0 && " — connected apps are available to the agent right now"}.
         </p>
       )}
@@ -264,21 +289,19 @@ export function ConnectorsPanel() {
 }
 
 function ConnectorCard({
-  meta,
-  live,
+  item,
   busy,
   configured,
   onConnect,
   onDisconnect,
 }: {
-  meta: ConnectorMeta;
-  live: ConnectorOverviewItem | null;
+  item: ConnectorOverviewItem;
   busy: boolean;
   configured: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
 }) {
-  const status: ConnectorStatus = live?.status ?? "disconnected";
+  const status: ConnectorStatus = item.status;
   const style = STATUS_STYLE[status];
   const connected = status === "active";
   const awaiting = status === "pending";
@@ -293,18 +316,22 @@ function ConnectorCard({
         style={{ boxShadow: "var(--shadow-chip)" }}
       >
         <div className="flex items-start gap-3">
-          <ConnectorLogo meta={meta} logoUrl={live?.logo_url} />
+          <ConnectorLogo name={item.name} logoUrl={item.logo_url} />
           <div className="min-w-0 flex-1">
-            <h3 className="m-0 text-base font-semibold text-[var(--fg)]">{meta.name}</h3>
-            <a
-              href={meta.homepage}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--subtle)] hover:text-[var(--secondary)]"
-            >
-              {meta.homepage.replace(/^https?:\/\//, "")}
-              <ExternalLink className="h-2.5 w-2.5" />
-            </a>
+            <h3 className="m-0 text-base font-semibold text-[var(--fg)]">{item.name}</h3>
+            {item.homepage ? (
+              <a
+                href={item.homepage}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--subtle)] hover:text-[var(--secondary)]"
+              >
+                {item.homepage.replace(/^https?:\/\//, "")}
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            ) : (
+              <span className="mt-0.5 block font-mono text-[11px] text-[var(--subtle)]">{item.id}</span>
+            )}
           </div>
           <span
             className={cn(
@@ -318,16 +345,18 @@ function ConnectorCard({
           </span>
         </div>
 
-        <p className="m-0 mt-2 text-[13px] leading-relaxed text-[var(--muted)]">{meta.description}</p>
+        {item.description && (
+          <p className="m-0 mt-2 text-[13px] leading-relaxed text-[var(--muted)]">{item.description}</p>
+        )}
 
-        {connected && live?.account_label && (
+        {connected && item.account_label && (
           <p className="m-0 mt-2 truncate font-mono text-[11px] text-[var(--subtle)]">
-            {live.account_label}
+            {item.account_label}
           </p>
         )}
         {awaiting && (
           <p className="m-0 mt-2 text-[11px] leading-relaxed text-[var(--warning)]">
-            Finish authorizing {meta.name} in the opened tab — this card updates automatically.
+            Finish authorizing {item.name} in the opened tab — this card updates automatically.
           </p>
         )}
 
@@ -351,7 +380,7 @@ function ConnectorCard({
               ) : (
                 <Plug className="h-3.5 w-3.5" />
               )}
-              {awaiting ? "Waiting for auth…" : status === "failed" ? "Reconnect" : "Connect"}
+              {awaiting ? "Waiting for auth..." : status === "failed" ? "Reconnect" : "Connect"}
             </Button>
           )}
         </div>
@@ -360,14 +389,14 @@ function ConnectorCard({
   );
 }
 
-/** Official app logo (Composio artwork, else Simple-Icons), with a letter fallback. */
-function ConnectorLogo({ meta, logoUrl }: { meta: ConnectorMeta; logoUrl?: string | null }) {
+/** Official app logo (Composio artwork), with a letter fallback. */
+function ConnectorLogo({ name, logoUrl }: { name: string; logoUrl?: string | null }) {
   const [failed, setFailed] = useState(false);
-  const src = connectorLogo(meta, logoUrl);
-  if (failed) {
+  const src = connectorLogo(logoUrl);
+  if (failed || !src) {
     return (
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--secondary)] text-lg font-semibold text-[var(--secondary-fg)]">
-        {meta.name.slice(0, 1)}
+        {name.slice(0, 1).toUpperCase()}
       </span>
     );
   }
@@ -375,7 +404,7 @@ function ConnectorLogo({ meta, logoUrl }: { meta: ConnectorMeta; logoUrl?: strin
     <img
       key={src}
       src={src}
-      alt={`${meta.name} logo`}
+      alt={`${name} logo`}
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}

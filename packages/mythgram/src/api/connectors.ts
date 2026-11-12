@@ -1,26 +1,25 @@
 import { Router, type Request, type Response } from "express";
 import type { AppConfig } from "../config.js";
 import {
-  AVAILABLE_CONNECTORS,
   COMPOSIO_DEFAULT_USER_ID,
   ComposioClient,
   ConnectorManager,
-  getConnector,
-  type ComposioToolkitInfo,
-  type ConnectorId,
+  isToolkitSlug,
+  type ComposioToolkitSummary,
 } from "../agents/connectors/index.js";
 import { isSafeSessionId } from "../database/index.js";
 
 /**
- * Connectors API — third-party app integrations (GitHub, Slack, Notion, Gmail, Outlook)
- * powered by Composio.
+ * Connectors API — third-party app integrations powered by Composio.
  *
- * The browser owns no tokens: the OAuth dance happens through Composio (redirect URL
- * opened in a new tab, status polled until ACTIVE), and only the connected-account id
- * + status are persisted in the SQLite `connectors` document. Tool execution always
- * happens server-side through the connector bridge.
+ * The connectable app catalog is fetched LIVE from Composio (no static/pre-added list): the
+ * backend lists the project's toolkits, keeps only the OAuth-capable ones, and returns them with
+ * their official names, descriptions, and logo URLs. The browser owns no tokens: the OAuth dance
+ * happens through Composio (redirect URL opened in a new tab, status polled until ACTIVE), and only
+ * the connected-account id + status are persisted in the SQLite `connectors` document. Tool
+ * execution always happens server-side through the connector bridge.
  *
- *   GET    /api/connectors              catalog + connection status (+ official logos)
+ *   GET    /api/connectors              live OAuth-capable catalog + connection status (+ logos)
  *   POST   /api/connectors/connect      { connector_id } -> { redirect_url, connected_account_id }
  *   GET    /api/connectors/status/:id   poll one connected account, persist its status
  *   POST   /api/connectors/refresh      re-poll every stored connection
@@ -29,27 +28,33 @@ import { isSafeSessionId } from "../database/index.js";
  *   POST   /api/connectors/validate     { composio_api_key? } -> { ok }
  */
 
-/** Toolkit metadata cache so the overview rarely hits Composio (logos change ~never). */
-const TOOLKIT_INFO_TTL_MS = 60 * 60_000;
-const toolkitInfoCache = new Map<string, { at: number; info: ComposioToolkitInfo | null }>();
+/** Live toolkit catalog cache so the overview rarely hits Composio (logos change ~never). */
+const TOOLKIT_CATALOG_TTL_MS = 60 * 60_000;
+interface CatalogEntry {
+  at: number;
+  toolkits: ComposioToolkitSummary[];
+}
+const toolkitCatalogCache = new Map<string, CatalogEntry>();
 
-async function toolkitInfo(
-  client: ComposioClient,
-  toolkitSlug: string,
-): Promise<ComposioToolkitInfo | null> {
-  const cached = toolkitInfoCache.get(toolkitSlug);
-  if (cached && Date.now() - cached.at < TOOLKIT_INFO_TTL_MS) return cached.info;
-  const info = await client.getToolkit(toolkitSlug);
-  toolkitInfoCache.set(toolkitSlug, { at: Date.now(), info });
-  return info;
+async function oauthToolkits(client: ComposioClient, apiKey: string): Promise<ComposioToolkitSummary[]> {
+  const cached = toolkitCatalogCache.get(apiKey);
+  if (cached && Date.now() - cached.at < TOOLKIT_CATALOG_TTL_MS) return cached.toolkits;
+  const all = await client.listToolkits();
+  // Allow only OAuth-capable connectors, as required.
+  const toolkits = all.filter((t) => t.oauthCapable);
+  toolkitCatalogCache.set(apiKey, { at: Date.now(), toolkits });
+  return toolkits;
 }
 
-function clientFor(manager: ConnectorManager, config: AppConfig, override?: unknown): ComposioClient {
-  const key = manager.resolveApiKey(
+function keyFor(manager: ConnectorManager, config: AppConfig, override?: unknown): string {
+  return manager.resolveApiKey(
     typeof override === "string" ? override : "",
     config.composioApiKey,
   );
-  return new ComposioClient(key);
+}
+
+function clientFor(manager: ConnectorManager, config: AppConfig, override?: unknown): ComposioClient {
+  return new ComposioClient(keyFor(manager, config, override));
 }
 
 function err(res: Response, status: number, code: string, message: string): void {
@@ -59,46 +64,65 @@ function err(res: Response, status: number, code: string, message: string): void
 export function buildConnectorsRouter(manager: ConnectorManager, config: AppConfig): Router {
   const router = Router();
 
-  /** Catalog with live connection status (and official logos when a key is configured). */
+  /** Live OAuth-capable catalog with connection status and official logos. */
   router.get("/", async (_req: Request, res: Response) => {
-    const probe = clientFor(manager, config);
-    const configured = probe.configured;
+    const client = clientFor(manager, config);
+    if (!client.configured) {
+      res.json({ ok: true, configured: false, user_id: COMPOSIO_DEFAULT_USER_ID, connectors: [] });
+      return;
+    }
     const stored = new Map(manager.list().map((c) => [c.connectorId, c]));
-
-    let logos = new Map<string, ComposioToolkitInfo | null>();
-    if (configured) {
-      const settled = await Promise.all(
-        AVAILABLE_CONNECTORS.map(async (connector) => {
-          try {
-            return [connector.id, await toolkitInfo(probe, connector.toolkitSlug)] as const;
-          } catch {
-            return [connector.id, null] as const;
-          }
-        }),
-      );
-      logos = new Map(settled);
+    let toolkits: ComposioToolkitSummary[] = [];
+    try {
+      toolkits = await oauthToolkits(client, keyFor(manager, config));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const code = (error as { code?: string }).code ?? "composio_request_failed";
+      res.status(502).json({ error: message, code, configured: true, connectors: [] });
+      return;
     }
 
-    res.json({
-      ok: true,
-      configured,
-      user_id: COMPOSIO_DEFAULT_USER_ID,
-      connectors: AVAILABLE_CONNECTORS.map((connector) => {
-        const connection = stored.get(connector.id);
-        const info = logos.get(connector.id) ?? null;
+    const connectable = toolkits
+      .map((toolkit) => {
+        const connection = stored.get(toolkit.slug);
         return {
-          id: connector.id,
-          name: connector.name,
-          description: connector.description,
-          homepage: connector.homepage,
-          logo_url: info?.logo ?? null,
-          tools_count: info?.toolsCount ?? null,
+          id: toolkit.slug,
+          name: toolkit.name,
+          description: toolkit.description,
+          homepage: toolkit.homepage,
+          logo_url: toolkit.logo || null,
+          tools_count: toolkit.toolsCount || null,
           status: connection?.status ?? "disconnected",
           connected_account_id: connection?.connectedAccountId ?? null,
           account_label: connection?.accountLabel ?? "",
           updated_at: connection?.updatedAt ?? null,
         };
-      }),
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Always include stored connections that are no longer in the live OAuth catalog so a
+    // user can still see and disconnect them.
+    for (const connection of stored.values()) {
+      if (connectable.some((c) => c.id === connection.connectorId)) continue;
+      connectable.push({
+        id: connection.connectorId,
+        name: connection.connectorId,
+        description: "",
+        homepage: "",
+        logo_url: null,
+        tools_count: null,
+        status: connection.status,
+        connected_account_id: connection.connectedAccountId,
+        account_label: connection.accountLabel,
+        updated_at: connection.updatedAt,
+      });
+    }
+
+    res.json({
+      ok: true,
+      configured: true,
+      user_id: COMPOSIO_DEFAULT_USER_ID,
+      connectors: connectable,
     });
   });
 
@@ -111,9 +135,9 @@ export function buildConnectorsRouter(manager: ConnectorManager, config: AppConf
    */
   router.post("/connect", async (req: Request, res: Response) => {
     const body = (req.body ?? {}) as { connector_id?: unknown; composio_api_key?: unknown };
-    const connector = getConnector(typeof body.connector_id === "string" ? body.connector_id : "");
-    if (!connector) {
-      err(res, 400, "unknown_connector", "Unknown connector. Expected one of: github, slack, notion, gmail, outlook.");
+    const toolkitSlug = typeof body.connector_id === "string" ? body.connector_id.trim().toLowerCase() : "";
+    if (!isToolkitSlug(toolkitSlug)) {
+      err(res, 400, "unknown_connector", "A valid connector id (Composio toolkit slug) is required.");
       return;
     }
     const client = clientFor(manager, config, body.composio_api_key);
@@ -123,13 +147,13 @@ export function buildConnectorsRouter(manager: ConnectorManager, config: AppConf
     }
 
     try {
-      let authConfig = await client.findAuthConfig(connector.toolkitSlug);
-      authConfig ??= await client.createAuthConfig(connector.toolkitSlug);
+      let authConfig = await client.findAuthConfig(toolkitSlug);
+      authConfig ??= await client.createAuthConfig(toolkitSlug);
       const link = await client.createLink(authConfig.id, COMPOSIO_DEFAULT_USER_ID);
-      const record = manager.upsertPending(connector.id, link.connectedAccountId);
+      const record = manager.upsertPending(toolkitSlug, link.connectedAccountId);
       res.json({
         ok: true,
-        connector_id: connector.id,
+        connector_id: toolkitSlug,
         redirect_url: link.redirectUrl,
         connected_account_id: link.connectedAccountId,
         status: record.status,
@@ -156,7 +180,6 @@ export function buildConnectorsRouter(manager: ConnectorManager, config: AppConf
     try {
       const account = await client.getConnectedAccount(connectedAccountId);
       const status = account.status === "active" ? "active" : account.status === "failed" ? "failed" : "pending";
-      // Attribute the polled account to whichever stored connection holds its id.
       const match = manager.list().find((c) => c.connectedAccountId === connectedAccountId);
       if (match) manager.markStatus(match.connectorId, status);
       res.json({ ok: true, connected_account_id: account.id, status });
@@ -190,12 +213,12 @@ export function buildConnectorsRouter(manager: ConnectorManager, config: AppConf
 
   /** Disconnect a connector: delete the remote account (best-effort) + drop the record. */
   router.delete("/:connectorId", async (req: Request, res: Response) => {
-    const connector = getConnector(String(req.params.connectorId));
-    if (!connector) {
+    const key = String(req.params.connectorId).trim().toLowerCase();
+    if (!isToolkitSlug(key)) {
       err(res, 404, "unknown_connector", "Unknown connector.");
       return;
     }
-    const stored = manager.get(connector.id);
+    const stored = manager.get(key);
     if (stored) {
       const client = clientFor(manager, config);
       if (client.configured) {
@@ -206,8 +229,8 @@ export function buildConnectorsRouter(manager: ConnectorManager, config: AppConf
         }
       }
     }
-    manager.remove(connector.id as ConnectorId);
-    res.json({ ok: true, connector_id: connector.id });
+    manager.remove(key);
+    res.json({ ok: true, connector_id: key });
   });
 
   /**
@@ -221,11 +244,6 @@ export function buildConnectorsRouter(manager: ConnectorManager, config: AppConf
       return;
     }
     const active = manager.list().filter((c) => c.status === "active");
-    const byToolkit = new Map<string, ConnectorId>();
-    for (const connection of active) {
-      const connector = getConnector(connection.connectorId);
-      if (connector) byToolkit.set(connector.toolkitSlug.toLowerCase(), connector.id);
-    }
     const tools: Array<{
       name: string;
       display: string;
@@ -234,16 +252,16 @@ export function buildConnectorsRouter(manager: ConnectorManager, config: AppConf
       toolkit: string;
     }> = [];
     await Promise.all(
-      [...byToolkit.entries()].map(async ([toolkitSlug, connectorId]) => {
+      active.map(async (connection) => {
         try {
-          const items = await client.listTools(toolkitSlug);
+          const items = await client.listTools(connection.connectorId);
           for (const item of items) {
             tools.push({
               name: item.slug,
               display: item.name || item.slug,
               description: item.description,
-              connector_id: connectorId,
-              toolkit: toolkitSlug,
+              connector_id: connection.connectorId,
+              toolkit: connection.connectorId,
             });
           }
         } catch {
