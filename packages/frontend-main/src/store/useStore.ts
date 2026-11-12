@@ -420,6 +420,13 @@ interface AppState {
   profileStates: Record<string, ProfileSnapshot>;
   /** Per-profile chat session id lists, keyed by profile id. */
   profileSessions: Record<string, string[]>;
+  /**
+   * Queued prompts per conversation id: extra messages the user staged while a turn
+   * was running. After each turn finishes, the next queued prompt for that session
+   * is sent automatically (no user interaction), one after another, in the
+   * background. Persisted with the backend so a queue survives a refresh.
+   */
+  promptQueues: Record<string, string[]>;
   activeRun: ActiveRun | null;
 
   // Ephemeral UI
@@ -521,6 +528,16 @@ interface AppState {
   ensureConversation: () => string;
   /** Replace one conversation wholesale (used when its snapshot loads from the database). */
   replaceConversation: (conv: Conversation) => void;
+
+  // Prompt queue (stage extra prompts while a turn is running; auto-sent afterwards)
+  /** Append one prompt to a conversation's queue (no-op for blank text). */
+  queuePrompt: (convId: string, text: string) => void;
+  /** Remove and return the next queued prompt for a conversation, or null when empty. */
+  dequeuePrompt: (convId: string) => string | null;
+  /** Remove one queued prompt by index (used by the queue chips' remove button). */
+  removeQueuedPrompt: (convId: string, index: number) => void;
+  /** Drop a conversation's entire queue. */
+  clearPromptQueue: (convId: string) => void;
 
   // Messages
   addMessage: (convId: string, message: ChatMessage) => void;
@@ -1380,6 +1397,7 @@ export const useStore = create<AppState>()(
       activeUserProfileId: null,
       profileStates: {},
       profileSessions: {},
+      promptQueues: {},
       activeRun: null,
 
       hydrated: false,
@@ -1447,6 +1465,19 @@ export const useStore = create<AppState>()(
         let profileSessions = normalizeProfileSessions(
           (p as { profileSessions?: unknown }).profileSessions,
         );
+        // Prompt queue: opaque conversation-id → prompt-list document. Sanitize so a
+        // malformed entry can never break boot; blank prompts are dropped.
+        const promptQueues: Record<string, string[]> = {};
+        const rawQueues = (p as { promptQueues?: unknown }).promptQueues;
+        if (rawQueues && typeof rawQueues === "object" && !Array.isArray(rawQueues)) {
+          for (const [cid, list] of Object.entries(rawQueues as Record<string, unknown>)) {
+            if (!cid || !Array.isArray(list)) continue;
+            const texts = list.filter(
+              (t): t is string => typeof t === "string" && t.trim().length > 0,
+            );
+            if (texts.length > 0) promptQueues[cid] = texts;
+          }
+        }
 
         // Drop session references the database no longer knows (deleted elsewhere).
         const serverIds = new Set(payload.sessions.map((s) => s.id));
@@ -1595,58 +1626,25 @@ export const useStore = create<AppState>()(
           (p as { modelsByProvider?: unknown }).modelsByProvider,
         );
 
-        // Seed the active profile's snapshot from the working copy when it has none
-        // (first run — preserves all pre-existing data under the default profile).
-        if (!profileStates[activePid]) {
-          profileStates = {
-            ...profileStates,
-            [activePid]: { ...cloneJson(base), currentId: null },
-          };
-        }
-        // The active snapshot wins over the working copy (it is newer by construction:
-        // it was captured the last time this profile was switched away from).
-        const snap = profileStates[activePid]!;
-        const fromSnap = {
-          settings: snap.settings && typeof snap.settings === "object" ? { ...base.settings, ...snap.settings } : base.settings,
-          subAgents: mergeSubAgentsWithDefaults(Array.isArray(snap.subAgents) ? snap.subAgents : base.subAgents),
-          skills: mergeSkillsWithDefaults(Array.isArray(snap.skills) ? snap.skills : base.skills),
-          todos: Array.isArray(snap.todos) ? snap.todos : base.todos,
-          memory: mergeMemoryWithDefaults(Array.isArray(snap.memory) ? snap.memory : base.memory),
-          knowledge: sanitizeKnowledge(Array.isArray(snap.knowledge) ? snap.knowledge : base.knowledge),
-          knowledgeSources:
-            snap.knowledgeSources && typeof snap.knowledgeSources === "object"
-              ? (snap.knowledgeSources as Record<string, KnowledgeSource>)
-              : base.knowledgeSources,
-          customProviders: Array.isArray(snap.customProviders) ? snap.customProviders : base.customProviders,
-          agentTeams: mergeTeamsWithDefaults(
-            Array.isArray(snap.agentTeams) ? (snap.agentTeams as AgentTeam[]) : base.agentTeams,
-          ),
-          ceoAgents: mergeCeosWithDefaults(snap.ceoAgents ?? base.ceoAgents),
-          customAgents: mergeCustomAgentsWithDefaults(snap.customAgents ?? base.customAgents),
-          activeCustomAgentId:
-            typeof snap.activeCustomAgentId === "string" ? snap.activeCustomAgentId : null,
-          mainAgentPrompts: normalizeMainAgentPrompts(snap.mainAgentPrompts ?? base.mainAgentPrompts),
-          activeMainAgentPromptId:
-            typeof snap.activeMainAgentPromptId === "string" ? snap.activeMainAgentPromptId : null,
-          taskModes: normalizeTaskModes(snap.taskModes ?? base.taskModes),
-          promptLibrary: normalizePromptLibrary(
-            (snap as { promptLibrary?: unknown }).promptLibrary ?? base.promptLibrary,
-          ),
-          activeTaskModeId:
-            typeof snap.activeTaskModeId === "string" ? snap.activeTaskModeId : null,
-          planModePrompt: normalizePlanModePrompt(snap.planModePrompt ?? base.planModePrompt),
-          agentMode: normalizeAgentMode(
-            (snap as { agentMode?: unknown }).agentMode ?? base.agentMode,
-          ),
-          connectors: normalizeConnectors(snap.connectors ?? base.connectors),
-          mcpServers: normalizeMcpServers(snap.mcpServers ?? base.mcpServers),
-        };
+        // The active profile's live workspace is the TOP-LEVEL working copy (`base`):
+        // every edit is written to those shared documents continuously while the user
+        // works. The profile's stashed snapshot (`profileStates[activePid]`) is only
+        // refreshed when switching AWAY from the profile, so for the *active* profile
+        // it is stale — it still holds the state from when the profile was opened.
+        // Reading it here would wipe every change made since (the reported "data
+        // vanishes on refresh" bug). So the working copy wins for the active profile,
+        // and its snapshot is refreshed to match it. Inactive profiles still restore
+        // from their snapshots — that is what makes switching bring each profile back.
+        const previousSnap = profileStates[activePid];
+        const fromSnap = base;
 
         const profileConvs = conversations.filter(
           (c) => (c.profileId ?? activePid) === activePid,
         );
         const storedCurrent =
-          typeof snap.currentId === "string" ? snap.currentId : null;
+          previousSnap && typeof previousSnap.currentId === "string"
+            ? previousSnap.currentId
+            : null;
         const legacyCurrent =
           typeof state.currentSessionId === "string" ? (state.currentSessionId as string) : null;
         const currentId =
@@ -1671,6 +1669,7 @@ export const useStore = create<AppState>()(
           activeUserProfileId: activePid,
           profileStates,
           profileSessions,
+          promptQueues,
         });
       },
 
@@ -1807,7 +1806,51 @@ export const useStore = create<AppState>()(
           delete summaryHistory[id];
           const subAgentSummaries = { ...s.subAgentSummaries };
           delete subAgentSummaries[id];
-          return { conversations, currentId, activeRun, contextUsage, customContextUsage, chatContextUsage, subAgentUsage, teamUsage, ceoUsage, summaryHandoffs, summaryHistory, subAgentSummaries };
+          // Drop the thread's pending prompt queue along with it.
+          const promptQueues = { ...s.promptQueues };
+          delete promptQueues[id];
+          return { conversations, currentId, activeRun, contextUsage, customContextUsage, chatContextUsage, subAgentUsage, teamUsage, ceoUsage, summaryHandoffs, summaryHistory, subAgentSummaries, promptQueues };
+        }),
+
+      // ---- Prompt queue -----------------------------------------------------------
+      queuePrompt: (convId, text) => {
+        const prompt = text.trim();
+        if (!convId || !prompt) return;
+        set((s) => ({
+          promptQueues: { ...s.promptQueues, [convId]: [...(s.promptQueues[convId] ?? []), prompt] },
+        }));
+      },
+
+      dequeuePrompt: (convId) => {
+        const list = get().promptQueues[convId];
+        if (!list || list.length === 0) return null;
+        const [next, ...rest] = list;
+        set((s) => {
+          const promptQueues = { ...s.promptQueues };
+          if (rest.length > 0) promptQueues[convId] = rest;
+          else delete promptQueues[convId];
+          return { promptQueues };
+        });
+        return next ?? null;
+      },
+
+      removeQueuedPrompt: (convId, index) =>
+        set((s) => {
+          const list = s.promptQueues[convId];
+          if (!list) return {};
+          const next = list.filter((_, i) => i !== index);
+          const promptQueues = { ...s.promptQueues };
+          if (next.length > 0) promptQueues[convId] = next;
+          else delete promptQueues[convId];
+          return { promptQueues };
+        }),
+
+      clearPromptQueue: (convId) =>
+        set((s) => {
+          if (!s.promptQueues[convId]) return {};
+          const promptQueues = { ...s.promptQueues };
+          delete promptQueues[convId];
+          return { promptQueues };
         }),
 
       renameConversation: (id, title) =>
@@ -2845,12 +2888,18 @@ export const useStore = create<AppState>()(
         delete profileStates[id];
         const profileSessions = { ...s.profileSessions };
         delete profileSessions[id];
+        // Forget queued prompts for the deleted profile's conversations.
+        const keptConvIds = new Set(conversations.map((c) => c.id));
+        const promptQueues = Object.fromEntries(
+          Object.entries(s.promptQueues).filter(([cid]) => keptConvIds.has(cid)),
+        );
         if (!wasActive) {
           set({
             userProfiles: mergeProfilesWithDefaults(remaining),
             conversations,
             profileStates,
             profileSessions,
+            promptQueues,
           });
           return null;
         }
@@ -2894,6 +2943,7 @@ export const useStore = create<AppState>()(
             ...profileSessions,
             [fallback.id]: owned.map((c) => c.id),
           },
+          promptQueues,
         });
         return null;
       },
@@ -3089,6 +3139,9 @@ export const useStore = create<AppState>()(
         const subAgentSummaries = Object.fromEntries(
           Object.entries(s.subAgentSummaries).filter(([cid]) => keptIds.has(cid)),
         );
+        const promptQueues = Object.fromEntries(
+          Object.entries(s.promptQueues).filter(([cid]) => keptIds.has(cid)),
+        );
         if (!isActive) {
           set({
             conversations,
@@ -3101,6 +3154,7 @@ export const useStore = create<AppState>()(
             teamUsage,
             ceoUsage,
             subAgentSummaries,
+            promptQueues,
           });
           return null;
         }
@@ -3136,6 +3190,7 @@ export const useStore = create<AppState>()(
           teamUsage,
           ceoUsage,
           subAgentSummaries,
+          promptQueues,
           profileStates: { ...s.profileStates, [id]: { ...cloneJson(fresh), currentId: null } },
           profileSessions: { ...s.profileSessions, [id]: [] },
         });

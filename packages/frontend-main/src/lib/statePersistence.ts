@@ -55,6 +55,7 @@ const SYNC_KEYS = [
   "activeUserProfileId",
   "profileStates",
   "profileSessions",
+  "promptQueues",
 ] as const;
 
 type SyncKey = (typeof SYNC_KEYS)[number];

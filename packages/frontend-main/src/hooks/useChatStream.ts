@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import { abortChat } from "@/lib/api";
 import { runChatStream, type StreamPhase, type StreamResult } from "@/lib/chatStream";
+import { DEFAULT_PROFILE_ID } from "@/lib/userProfiles";
+import { loadConversationIfNeeded } from "@/lib/statePersistence";
 import { isContextLimitRequired, isMainAgentActive, resolveContextLimit } from "@/lib/contextMeter";
 import { StreamBatcher } from "@/lib/streamBatcher";
 import { dispatchStreamEvent } from "@/lib/streamDispatch";
@@ -276,6 +278,11 @@ function buildStartRequest(convId: string, text: string): StreamRequest {
 export function useChatStream(onFilesChanged?: () => void) {
   const abortRef = useRef<AbortController | null>(null);
   const runningRef = useRef(false);
+  // Queue plumbing: refs let the queue drain call back into the latest `sendTo`
+  // without making `drive`/`drainQueue` depend on each other's identity.
+  const sendToRef = useRef<(convId: string, text: string) => Promise<void>>(async () => {});
+  const drainRef = useRef<((preferredConvId?: string) => void) | null>(null);
+  const drainingRef = useRef(false);
 
   const drive = useCallback(
     async (params: {
@@ -346,13 +353,68 @@ export function useChatStream(onFilesChanged?: () => void) {
         // `memory_agent_queued` SSE event normally attaches the watcher already; this is
         // the fallback that also refreshes the sessions list (idempotent per run).
         void attachLatestMemoryAgentRun();
+
+        // Auto-send the next queued prompt for this session once the turn ends. Only a
+        // clean completion ("done") or a run the backend already finished ("gone")
+        // drains; an explicit Stop ("aborted") pauses the queue and a hard connect
+        // error ("error") waits for the user. This runs off the stream lifecycle, not
+        // the UI, so queued prompts keep flowing in the background.
+        if (result === "done" || result === "gone") void drainRef.current?.(convId);
       }
     },
     [onFilesChanged],
   );
 
-  const send = useCallback(
-    async (text: string) => {
+  /**
+   * Send the next queued prompt (for `preferredConvId` first, else any queue in the
+   * active profile). Runs one turn at a time; each finished turn re-invokes this so
+   * multiple prompts drain one after another with no user interaction. A no-op while
+   * a turn is already running. Never sends another profile's queued prompts.
+   */
+  const drainQueue = useCallback((preferredConvId?: string) => {
+    if (runningRef.current || drainingRef.current) return;
+    const store = useStore.getState();
+    const active = store.activeUserProfileId ?? DEFAULT_PROFILE_ID;
+    const drainable = (convId: string): boolean => {
+      const list = store.promptQueues[convId];
+      if (!list || list.length === 0) return false;
+      const conv = store.conversations.find((c) => c.id === convId);
+      if (!conv) return false;
+      return (conv.profileId ?? DEFAULT_PROFILE_ID) === active;
+    };
+    const candidate =
+      (preferredConvId && drainable(preferredConvId) ? preferredConvId : null) ??
+      Object.keys(store.promptQueues).find(drainable) ??
+      null;
+    if (!candidate) return;
+
+    drainingRef.current = true;
+    void (async () => {
+      try {
+        // A queued prompt restored from the database may target a not-yet-loaded
+        // stub; pull its history first so the turn's context is complete.
+        try {
+          await loadConversationIfNeeded(candidate);
+        } catch {
+          // best effort — send with whatever is in memory
+        }
+        const text = useStore.getState().dequeuePrompt(candidate);
+        if (text) await sendToRef.current(candidate, text);
+      } finally {
+        drainingRef.current = false;
+        // Continue with the remaining queue (the finished turn triggers the next pass).
+        drainRef.current?.(candidate);
+      }
+    })();
+  }, []);
+
+  /**
+   * Start a fresh turn in a specific conversation (used by both the composer's
+   * `send` and the queued-prompt drain, so a queue can target a session even
+   * when it is not the one on screen).
+   */
+  const sendTo = useCallback(
+    async (convId: string, text: string) => {
       const trimmed = text.trim();
       if (!trimmed || runningRef.current) return;
 
@@ -383,8 +445,8 @@ export function useChatStream(onFilesChanged?: () => void) {
         return;
       }
 
-      const convId = store.ensureConversation();
-      const conv = useStore.getState().conversations.find((c) => c.id === convId)!;
+      const conv = useStore.getState().conversations.find((c) => c.id === convId);
+      if (!conv) return;
 
       const start = buildStartRequest(convId, trimmed);
 
@@ -397,7 +459,7 @@ export function useChatStream(onFilesChanged?: () => void) {
       store.addMessage(convId, userMsg);
 
       if (conv.messages.length === 0) {
-        store.renameConversation(convId, trimmed.slice(0, 48) + (trimmed.length > 48 ? "…" : ""));
+        store.renameConversation(convId, trimmed.slice(0, 48) + (trimmed.length > 48 ? "..." : ""));
       }
 
       const assistantId = uid("msg");
@@ -416,6 +478,22 @@ export function useChatStream(onFilesChanged?: () => void) {
       await drive({ convId, assistantId, start, resume: false });
     },
     [drive],
+  );
+
+  // Keep the refs current so the drain/drive callbacks always reach the latest logic.
+  useEffect(() => {
+    sendToRef.current = sendTo;
+    drainRef.current = drainQueue;
+  }, [sendTo, drainQueue]);
+
+  /** Send a prompt into the current conversation (the composer's Send action). */
+  const send = useCallback(
+    async (text: string) => {
+      if (!text.trim() || runningRef.current) return;
+      const convId = useStore.getState().ensureConversation();
+      await sendTo(convId, text);
+    },
+    [sendTo],
   );
 
   /**
@@ -482,7 +560,7 @@ export function useChatStream(onFilesChanged?: () => void) {
     [send],
   );
 
-  return { send, resume, stop, continueTask, isRunning: () => runningRef.current };
+  return { send, resume, stop, continueTask, drainQueue, isRunning: () => runningRef.current };
 }
 
 /** Keep the global connection indicator honest even when no stream is active. */

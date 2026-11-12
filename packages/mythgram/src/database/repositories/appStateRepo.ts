@@ -36,6 +36,7 @@ export const APP_STATE_KEYS = [
   "activeUserProfileId",
   "profileStates",
   "profileSessions",
+  "promptQueues",
   "channels",
   "tts",
   "ttsAgent",

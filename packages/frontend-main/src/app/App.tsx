@@ -54,7 +54,7 @@ export function App() {
   const currentId = useStore((s) => s.currentId);
   const hydrated = useStore((s) => s.hydrated);
   const setProviders = useStore((s) => s.setProviders);
-  const { send, resume, stop, continueTask } = useChatStream();
+  const { send, resume, stop, continueTask, drainQueue } = useChatStream();
   const bootedRef = useRef(false);
 
   useConnectionWatch();
@@ -136,9 +136,13 @@ export function App() {
             startedAt: Date.now(),
           });
         }
+      } else {
+        // No turn is running: flush any prompt queue restored from the database so
+        // staged prompts continue automatically (the queue works in the background).
+        drainQueue();
       }
     })();
-  }, [resume, setProviders]);
+  }, [resume, setProviders, drainQueue]);
 
   // Lazily pull a conversation's stored snapshot from the database when it is opened.
   useEffect(() => {

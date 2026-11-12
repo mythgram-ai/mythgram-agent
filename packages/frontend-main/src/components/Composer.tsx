@@ -30,6 +30,12 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
   const customAgents = useStore((s) => s.customAgents);
   const ceoAgents = useStore((s) => s.ceoAgents);
   const agentTeams = useStore((s) => s.agentTeams);
+  const currentId = useStore((s) => s.currentId);
+  const promptQueues = useStore((s) => s.promptQueues);
+  const queuePrompt = useStore((s) => s.queuePrompt);
+  const removeQueuedPrompt = useStore((s) => s.removeQueuedPrompt);
+  const clearPromptQueue = useStore((s) => s.clearPromptQueue);
+  const currentQueue = currentId ? (promptQueues[currentId] ?? []) : [];
   // "/" shortcut stages: "menu" shows the single "Prompt library" option,
   // "list" shows the saved prompts (title + optional short description).
   const [slashStage, setSlashStage] = useState<"menu" | "list">("menu");
@@ -112,9 +118,28 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
       manualLimits: settings.manualContextLimits,
     });
 
+  /** Stage the current draft for automatic sending after the running turn ends. */
+  const addToQueue = () => {
+    const text = value.trim();
+    if (!text || !currentId || uploading) return;
+    const notice = buildAttachmentPrompt(attachments);
+    queuePrompt(currentId, notice ? `${text}\n\n${notice}` : text);
+    setValue("");
+    setSlashStage("menu");
+    setAttachments([]);
+    setUploadError(null);
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+  };
+
   const submit = () => {
     const text = value.trim();
-    if (!text || streaming || uploading) return;
+    if (!text || uploading) return;
+    // While a turn is running, extra prompts are queued and sent automatically once
+    // the current task finishes (no need to wait or interact again).
+    if (streaming) {
+      addToQueue();
+      return;
+    }
     if (!ready) {
       setSettingsOpen(true);
       return;
@@ -345,6 +370,49 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
             <p className="mt-2 text-xs text-[var(--danger)]">{uploadError}</p>
           )}
 
+          {currentQueue.length > 0 && (
+            <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] p-2.5">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  <ListChecks className="h-3.5 w-3.5" />
+                  Queue · {currentQueue.length}
+                  {streaming ? " · sending after this task" : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => currentId && clearPromptQueue(currentId)}
+                  className="text-[10px] font-medium text-[var(--muted)] hover:text-[var(--danger)]"
+                >
+                  Clear
+                </button>
+              </div>
+              <ul className="m-0 max-h-28 list-none space-y-1 overflow-y-auto p-0">
+                {currentQueue.map((queued, index) => (
+                  <li
+                    key={`${index}-${queued.slice(0, 16)}`}
+                    className="flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--bg)] px-2 py-1.5"
+                  >
+                    <span className="w-4 shrink-0 text-center text-[10px] text-[var(--subtle)]">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-[var(--fg)]" title={queued}>
+                      {queued}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => currentId && removeQueuedPrompt(currentId, index)}
+                      className="shrink-0 text-[var(--subtle)] hover:text-[var(--danger)]"
+                      title="Remove from queue"
+                      aria-label={`Remove queued prompt ${index + 1}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-1">
               <button
@@ -385,15 +453,29 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
             </div>
 
             {streaming ? (
-              <button
-                type="button"
-                onClick={onStop}
-                title="Stop"
-                aria-label="Stop"
-                className="grid h-11 w-11 place-items-center rounded-full bg-[var(--secondary)] text-[var(--secondary-fg)] transition-transform active:scale-95"
-              >
-                <Square className="h-4 w-4" fill="currentColor" />
-              </button>
+              <div className="flex items-center gap-2">
+                {value.trim().length > 0 && (
+                  <button
+                    type="button"
+                    onClick={addToQueue}
+                    title="Add this prompt to the queue — it sends automatically once the current task finishes"
+                    aria-label="Add to queue"
+                    className="flex h-11 items-center gap-1.5 rounded-full bg-[var(--chip)] px-3.5 text-xs font-medium text-[var(--fg)] transition-colors hover:bg-[var(--chip-hover)] active:scale-95"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                    Add to queue
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onStop}
+                  title="Stop"
+                  aria-label="Stop"
+                  className="grid h-11 w-11 place-items-center rounded-full bg-[var(--secondary)] text-[var(--secondary-fg)] transition-transform active:scale-95"
+                >
+                  <Square className="h-4 w-4" fill="currentColor" />
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
