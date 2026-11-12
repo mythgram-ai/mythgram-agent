@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   ExternalLink,
+  KeyRound,
   Loader2,
   Plug,
   PlugZap,
   Search,
-  Settings2,
   Unplug,
   X,
 } from "lucide-react";
@@ -19,9 +19,11 @@ import {
   pollConnectorActive,
   refreshConnectors,
   startConnectorConnect,
+  validateComposioKey,
 } from "@/lib/connectors";
+import { saveStateKey } from "@/lib/backendState";
 import { Modal } from "@/components/ui/Modal";
-import { Button, EmptyState, PanelHeader } from "@/components/ui/primitives";
+import { Button, EmptyState, PanelHeader, TextInput } from "@/components/ui/primitives";
 import { cn } from "@/utils/cn";
 import { ConnectorsIcon } from "@/components/icons/NavIcons";
 
@@ -41,12 +43,14 @@ const ZAPPER_LOGO_URL = "https://cdn.simpleicons.org/zapier";
  *
  * Lists the OAuth-capable app integrations, fetched LIVE from Composio (the backend lists the
  * project's toolkits and keeps only the ones that authenticate via OAuth), with their official
- * logos. Connecting opens the app's OAuth page (via Composio) in a new tab; this page polls until
- * the connection is active. Once a connector is connected, every one of its tools is available to
- * the agent (main, custom, sub-agents, teams, CEO) as native function calls.
+ * logos. Until a Composio API key is configured, the page shows a clear guide with an inline input
+ * so the user can add the key right here and load the connectors. Once a connector is connected,
+ * every one of its tools is available to the agent (main, custom, sub-agents, teams, CEO) as native
+ * function calls.
  */
 export function ConnectorsPanel() {
-  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
+  const settings = useStore((s) => s.settings);
+  const setSettings = useStore((s) => s.setSettings);
   const setConnector = useStore((s) => s.setConnector);
   const removeConnector = useStore((s) => s.removeConnector);
   const setConnectors = useStore((s) => s.setConnectors);
@@ -58,6 +62,16 @@ export function ConnectorsPanel() {
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  // Inline Composio API-key entry (shown until a key is configured).
+  const [apiKey, setApiKey] = useState(settings.composioApiKey ?? "");
+  const [savingKey, setSavingKey] = useState(false);
+  const [keyCheck, setKeyCheck] = useState<"ok" | "bad" | null>(null);
+
+  // Keep the inline field in sync if the key changes elsewhere (e.g. Settings).
+  useEffect(() => {
+    setApiKey(settings.composioApiKey ?? "");
+  }, [settings.composioApiKey]);
 
   const reload = async () => {
     try {
@@ -98,6 +112,37 @@ export function ConnectorsPanel() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Validate the entered Composio key, persist it into Settings (so every surface picks it up),
+   * then reload the live connector catalog. Persisting the settings document directly guarantees
+   * the backend sees the key before we refetch the catalog.
+   */
+  const saveApiKey = async () => {
+    const key = apiKey.trim();
+    if (!key) {
+      setKeyCheck("bad");
+      return;
+    }
+    setSavingKey(true);
+    setKeyCheck(null);
+    setError(null);
+    try {
+      const ok = await validateComposioKey(key);
+      if (!ok) {
+        setKeyCheck("bad");
+        return;
+      }
+      setKeyCheck("ok");
+      setSettings({ composioApiKey: key });
+      await saveStateKey("settings", { ...useStore.getState().settings, composioApiKey: key });
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingKey(false);
+    }
+  };
 
   const connect = async (id: string) => {
     setBusyId(id);
@@ -190,71 +235,72 @@ export function ConnectorsPanel() {
         are shown, fetched live from Composio.
       </p>
 
-      {!loading && !configured && (
-        <div className="mb-4 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_oklab,var(--warning)_35%,transparent)] bg-[var(--warning-soft)] p-3 text-sm">
-          <Settings2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning)]" />
-          <div className="flex-1">
-            <p className="m-0 text-[var(--fg)]">Add your Composio API key to enable connectors.</p>
-            <p className="m-0 mt-0.5 text-xs text-[var(--muted)]">
-              The key is stored with your settings and only ever sent to the backend — the connectable
-              apps are then fetched directly from Composio.
-            </p>
-          </div>
-          <Button variant="outline" onClick={() => setSettingsOpen(true)}>
-            Open Settings
-          </Button>
-        </div>
-      )}
-
-      <div className="mb-4 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
-        <Search className="h-4 w-4 shrink-0 text-[var(--subtle)]" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search connectors..."
-          aria-label="Search connectors"
-          className="w-full bg-transparent text-sm text-[var(--fg)] outline-none placeholder:text-[var(--subtle)]"
-        />
-        {query && (
-          <button
-            type="button"
-            onClick={() => setQuery("")}
-            aria-label="Clear search"
-            className="text-[var(--subtle)] hover:text-[var(--fg)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-12 text-sm text-[var(--muted)]">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading connectors from Composio...
         </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={<ConnectorsIcon className="h-8 w-8" />}>
-          {items.length === 0 ? "No connectors available yet." : `No connectors match “${query}”.`}
-        </EmptyState>
+      ) : !configured ? (
+        <ComposioKeyGuide
+          apiKey={apiKey}
+          onChange={(value) => {
+            setApiKey(value);
+            setKeyCheck(null);
+          }}
+          onSave={() => void saveApiKey()}
+          saving={savingKey}
+          check={keyCheck}
+        />
       ) : (
-        <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2">
-          {filtered.map((item) => (
-            <ConnectorCard
-              key={item.id}
-              item={item}
-              busy={busyId === item.id}
-              configured={configured}
-              onConnect={() => void connect(item.id)}
-              onDisconnect={() => setConfirmId(item.id)}
+        <>
+          <div className="mb-4 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
+            <Search className="h-4 w-4 shrink-0 text-[var(--subtle)]" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search connectors..."
+              aria-label="Search connectors"
+              className="w-full bg-transparent text-sm text-[var(--fg)] outline-none placeholder:text-[var(--subtle)]"
             />
-          ))}
-        </ul>
-      )}
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="text-[var(--subtle)] hover:text-[var(--fg)]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
 
-      {!loading && items.length > 0 && (
-        <p className="mt-4 text-xs text-[var(--subtle)]">
-          {activeCount} of {items.length} connected
-          {activeCount > 0 && " — connected apps are available to the agent right now"}.
-        </p>
+          {filtered.length === 0 ? (
+            <EmptyState icon={<ConnectorsIcon className="h-8 w-8" />}>
+              {items.length === 0
+                ? "No OAuth-capable connectors were found for this Composio project."
+                : `No connectors match “${query}”.`}
+            </EmptyState>
+          ) : (
+            <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2">
+              {filtered.map((item) => (
+                <ConnectorCard
+                  key={item.id}
+                  item={item}
+                  busy={busyId === item.id}
+                  configured={configured}
+                  onConnect={() => void connect(item.id)}
+                  onDisconnect={() => setConfirmId(item.id)}
+                />
+              ))}
+            </ul>
+          )}
+
+          {items.length > 0 && (
+            <p className="mt-4 text-xs text-[var(--subtle)]">
+              {activeCount} of {items.length} connected
+              {activeCount > 0 && " — connected apps are available to the agent right now"}.
+            </p>
+          )}
+        </>
       )}
 
       {error && <p className="mt-3 text-xs text-[var(--danger)]">{error}</p>}
@@ -284,6 +330,99 @@ export function ConnectorsPanel() {
           The agent will immediately lose access to this app's tools. You can reconnect anytime.
         </p>
       </Modal>
+    </div>
+  );
+}
+
+/**
+ * The first-run guide shown until a Composio API key is configured. It explains what the key is
+ * for and lets the user paste and save it right on the Connectors page (the connectors load
+ * automatically once the key is accepted).
+ */
+function ComposioKeyGuide({
+  apiKey,
+  onChange,
+  onSave,
+  saving,
+  check,
+}: {
+  apiKey: string;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  saving: boolean;
+  check: "ok" | "bad" | null;
+}) {
+  return (
+    <div
+      className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg)] p-5"
+      style={{ boxShadow: "var(--shadow-chip)" }}
+    >
+      <div className="flex items-start gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--secondary)] text-[var(--secondary-fg)]">
+          <KeyRound className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="m-0 text-base font-semibold text-[var(--fg)]">
+            Add your Composio API key to get connectors
+          </h3>
+          <p className="m-0 mt-1 text-sm leading-relaxed text-[var(--muted)]">
+            Connectors are powered by Composio and fetched live. Add your API key once here and the
+            OAuth-capable apps you can connect will load automatically.
+          </p>
+        </div>
+      </div>
+
+      <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-[var(--muted)]">
+        <li>
+          Create a free account and copy your API key from{" "}
+          <a
+            href="https://app.composio.dev"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[var(--secondary)] hover:underline"
+          >
+            app.composio.dev
+            <ExternalLink className="h-3 w-3" />
+          </a>
+          .
+        </li>
+        <li>Paste the key below and press “Save &amp; load connectors”.</li>
+        <li>Your apps appear here and can be connected in one click.</li>
+      </ol>
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <TextInput
+          type="password"
+          value={apiKey}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSave();
+          }}
+          placeholder="ak-..."
+          aria-label="Composio API key"
+          className="flex-1"
+        />
+        <Button onClick={onSave} disabled={saving || apiKey.trim().length === 0} className="shrink-0">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+          Save &amp; load connectors
+        </Button>
+      </div>
+
+      {check === "bad" && (
+        <p className="m-0 mt-2 text-xs text-[var(--danger)]">
+          That key was rejected by Composio. Check it and try again.
+        </p>
+      )}
+      {check === "ok" && (
+        <p className="m-0 mt-2 inline-flex items-center gap-1 text-xs text-emerald-600">
+          <Check className="h-3 w-3" /> Key accepted — loading your connectors…
+        </p>
+      )}
+
+      <p className="m-0 mt-3 text-xs text-[var(--subtle)]">
+        The key is stored with your settings and only ever sent to your own backend — connectors are
+        fetched directly from Composio. You can also manage it later in Settings.
+      </p>
     </div>
   );
 }
