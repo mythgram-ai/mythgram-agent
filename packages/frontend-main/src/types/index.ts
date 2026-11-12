@@ -676,6 +676,8 @@ export interface ChatMessage {
   retry?: RetryActivity;
   /** Present after the request failed over to a fallback provider/api for this message. */
   fallback?: FallbackActivity;
+  /** Present after the active provider combo advanced to another provider for this message. */
+  combo?: ComboActivity;
   /**
    * Set when this assistant turn stopped before finishing — stopped by the user, or cut
    * short by the system (provider failure, lost run, backend restart). The latest
@@ -1060,6 +1062,105 @@ export interface FallbackActivity {
   startedAt: number;
 }
 
+/**
+ * One entry in a provider combo: a provider id plus the model (and optional
+ * credentials) to use. Mirrors the backend `ComboEntry` (see src/combo).
+ */
+export interface ComboEntry {
+  /** Stable id (React key / removal). */
+  id: string;
+  /** Provider id: a built-in id, `"local"`, or a `"custom_"`-prefixed id. */
+  provider: string;
+  /** Model id for this entry (required for the combo to be usable). */
+  model: string;
+  /** API key for this entry (may be empty for local servers). */
+  apiKey: string;
+  /** Optional base URL override. */
+  baseUrl?: string;
+  /** Full custom-provider config, present when `provider` is a custom id. */
+  customProvider?: CustomProviderConfig;
+}
+
+/**
+ * A user-created, ordered provider combo. When active, the first entry serves
+ * chat; a failing entry switches straight to the next (no retry), and only the
+ * last entry retries. A combo requires at least two entries.
+ */
+export interface ProviderCombo {
+  /** Stable id (React key / activation). */
+  id: string;
+  /** User-visible name. */
+  name: string;
+  /** Ordered entries (index 0 = primary, last = retry endpoint). */
+  entries: ComboEntry[];
+  /** Creation timestamp (ms). */
+  createdAt: number;
+}
+
+/**
+ * Provider combo policy for LLM provider requests. When enabled with an active
+ * combo (>= 2 entries) it replaces the fallback policy entirely: no fallback
+ * provider and no fallback API key are used. Defaults to OFF.
+ */
+export interface ComboSettings {
+  /** Master on/off switch (default OFF). */
+  enabled: boolean;
+  /** Id of the currently active combo, or null. */
+  activeComboId: string | null;
+  /** Every combo the user has created. */
+  combos: ProviderCombo[];
+}
+
+/** A fresh mutable copy of the default combo settings (OFF, no combos). */
+export function defaultComboSettings(): ComboSettings {
+  return { enabled: false, activeComboId: null, combos: [] };
+}
+
+/**
+ * The resolved combo payload sent to the backend for a turn (from the active
+ * combo). Mirrors the backend `ComboSettings` (see src/combo): the first entry
+ * serves chat, a failing entry switches straight to the next, and only the last
+ * entry retries.
+ */
+export interface ComboChain {
+  enabled: boolean;
+  /** Id of the active combo (for the backend's active-index state key). */
+  comboId?: string;
+  /** Display name of the active combo (for events/labels). */
+  name?: string;
+  /** Ordered combo entries: the first is primary, the last retries. */
+  entries: ComboEntry[];
+}
+
+/** Minimum number of entries a combo needs to take effect. */
+export const MIN_COMBO_ENTRIES = 2;
+
+/**
+ * Live combo state for one assistant message, populated from the backend's
+ * `combo` stream events when the active combo advances to another provider.
+ */
+export interface ComboActivity {
+  /** Id of the active combo. */
+  comboId?: string;
+  /** Display name of the active combo. */
+  comboName?: string;
+  /** 1-based number of the combo entry that took over. */
+  index: number;
+  /** Total entries in the combo. */
+  total: number;
+  /** Provider id of the entry that took over. */
+  provider: string;
+  /** Model id of the entry that took over. */
+  model: string;
+  /** The error that exhausted the previous entry. */
+  error: string;
+  /** Which agent triggered the switch. */
+  scope?: string;
+  /** Client timestamp (ms) when the switch happened. */
+  startedAt: number;
+}
+
+
 export interface Settings {
   provider: string;
   model: string;
@@ -1155,6 +1256,13 @@ export interface Settings {
    * and sticks with it for all later requests. Default OFF.
    */
   fallback: FallbackSettings;
+  /**
+   * Provider combo policy. When enabled with an active combo (>= 2 entries) it
+   * replaces the fallback policy: the first entry serves chat, a failing entry
+   * switches straight to the next (no retry), and only the last entry retries.
+   * Default OFF.
+   */
+  combo: ComboSettings;
 }
 
 /** The four built-in reasoning-effort presets shown in Settings. */
@@ -1251,6 +1359,11 @@ export interface StreamRequest {
   retry?: RetrySettings;
   /** Fallback policy for provider requests this turn (from Settings). Default OFF. */
   fallback?: FallbackSettings;
+  /**
+   * Active provider combo for this turn (from Settings). When present it replaces
+   * the fallback policy. See src/combo.
+   */
+  combo?: ComboChain;
 }
 
 /** SSE event payloads emitted by the mythgram agent. */
@@ -1294,6 +1407,19 @@ export interface SSEEventData {
   fallback_provider?: string;
   /** Model id of the target that took over. */
   fallback_model?: string;
+  // Provider combo event fields (emitted when the active combo advances to the next entry).
+  /** Id of the active combo. */
+  combo_id?: string;
+  /** Display name of the active combo. */
+  combo_name?: string;
+  /** 1-based number of the combo entry that took over. */
+  combo_index?: number;
+  /** Total entries in the combo. */
+  combo_total?: number;
+  /** Provider id of the combo entry that took over. */
+  combo_provider?: string;
+  /** Model id of the combo entry that took over. */
+  combo_model?: string;
   // Sub-agent side-channel fields
   agent?: string;
   task?: string;

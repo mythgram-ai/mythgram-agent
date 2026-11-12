@@ -19,7 +19,10 @@ import type {
   BackendSkill,
   BackendSubAgent,
   ChatMessage,
+  ComboChain,
+  CustomProvider,
   SSEEventData,
+  Settings,
   TurnInterruption,
   KnowledgeFile,
   MemoryFile,
@@ -47,6 +50,42 @@ function phaseToConnection(phase: StreamPhase): void {
   if (phase === "offline") setConnection("offline");
   else if (phase === "reconnecting") setConnection("reconnecting");
   else setConnection(navigator.onLine === false ? "offline" : "online");
+}
+
+/**
+ * Resolve the active provider combo into the wire payload. Entries with no model
+ * are dropped; the first entry is the primary (already reflected in
+ * settings.provider/model on activation). Returns undefined when no usable combo
+ * is active, so the backend falls back to the fallback policy instead.
+ */
+function buildComboPayload(
+  settings: Settings,
+  customProviders: CustomProvider[],
+): ComboChain | undefined {
+  const comboState = settings.combo;
+  if (!comboState?.enabled || !comboState.activeComboId) return undefined;
+  const combo = comboState.combos.find((c) => c.id === comboState.activeComboId);
+  if (!combo) return undefined;
+  const entries = combo.entries
+    .filter((entry) => entry.model.trim().length > 0)
+    .map((entry) => {
+      const custom = customProviders.find((p) => p.id === entry.provider);
+      const apiKey = entry.apiKey.trim()
+        ? entry.apiKey
+        : custom
+          ? custom.apiKey
+          : (settings.apiKeys[entry.provider] ?? "");
+      return {
+        id: entry.id,
+        provider: entry.provider,
+        model: entry.model,
+        apiKey,
+        baseUrl: entry.baseUrl || undefined,
+        customProvider: custom ? toCustomProviderConfig(custom, entry.model) : entry.customProvider,
+      };
+    });
+  if (entries.length < 2) return undefined;
+  return { enabled: true, comboId: combo.id, name: combo.name, entries };
 }
 
 /** Build the wire payload for a turn from the current store state. */
@@ -229,6 +268,8 @@ function buildStartRequest(convId: string, text: string): StreamRequest {
           apis: settings.fallback.apis.filter((t) => !t.provider || t.provider === settings.provider),
         }
       : undefined,
+    // Active provider combo (when set) replaces the fallback policy on the backend.
+    combo: buildComboPayload(settings, customProviders),
   };
 }
 

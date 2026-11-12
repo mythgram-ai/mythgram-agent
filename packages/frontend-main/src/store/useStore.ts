@@ -40,6 +40,9 @@ import type {
   FallbackMethod,
   FallbackSettings,
   FallbackTarget,
+  ComboSettings,
+  ComboEntry,
+  ProviderCombo,
   SearchProvider,
   Settings,
   Skill,
@@ -89,7 +92,7 @@ import {
 } from "@/lib/taskModes";
 import { normalizePromptLibrary, newPromptLibraryId } from "@/lib/promptLibrary";
 import { manualLimitKey, sanitizeManualContextLimits } from "@/lib/contextMeter";
-import { defaultFallbackSettings, defaultRetrySettings } from "@/types";
+import { defaultComboSettings, defaultFallbackSettings, defaultRetrySettings } from "@/types";
 
 /** Coerce an unknown value to a trimmed-safe string (non-strings become ""). */
 function asText(value: unknown): string {
@@ -189,6 +192,78 @@ function sanitizeFallbackSettings(raw: unknown): FallbackSettings {
     method: record.method === "provider" ? "provider" : "api",
     providers: targets(record.providers),
     apis: targets(record.apis),
+  };
+}
+
+/**
+ * Defensively normalize one combo entry. Requires a provider id; every other
+ * field is coerced to a string. Returns null for unusable entries.
+ */
+function sanitizeComboEntry(raw: unknown, index: number): ComboEntry | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const provider = asText(record.provider).trim();
+  if (!provider) return null;
+  const baseUrl = asText(record.baseUrl ?? record.base_url).trim();
+  return {
+    id: asText(record.id).trim() || `combo_${index}`,
+    provider,
+    model: asText(record.model).trim(),
+    apiKey: asText(record.apiKey ?? record.api_key),
+    baseUrl: baseUrl || undefined,
+    customProvider: (record.customProvider ?? record.custom_provider) as ComboEntry["customProvider"],
+  };
+}
+
+/**
+ * Defensively normalize a persisted/loaded combo policy. Absent or malformed
+ * input falls back to the defaults (combo OFF, no combos), so an older persisted
+ * Settings document upgrades transparently.
+ */
+function sanitizeComboSettings(raw: unknown): ComboSettings {
+  const defaults = defaultComboSettings();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaults;
+  const record = raw as Record<string, unknown>;
+  const entryList = (value: unknown): ComboEntry[] => {
+    if (!Array.isArray(value)) return [];
+    const out: ComboEntry[] = [];
+    for (let i = 0; i < value.length && out.length < 20; i++) {
+      const entry = sanitizeComboEntry(value[i], i);
+      if (entry) out.push(entry);
+    }
+    return out;
+  };
+  const combos: ProviderCombo[] = [];
+  if (Array.isArray(record.combos)) {
+    for (let i = 0; i < record.combos.length && combos.length < 50; i++) {
+      const item = record.combos[i];
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const r = item as Record<string, unknown>;
+      const id = asText(r.id).trim() || `combo_${i}`;
+      combos.push({
+        id,
+        name: asText(r.name).trim() || "Untitled combo",
+        entries: entryList(r.entries),
+        createdAt:
+          typeof r.createdAt === "number"
+            ? r.createdAt
+            : typeof r.created_at === "number"
+              ? r.created_at
+              : Date.now(),
+      });
+    }
+  }
+  const activeComboId =
+    typeof record.activeComboId === "string" && combos.some((c) => c.id === record.activeComboId)
+      ? record.activeComboId
+      : typeof record.active_combo_id === "string" &&
+          combos.some((c) => c.id === record.active_combo_id)
+        ? record.active_combo_id
+        : null;
+  return {
+    enabled: toBool(record.enabled, defaults.enabled),
+    activeComboId,
+    combos,
   };
 }
 
@@ -470,6 +545,21 @@ interface AppState {
     msgId: string,
     info: {
       method: FallbackMethod;
+      index: number;
+      total: number;
+      provider: string;
+      model: string;
+      error: string;
+      scope?: string;
+    },
+  ) => void;
+  /** Record that the active provider combo advanced to another provider for this message. */
+  registerCombo: (
+    convId: string,
+    msgId: string,
+    info: {
+      comboId?: string;
+      comboName?: string;
       index: number;
       total: number;
       provider: string;
@@ -840,6 +930,18 @@ interface AppState {
   deleteCustomProvider: (id: string) => void;
   selectCustomProvider: (id: string) => void;
 
+  // Provider combos
+  /** Create a provider combo and return it. */
+  createCombo: (input: { name: string; entries: ComboEntry[] }) => ProviderCombo;
+  /** Update a combo's name and/or entries. */
+  updateCombo: (id: string, patch: Partial<Omit<ProviderCombo, "id" | "createdAt">>) => void;
+  /** Delete a combo (and deactivate it when it was active). */
+  deleteCombo: (id: string) => void;
+  /** Activate a combo by id (enables combo mode), or pass null to deactivate. */
+  activateCombo: (id: string | null) => void;
+  /** The active combo, or null when none is enabled/valid. */
+  activeCombo: () => ProviderCombo | null;
+
   // Settings + UI
   setSettings: (patch: Partial<Settings>) => void;
   /** Save a manual context-window limit for one provider+model pair (persisted in settings). */
@@ -955,6 +1057,7 @@ const defaultSettings: Settings = {
   slidingWindowTruncatePercent: 0.3,
   retry: defaultRetrySettings(),
   fallback: defaultFallbackSettings(),
+  combo: defaultComboSettings(),
 };
 
 function touch(conv: Conversation): Conversation {
@@ -1411,6 +1514,11 @@ export const useStore = create<AppState>()(
             fallback: sanitizeFallbackSettings(
               (p.settings as { fallback?: unknown } | undefined)?.fallback,
             ),
+            // Combo policy from older clients may be absent/malformed — normalize
+            // so a corrupt combo can never break provider requests (defaults to OFF).
+            combo: sanitizeComboSettings(
+              (p.settings as { combo?: unknown } | undefined)?.combo,
+            ),
           },
           subAgents: mergeSubAgentsWithDefaults(
             Array.isArray(p.subAgents) ? p.subAgents : defaults.subAgents,
@@ -1865,6 +1973,35 @@ export const useStore = create<AppState>()(
                           ...m,
                           fallback: {
                             method: info.method,
+                            index: info.index,
+                            total: info.total,
+                            provider: info.provider,
+                            model: info.model,
+                            error: info.error,
+                            scope: info.scope,
+                            startedAt: Date.now(),
+                          },
+                        }
+                      : m,
+                  ),
+                }
+              : c,
+          ),
+        })),
+
+      registerCombo: (convId, msgId, info) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === msgId
+                      ? {
+                          ...m,
+                          combo: {
+                            comboId: info.comboId,
+                            comboName: info.comboName,
                             index: info.index,
                             total: info.total,
                             provider: info.provider,
@@ -3359,6 +3496,98 @@ export const useStore = create<AppState>()(
           const model = provider.models.find((m) => m.trim().length > 0) ?? "";
           return { settings: { ...s.settings, provider: id, model, baseUrl: "" }, models: [] };
         }),
+
+      createCombo: (input) => {
+        const combo: ProviderCombo = {
+          id: uid("combo"),
+          name: input.name.trim() || "Untitled combo",
+          entries: input.entries.map((entry, index) => ({
+            ...entry,
+            id: entry.id.trim() || `combo_entry_${index}`,
+          })),
+          createdAt: Date.now(),
+        };
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            combo: { ...s.settings.combo, combos: [...s.settings.combo.combos, combo] },
+          },
+        }));
+        return combo;
+      },
+      updateCombo: (id, patch) =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            combo: {
+              ...s.settings.combo,
+              combos: s.settings.combo.combos.map((c) => (c.id === id ? { ...c, ...patch, id } : c)),
+            },
+          },
+        })),
+      deleteCombo: (id) =>
+        set((s) => {
+          const combos = s.settings.combo.combos.filter((c) => c.id !== id);
+          const activeComboId =
+            s.settings.combo.activeComboId === id ? null : s.settings.combo.activeComboId;
+          return {
+            settings: {
+              ...s.settings,
+              combo: {
+                enabled: combos.length === 0 ? false : s.settings.combo.enabled,
+                activeComboId,
+                combos,
+              },
+            },
+          };
+        }),
+      activateCombo: (id) =>
+        set((s) => {
+          if (id === null) {
+            return {
+              settings: {
+                ...s.settings,
+                combo: { ...s.settings.combo, enabled: false, activeComboId: null },
+              },
+            };
+          }
+          const combo = s.settings.combo.combos.find((c) => c.id === id);
+          const usable = combo ? combo.entries.filter((e) => e.model.trim().length > 0) : [];
+          if (!combo || usable.length < 2) {
+            return {
+              settings: {
+                ...s.settings,
+                combo: { ...s.settings.combo, enabled: false, activeComboId: null },
+              },
+            };
+          }
+          // The first entry becomes the active provider/model for chat so the
+          // composer, context meter, and Settings all reflect what is in use.
+          const first = usable[0]!;
+          const apiKeys = first.apiKey.trim()
+            ? { ...s.settings.apiKeys, [first.provider]: first.apiKey }
+            : s.settings.apiKeys;
+          return {
+            settings: {
+              ...s.settings,
+              provider: first.provider,
+              model: first.model,
+              baseUrl: first.baseUrl ?? "",
+              apiKeys,
+              combo: { ...s.settings.combo, enabled: true, activeComboId: id },
+            },
+            ...(first.provider !== s.settings.provider
+              ? { models: activeModelsFor(s.modelsByProvider, first.provider) }
+              : {}),
+          };
+        }),
+      activeCombo: () => {
+        const { combo } = get().settings;
+        if (!combo.enabled || !combo.activeComboId) return null;
+        const found = combo.combos.find((c) => c.id === combo.activeComboId);
+        if (!found || found.entries.filter((e) => e.model.trim().length > 0).length < 2) return null;
+        return found;
+      },
 
       setSettings: (patch) =>
         set((s) => {

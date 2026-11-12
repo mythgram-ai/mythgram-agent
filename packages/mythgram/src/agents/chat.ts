@@ -3,7 +3,8 @@ import type { ProviderRegistry } from "./providers/registry.js";
 import { resolveProvider } from "./providers/registry.js";
 import type { Provider } from "./providers/types.js";
 import { retryEventPayload } from "../retry/index.js";
-import { fallbackEventPayload, withFallback } from "../fallback/index.js";
+import { fallbackEventPayload } from "../fallback/index.js";
+import { comboEventPayload, withResilience } from "../combo/index.js";
 import type { ToolRegistry } from "./tools/index.js";
 import type { ToolCall, ToolCallDelta } from "./providers/types.js";
 import type { ChatSession, StoredMessage } from "../services/sessionStore.js";
@@ -184,9 +185,15 @@ export interface RunChatRequest {
   /**
    * Fallback policy for this turn's provider requests (from Settings). When
    * enabled, requests fail over to a configured fallback provider/api once every
-   * retry attempt is exhausted. See src/fallback.
+   * retry attempt is exhausted. See src/fallback. Ignored while a combo is active.
    */
   fallback?: import("../fallback/index.js").FallbackSettings;
+  /**
+   * Active provider combo for this turn's provider requests (from Settings). When
+   * present it replaces the fallback policy: failing entries switch straight to the
+   * next with no retry, and only the last entry retries. See src/combo.
+   */
+  combo?: import("../combo/index.js").ComboSettings;
 }
 
 export class ChatRunner {
@@ -233,11 +240,13 @@ export class ChatRunner {
       let provider: Provider;
       try {
         // Retry every provider request of this chat turn per the turn's policy,
-        // failing over to a configured fallback target once retries are exhausted.
-        provider = withFallback(
+        // failing over to a configured fallback target once retries are exhausted,
+        // or advancing through the active provider combo (no retry until the last).
+        provider = withResilience(
           resolveProvider(this.providers, request.provider, request.customProvider),
           {
-            settings: request.fallback,
+            combo: request.combo,
+            fallback: request.fallback,
             retry: request.retry,
             providerId: request.provider,
             model: request.model,
@@ -247,6 +256,7 @@ export class ChatRunner {
             resolve: (target) => resolveProvider(this.providers, target.provider, target.customProvider),
             onRetry: (info) => send("retry", retryEventPayload(info, "chat")),
             onFallback: (event) => send("fallback", fallbackEventPayload(event, "chat")),
+            onCombo: (event) => send("combo", comboEventPayload(event, "chat")),
             scope: "chat",
           },
         );
@@ -510,6 +520,7 @@ export class ChatRunner {
             effort: request.effort,
             retry: request.retry,
             fallback: request.fallback,
+            combo: request.combo,
           });
           if (runId) {
             send("memory_agent_queued", { run_id: runId, chat_id: request.chatId });

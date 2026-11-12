@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Pencil, Plug, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Layers, Pencil, Plug, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { fetchCustomProviderModels, fetchModels, fetchProviders } from "@/lib/api";
 import { validateComposioKey } from "@/lib/connectors";
@@ -19,12 +19,16 @@ import {
 } from "@/lib/providers";
 import {
   EFFORT_PRESETS,
+  defaultComboSettings,
   defaultFallbackSettings,
   defaultRetrySettings,
+  MIN_COMBO_ENTRIES,
+  type ComboEntry,
   type CustomHeader,
   type CustomProvider,
   type FallbackSettings,
   type FallbackTarget,
+  type ProviderCombo,
   type ProviderMeta,
   type RetryAttemptSetting,
   type RetrySettings,
@@ -535,6 +539,14 @@ export function SettingsModal() {
           <FallbackSettingsEditor
             fallback={settings.fallback ?? defaultFallbackSettings()}
             onChange={(fallback) => setSettings({ fallback })}
+            builtIns={builtIns}
+            customProviders={customProviders}
+            currentProvider={settings.provider}
+            currentModel={settings.model}
+          />
+
+          {/* Provider combos */}
+          <ComboSettingsEditor
             builtIns={builtIns}
             customProviders={customProviders}
             currentProvider={settings.provider}
@@ -1214,8 +1226,432 @@ function FallbackProviderCard({
   );
 }
 
-/** Clamp an untrusted temperature to the provider-safe 0–2 range (NaN → 0.6 default). */
-function clampTemp(value: number): number {
+/**
+ * Seed a fresh combo entry from the current provider/model so a newly created
+ * entry starts on something sensible the user can then change. Custom providers
+ * carry their config; built-ins/local start with an empty API key that the user
+ * (or the active provider's stored key) fills in.
+ */
+function comboEntryFrom(
+  builtIns: ProviderMeta[],
+  customProviders: CustomProvider[],
+  currentProvider: string,
+  currentModel: string,
+): ComboEntry {
+  const custom = customProviders.find((p) => p.id === currentProvider);
+  const model = custom ? (custom.models.find((m) => m.trim()) ?? currentModel) : currentModel;
+  return {
+    id: uid("comboentry"),
+    provider: currentProvider || builtIns[0]?.id || "openrouter",
+    model,
+    apiKey: custom ? custom.apiKey : "",
+    baseUrl: undefined,
+    customProvider: custom ? toCustomProviderConfig(custom, model) : undefined,
+  };
+}
+
+/** A combo is usable when it has at least MIN_COMBO_ENTRIES entries bearing a model. */
+function comboIsUsable(combo: ProviderCombo): boolean {
+  return combo.entries.filter((e) => e.model.trim().length > 0).length >= MIN_COMBO_ENTRIES;
+}
+
+/**
+ * Editor for a single provider combo. A combo is an ordered list of provider+model
+ * entries: the first serves chat, each failing entry switches straight to the next
+ * (no retry), and only the last entry retries. At least two entries with a model
+ * are required. The combo can be activated (or deactivated) here or from the chat
+ * composer's combo button.
+ */
+function ComboSettingsEditor({
+  builtIns,
+  customProviders,
+  currentProvider,
+  currentModel,
+}: {
+  builtIns: ProviderMeta[];
+  customProviders: CustomProvider[];
+  currentProvider: string;
+  currentModel: string;
+}) {
+  const comboState = useStore((s) => s.settings.combo) ?? defaultComboSettings();
+  const createCombo = useStore((s) => s.createCombo);
+  const updateCombo = useStore((s) => s.updateCombo);
+  const deleteCombo = useStore((s) => s.deleteCombo);
+  const activateCombo = useStore((s) => s.activateCombo);
+
+  const addCombo = (): void => {
+    createCombo({
+      name: `Combo ${comboState.combos.length + 1}`,
+      entries: [
+        comboEntryFrom(builtIns, customProviders, currentProvider, currentModel),
+        comboEntryFrom(builtIns, customProviders, currentProvider, currentModel),
+      ],
+    });
+  };
+
+  return (
+    <section className="space-y-3 border-t border-[var(--border)] pt-5">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--subtle)]">
+        Provider combos
+      </h3>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium text-[var(--muted)]">Enable provider combo</span>
+        <Toggle
+          checked={comboState.enabled}
+          onChange={(next) => {
+            if (!next) activateCombo(null);
+            else if (comboState.activeComboId) activateCombo(comboState.activeComboId);
+            else {
+              const first = comboState.combos.find(comboIsUsable);
+              if (first) activateCombo(first.id);
+            }
+          }}
+          label="Enable provider combo"
+        />
+      </div>
+      <p className="text-xs text-[var(--muted)]">
+        A combo is an ordered list of providers. The first is used for chat; when a provider throws,
+        the agent switches straight to the next one — no retry on it — and only the last provider
+        retries. A failed provider is skipped for the rest of the combo. Requires at least{" "}
+        {MIN_COMBO_ENTRIES} providers with a model. While a combo is active, fallback is not used.
+      </p>
+
+      {comboState.combos.length === 0 ? (
+        <p className="text-xs text-[var(--muted)]">
+          No combos yet — create one to chain providers together.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {comboState.combos.map((combo) => (
+            <ComboCard
+              key={combo.id}
+              combo={combo}
+              active={comboState.enabled && comboState.activeComboId === combo.id}
+              usable={comboIsUsable(combo)}
+              builtIns={builtIns}
+              customProviders={customProviders}
+              onActivate={() =>
+                comboState.enabled && comboState.activeComboId === combo.id
+                  ? activateCombo(null)
+                  : activateCombo(combo.id)
+              }
+              onRename={(name) => updateCombo(combo.id, { name })}
+              onChangeEntries={(entries) => updateCombo(combo.id, { entries })}
+              onDelete={() => deleteCombo(combo.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" onClick={addCombo}>
+          <Plus className="h-4 w-4" /> New combo
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/** One combo card: name, entries (add/remove/reorder), activation, and delete. */
+function ComboCard({
+  combo,
+  active,
+  usable,
+  builtIns,
+  customProviders,
+  onActivate,
+  onRename,
+  onChangeEntries,
+  onDelete,
+}: {
+  combo: ProviderCombo;
+  active: boolean;
+  usable: boolean;
+  builtIns: ProviderMeta[];
+  customProviders: CustomProvider[];
+  onActivate: () => void;
+  onRename: (name: string) => void;
+  onChangeEntries: (entries: ComboEntry[]) => void;
+  onDelete: () => void;
+}) {
+  const updateEntry = (id: string, patch: Partial<ComboEntry>): void =>
+    onChangeEntries(combo.entries.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const removeEntry = (id: string): void =>
+    onChangeEntries(combo.entries.filter((e) => e.id !== id));
+  const moveEntry = (index: number, delta: number): void => {
+    const next = [...combo.entries];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target]!, next[index]!];
+    onChangeEntries(next);
+  };
+  const addEntry = (): void =>
+    onChangeEntries([
+      ...combo.entries,
+      comboEntryFrom(builtIns, customProviders, builtIns[0]?.id ?? "openrouter", ""),
+    ]);
+
+  return (
+    <div
+      className={cn(
+        "space-y-3 rounded-[var(--radius-md)] border bg-[var(--chip)] p-3",
+        active ? "border-[var(--secondary)]" : "border-[var(--border)]",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <Layers className="h-4 w-4 shrink-0 text-[var(--secondary)]" />
+        <TextInput
+          value={combo.name}
+          onChange={(e) => onRename(e.target.value)}
+          placeholder="Combo name"
+          className="min-w-0 flex-1 text-xs"
+        />
+        <button
+          type="button"
+          onClick={onActivate}
+          disabled={!usable && !active}
+          title={active ? "Deactivate this combo" : "Activate this combo"}
+          className={cn(
+            "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50",
+            active
+              ? "border-[var(--secondary)] bg-[var(--secondary)] text-[var(--secondary-fg)]"
+              : "border-[var(--border)] text-[var(--fg)] hover:border-[var(--secondary)]",
+          )}
+        >
+          {active ? "Active" : "Activate"}
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          title="Delete this combo"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-md)] text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--danger)]"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      {!usable && (
+        <p className="m-0 text-[11px] text-[var(--warning)]">
+          Add at least {MIN_COMBO_ENTRIES} providers with a model to use this combo.
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {combo.entries.map((entry, index) => (
+          <div
+            key={entry.id}
+            className="space-y-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg)] p-3"
+          >
+            <div className="flex items-center gap-2">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--chip)] text-[11px] font-semibold tabular-nums text-[var(--muted)]">
+                {index + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--fg)]">
+                {index === 0
+                  ? "Primary (used for chat)"
+                  : index === combo.entries.length - 1
+                    ? "Last resort (retries)"
+                    : "Fallback"}
+              </span>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => moveEntry(index, -1)}
+                  disabled={index === 0}
+                  title="Move up"
+                  className="grid h-7 w-7 place-items-center rounded-[var(--radius-md)] text-[var(--muted)] hover:bg-[var(--chip)] hover:text-[var(--fg)] disabled:opacity-30"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveEntry(index, 1)}
+                  disabled={index === combo.entries.length - 1}
+                  title="Move down"
+                  className="grid h-7 w-7 place-items-center rounded-[var(--radius-md)] text-[var(--muted)] hover:bg-[var(--chip)] hover:text-[var(--fg)] disabled:opacity-30"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeEntry(entry.id)}
+                  disabled={combo.entries.length <= 1}
+                  title="Remove this provider"
+                  className="grid h-7 w-7 place-items-center rounded-[var(--radius-md)] text-[var(--muted)] hover:bg-[var(--chip)] hover:text-[var(--danger)] disabled:opacity-30"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <ComboEntryCard
+              entry={entry}
+              builtIns={builtIns}
+              customProviders={customProviders}
+              onChange={(patch) => updateEntry(entry.id, patch)}
+            />
+          </div>
+        ))}
+      </div>
+
+      <Button type="button" variant="outline" onClick={addEntry}>
+        <Plus className="h-4 w-4" /> Add provider
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Editor for a single combo entry: choose the provider, its API key, and its model.
+ * The model can be picked from the provider's live model list (fetched on demand)
+ * or typed manually — and it is REQUIRED, because a combo entry without a model is
+ * meaningless.
+ */
+function ComboEntryCard({
+  entry,
+  builtIns,
+  customProviders,
+  onChange,
+}: {
+  entry: ComboEntry;
+  builtIns: ProviderMeta[];
+  customProviders: CustomProvider[];
+  onChange: (patch: Partial<ComboEntry>) => void;
+}) {
+  const selectedCustom = customProviders.find((p) => p.id === entry.provider);
+  const isLocal = isLocalProviderId(entry.provider);
+  const [result, setResult] = useState<{ provider: string; models: string[]; error: string | null } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const seeded = selectedCustom ? selectedCustom.models.filter((m) => m.trim()) : [];
+  const fresh = result && result.provider === entry.provider ? result : null;
+  const models = fresh ? fresh.models : seeded;
+  const error = fresh ? fresh.error : null;
+  const loadedProvider = fresh || selectedCustom ? entry.provider : null;
+
+  const handleProvider = (value: string): void => {
+    const custom = customProviders.find((p) => p.id === value);
+    const model = custom ? (custom.models.find((m) => m.trim()) ?? "") : "";
+    onChange({
+      provider: value,
+      model,
+      apiKey: custom ? custom.apiKey : "",
+      baseUrl: undefined,
+      customProvider: custom ? toCustomProviderConfig(custom, model) : undefined,
+    });
+  };
+
+  const handleModel = (model: string): void => {
+    onChange({
+      model,
+      ...(selectedCustom ? { customProvider: toCustomProviderConfig(selectedCustom, model) } : {}),
+    });
+  };
+
+  const loadModels = async (): Promise<void> => {
+    setLoading(true);
+    try {
+      const infos = selectedCustom
+        ? await fetchCustomProviderModels({
+            id: selectedCustom.id,
+            name: selectedCustom.name,
+            baseUrl: selectedCustom.baseUrl,
+            apiKey: entry.apiKey || selectedCustom.apiKey,
+            modelsUrl: selectedCustom.modelsUrl,
+            headers: selectedCustom.headers,
+          })
+        : await fetchModels(entry.provider, entry.apiKey ?? "", entry.baseUrl || undefined);
+      const ids = infos.map((m) => m.id).filter((id): id is string => Boolean(id && id.trim()));
+      setResult({
+        provider: entry.provider,
+        models: ids,
+        error: ids.length > 0 ? null : "No models returned — type one in manually.",
+      });
+    } catch (e) {
+      setResult({
+        provider: entry.provider,
+        models: [],
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const options = Array.from(new Set([...(entry.model ? [entry.model] : []), ...models]));
+  const modelMissing = !entry.model.trim();
+
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Select value={entry.provider} onChange={(e) => handleProvider(e.target.value)} className="text-xs">
+          <optgroup label="Providers">
+            {builtIns.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </optgroup>
+          {customProviders.length > 0 && (
+            <optgroup label="Custom providers">
+              {customProviders.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || p.id}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </Select>
+        <TextInput
+          type="password"
+          value={entry.apiKey}
+          onChange={(e) => onChange({ apiKey: e.target.value })}
+          placeholder={selectedCustom ? "API key (defaults to the provider's key)" : "API key (blank for local)"}
+          className="font-mono text-xs"
+        />
+      </div>
+
+      <Field
+        label="Model *"
+        hint={modelMissing ? "required" : loadedProvider === entry.provider ? `${options.length} available` : undefined}
+        hintError={modelMissing}
+      >
+        <div className="flex gap-2">
+          <Select value={entry.model} onChange={(e) => handleModel(e.target.value)} className="flex-1 text-xs">
+            <option value="">
+              {options.length > 0 ? "Select a model..." : "Load models or type below..."}
+            </option>
+            {options.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+          <Button type="button" variant="outline" onClick={loadModels} disabled={loading}>
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Load
+          </Button>
+        </div>
+      </Field>
+      <TextInput
+        value={entry.model}
+        onChange={(e) => handleModel(e.target.value)}
+        placeholder="Or type a model id"
+        className="font-mono text-xs"
+      />
+      {error && <p className="m-0 text-[11px] text-[var(--danger)]">{error}</p>}
+
+      {!selectedCustom && (
+        <TextInput
+          value={entry.baseUrl ?? ""}
+          onChange={(e) => onChange({ baseUrl: e.target.value })}
+          placeholder={isLocal ? "Server URL (e.g. http://localhost:11434/v1)" : "Base URL override (optional)"}
+          className="font-mono text-xs"
+        />
+      )}
+    </div>
+  );
+}
+
+/** Clamp an untrusted temperature to the provider-safe 0–2 range (NaN → 0.6 default). */function clampTemp(value: number): number {
   if (!Number.isFinite(value)) return 0.6;
   return Math.min(2, Math.max(0, Math.round(value * 100) / 100));
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, ArrowUp, Square, FolderOpen, X, Loader2, ChevronDown, ListChecks, Plus } from "lucide-react";
+import { Paperclip, ArrowUp, Square, FolderOpen, X, Loader2, ChevronDown, ListChecks, Plus, Layers } from "lucide-react";
 import { PromptLibraryIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { isCustomProviderId, isLocalProviderId } from "@/lib/providers";
@@ -381,6 +381,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                 </span>
               </button>
               {agentMode !== "chat" && <TaskModePicker />}
+              <ComboPicker />
             </div>
 
             {streaming ? (
@@ -722,6 +723,143 @@ function ModeOption({
     >
       <span className="min-w-0 flex-1">
         <span className="block truncate text-xs font-medium text-[var(--fg)]">{label}</span>
+        <span className="block text-[10px] text-[var(--subtle)]">{hint}</span>
+      </span>
+      {active && <span className="text-[10px] font-semibold text-[var(--secondary)]">Active</span>}
+    </button>
+  );
+}
+
+/**
+ * Combo picker: a compact toolbar button that shows the active provider combo and
+ * lets the user switch it on/off without opening Settings. Creating and editing
+ * combos happens in Settings (the "Manage combos" entry jumps there).
+ */
+function ComboPicker() {
+  const settings = useStore((s) => s.settings);
+  const activateCombo = useStore((s) => s.activateCombo);
+  const setSection = useStore((s) => s.setSection);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
+  const [open, setOpen] = useState(false);
+
+  const comboState = settings.combo ?? { enabled: false, activeComboId: null, combos: [] };
+  const usableCombos = comboState.combos.filter(
+    (c) => c.entries.filter((e) => e.model.trim().length > 0).length >= 2,
+  );
+  const activeCombo =
+    comboState.enabled && comboState.activeComboId
+      ? (comboState.combos.find((c) => c.id === comboState.activeComboId) ?? null)
+      : null;
+  const activeUsable = activeCombo
+    ? activeCombo.entries.filter((e) => e.model.trim().length > 0).length >= 2
+    : false;
+  const isActive = Boolean(activeCombo && activeUsable);
+
+  const openSettings = () => {
+    setOpen(false);
+    setSection("chat");
+    setSettingsOpen(true);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title={isActive ? `Provider combo: ${activeCombo?.name}` : "Provider combos"}
+        aria-label="Provider combos"
+        className={cn(
+          "flex h-11 items-center gap-1 rounded-[var(--radius-md)] px-2 text-xs font-medium transition-colors hover:bg-[var(--chip)]",
+          isActive ? "text-[var(--secondary)]" : "text-[var(--muted)] hover:text-[var(--fg)]",
+        )}
+      >
+        <Layers className="h-[18px] w-[18px] shrink-0" strokeWidth={1.8} />
+        <span className="max-w-[5.5rem] truncate">
+          {isActive ? activeCombo?.name : "Combo"}
+        </span>
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="absolute bottom-12 left-0 z-50 w-64 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)] py-1 pop-in"
+            style={{ boxShadow: "var(--shadow-pop)" }}
+          >
+            <div className="flex items-center justify-between px-3 pb-1 pt-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--subtle)]">
+                Provider combos
+              </span>
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    activateCombo(null);
+                    setOpen(false);
+                  }}
+                  className="text-[10px] font-medium text-[var(--muted)] hover:text-[var(--fg)]"
+                >
+                  Turn off
+                </button>
+              )}
+            </div>
+            {usableCombos.length === 0 ? (
+              <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
+                No usable combos yet. Create one with at least two providers in Settings.
+              </p>
+            ) : (
+              usableCombos.map((c) => (
+                <ComboOption
+                  key={c.id}
+                  name={c.name}
+                  hint={`${c.entries.length} providers`}
+                  active={isActive && activeCombo?.id === c.id}
+                  onClick={() => {
+                    if (isActive && activeCombo?.id === c.id) activateCombo(null);
+                    else activateCombo(c.id);
+                    setOpen(false);
+                  }}
+                />
+              ))
+            )}
+            <div className="my-1 border-t border-[var(--border)]" />
+            <button
+              type="button"
+              onClick={openSettings}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--muted)] hover:bg-[var(--chip)] hover:text-[var(--fg)]"
+            >
+              <Layers className="h-3.5 w-3.5" /> Manage combos in Settings
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ComboOption({
+  name,
+  hint,
+  active,
+  onClick,
+}: {
+  name: string;
+  hint: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--chip)]",
+        active && "bg-[var(--chip)]",
+      )}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium text-[var(--fg)]">{name}</span>
         <span className="block text-[10px] text-[var(--subtle)]">{hint}</span>
       </span>
       {active && <span className="text-[10px] font-semibold text-[var(--secondary)]">Active</span>}

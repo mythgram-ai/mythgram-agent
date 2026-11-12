@@ -8,6 +8,7 @@ import type { SkillDefinition } from "../agents/tools/types.js";
 import { normalizeEffort } from "../agents/providers/reasoning.js";
 import { sanitizeRetrySettings } from "../retry/index.js";
 import { sanitizeFallbackSettings } from "../fallback/index.js";
+import { sanitizeComboSettings } from "../combo/index.js";
 import { initSSE, formatSSE } from "../utils/sse.js";
 
 /** Extract a string field from an untrusted object. */
@@ -60,6 +61,8 @@ interface StreamBody {
   retry?: unknown;
   /** Fallback policy for provider requests this turn (from Settings). */
   fallback?: unknown;
+  /** Active provider combo for provider requests this turn (from Settings). See src/combo. */
+  combo?: unknown;
 }
 
 /** Defensively coerce the client-provided skill definitions. */
@@ -185,6 +188,7 @@ export function buildPromptAgentRouter(
         skills: normalizeSkills(body.skills),
         retry: sanitizeRetrySettings(body.retry),
         fallback: sanitizeFallbackSettings(body.fallback),
+        combo: sanitizeComboSettings(body.combo),
       };
 
       void runner

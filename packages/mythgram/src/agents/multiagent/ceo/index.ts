@@ -3,7 +3,8 @@ import type { ProviderRegistry } from "../../providers/registry.js";
 import { resolveProvider } from "../../providers/registry.js";
 import type { Provider } from "../../providers/types.js";
 import { retryEventPayload } from "../../../retry/index.js";
-import { fallbackEventPayload, withFallback } from "../../../fallback/index.js";
+import { fallbackEventPayload } from "../../../fallback/index.js";
+import { comboEventPayload, withResilience } from "../../../combo/index.js";
 import type { ToolRegistry } from "../../tools/index.js";
 import type { ChatSession } from "../../../services/sessionStore.js";
 import type { SessionEventBuffer } from "../../../services/eventBuffer.js";
@@ -190,11 +191,13 @@ export class CeoAgentRunner {
       let provider: Provider;
       try {
         // Retry (and fail over) provider requests for the whole organization (CEO,
-        // leaders, members, their sub-agents, and summarization handoffs).
-        provider = withFallback(
+        // leaders, members, their sub-agents, and summarization handoffs), or advance
+        // through the active provider combo when one is set.
+        provider = withResilience(
           resolveProvider(this.providers, request.provider, request.customProvider),
           {
-            settings: request.fallback,
+            combo: request.combo,
+            fallback: request.fallback,
             retry: request.retry,
             providerId: request.provider,
             model: request.model,
@@ -204,6 +207,7 @@ export class CeoAgentRunner {
             resolve: (target) => resolveProvider(this.providers, target.provider, target.customProvider),
             onRetry: (info) => send("retry", retryEventPayload(info, "ceo")),
             onFallback: (event) => send("fallback", fallbackEventPayload(event, "ceo")),
+            onCombo: (event) => send("combo", comboEventPayload(event, "ceo")),
             scope: "ceo",
           },
         );

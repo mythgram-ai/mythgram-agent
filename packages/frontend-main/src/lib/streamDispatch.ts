@@ -1156,6 +1156,22 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
       break;
     }
 
+    case "combo": {
+      // The active provider combo advanced to another provider after the current
+      // one threw: record it on the message so the UI can show a dedicated card.
+      s.registerCombo(convId, msgId, {
+        comboId: typeof data.combo_id === "string" ? data.combo_id : undefined,
+        comboName: typeof data.combo_name === "string" ? data.combo_name : undefined,
+        index: Number(data.combo_index ?? 0),
+        total: Number(data.combo_total ?? 0),
+        provider: typeof data.combo_provider === "string" ? data.combo_provider : "",
+        model: typeof data.combo_model === "string" ? data.combo_model : "",
+        error: typeof data.error === "string" ? data.error : "",
+        scope: typeof data.scope === "string" ? data.scope : undefined,
+      });
+      break;
+    }
+
     case "error":
       s.applyAssistantDelta(convId, msgId, {
         contentDelta: `\n\n⚠️ ${String(data.message ?? "Agent error")}`,

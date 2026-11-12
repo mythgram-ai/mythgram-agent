@@ -49,4 +49,6 @@ export interface MemoryAgentBuildRequest {
   retry?: import("../../retry/index.js").RetrySettings;
   /** Fallback policy inherited from the turn that triggered this memory build. See src/fallback. */
   fallback?: import("../../fallback/index.js").FallbackSettings;
+  /** Active provider combo inherited from the turn that triggered this memory build. See src/combo. */
+  combo?: import("../../combo/index.js").ComboSettings;
 }

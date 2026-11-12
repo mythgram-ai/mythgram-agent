@@ -13,6 +13,7 @@ import { ShowArtifactBlock } from "./ShowArtifactBlock";
 import { TeamRunView } from "./TeamRunView";
 import { RetryBlock } from "./RetryBlock";
 import { FallbackBlock } from "./FallbackBlock";
+import { ComboBlock } from "./ComboBlock";
 import { InterruptedBlock } from "./InterruptedBlock";
 import { SavePromptModal } from "@/components/panels/PromptLibraryPanel";
 
@@ -80,7 +81,7 @@ function MessageItemImpl({
   // A retry block replaces the generic thinking indicator so the user sees the
   // actual provider-retry state (attempt, countdown) while the request is retried.
   const showThinking =
-    message.streaming && !hasContent && tools.length === 0 && !isTeam && !message.retry && !message.fallback;
+    message.streaming && !hasContent && tools.length === 0 && !isTeam && !message.retry && !message.fallback && !message.combo;
 
   return (
     <div className="flex gap-3 fade-in">
@@ -105,6 +106,8 @@ function MessageItemImpl({
         )}
 
         {message.fallback && <FallbackBlock fallback={message.fallback} />}
+
+        {message.combo && <ComboBlock combo={message.combo} />}
 
         {message.reasoning && message.reasoning.trim().length > 0 && (
           <div className="overflow-hidden rounded-[var(--radius-md)] bg-[var(--chip)]">

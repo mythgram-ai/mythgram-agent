@@ -11,6 +11,7 @@ import type { SkillDefinition, SkillFileDefinition, SubAgentDefinition } from ".
 import { normalizeEffort } from "../agents/providers/reasoning.js";
 import { sanitizeRetrySettings } from "../retry/index.js";
 import { sanitizeFallbackSettings } from "../fallback/index.js";
+import { sanitizeComboSettings } from "../combo/index.js";
 import { normalizeTodos } from "../agents/todos.js";
 import { normalizeMemoryFiles } from "../agents/memory.js";
 import { normalizeKnowledgeFiles } from "../agents/knowledge.js";
@@ -263,9 +264,17 @@ interface StreamBody {
   /**
    * Fallback policy for provider requests this turn (from Settings → Fallback).
    * When enabled, requests fail over to a configured fallback provider/api once
-   * every retry attempt is exhausted. When omitted fallback is OFF.
+   * every retry attempt is exhausted. When omitted fallback is OFF. Ignored while
+   * a combo is active.
    */
   fallback?: unknown;
+  /**
+   * Active provider combo for this turn (from Settings → Provider combos). When
+   * present it replaces the fallback policy: the first entry serves chat, a
+   * failing entry switches straight to the next (no retry), and only the last
+   * entry retries. See src/combo.
+   */
+  combo?: unknown;
 }
 
 /**
@@ -730,6 +739,7 @@ export function buildChatRouter(
           memoryAgentInterval: parseMemoryAgentInterval(body.memory_agent_interval, config.memoryAgentInterval),
           retry: sanitizeRetrySettings(body.retry),
           fallback: sanitizeFallbackSettings(body.fallback),
+          combo: sanitizeComboSettings(body.combo),
         };
 
         void chatRunner
@@ -791,6 +801,7 @@ export function buildChatRouter(
           ),
           retry: sanitizeRetrySettings(body.retry),
           fallback: sanitizeFallbackSettings(body.fallback),
+          combo: sanitizeComboSettings(body.combo),
         };
 
         void ceoAgent
@@ -851,6 +862,7 @@ export function buildChatRouter(
           ),
           retry: sanitizeRetrySettings(body.retry),
           fallback: sanitizeFallbackSettings(body.fallback),
+          combo: sanitizeComboSettings(body.combo),
         };
 
         void multiAgent
@@ -913,6 +925,7 @@ export function buildChatRouter(
         ),
         retry: sanitizeRetrySettings(body.retry),
         fallback: sanitizeFallbackSettings(body.fallback),
+        combo: sanitizeComboSettings(body.combo),
       };
 
       // Custom Agent mode: when the active agent is a user-created top-level Custom Agent, run this

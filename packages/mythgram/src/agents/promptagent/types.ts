@@ -78,4 +78,6 @@ export interface RunPromptAgentRequest {
   retry?: import("../../retry/index.js").RetrySettings;
   /** Fallback policy for this turn's provider requests (from Settings). See src/fallback. */
   fallback?: import("../../fallback/index.js").FallbackSettings;
+  /** Active provider combo for this turn's provider requests (from Settings). See src/combo. */
+  combo?: import("../../combo/index.js").ComboSettings;
 }
