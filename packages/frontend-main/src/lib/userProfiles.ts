@@ -14,11 +14,13 @@ import type {
   McpServer,
   MemoryFile,
   PromptLibraryItem,
+  Role,
   Settings,
   Skill,
   SubAgent,
   TodoItem,
   UserProfile,
+  Workflow,
 } from "@/types";
 
 /**
@@ -184,6 +186,8 @@ export interface ProfileSnapshot {
   settings: Settings;
   subAgents: SubAgent[];
   skills: Skill[];
+  workflows: Workflow[];
+  roles: Role[];
   todos: TodoItem[];
   memory: MemoryFile[];
   knowledge: KnowledgeFile[];

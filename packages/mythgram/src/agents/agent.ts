@@ -13,7 +13,7 @@ import {
   withoutImageAttachment,
 } from "./tools/readImage.js";
 import { isVisionCapableModel } from "../utils/vision.js";
-import type { SkillDefinition, SubAgentDefinition, WebToolsConfig } from "./tools/types.js";
+import type { SkillDefinition, SubAgentDefinition, WebToolsConfig, WorkflowDefinition, RoleDefinition } from "./tools/types.js";
 import type { ChannelToolContext } from "./tools/types.js";
 import type { ToolCall, ToolCallDelta } from "./providers/types.js";
 import type { ChatSession, StoredMessage } from "../services/sessionStore.js";
@@ -24,6 +24,8 @@ import { safeJsonParse } from "../utils/json.js";
 import { createSubAgentRuntime } from "./subagents.js";
 import { createSkillRuntime } from "./skills.js";
 import { mergeDefaultSkills, resolveDefaultSkills } from "./skills/index.js";
+import { createWorkflowRuntime } from "../workflow/index.js";
+import { createRoleRuntime } from "../role/index.js";
 import { resolveDefaultSubAgents, mergeDefaultSubAgents } from "./sub-agents/index.js";
 import { createTodoRuntime } from "./todos.js";
 import { createMemoryRuntime } from "./memory.js";
@@ -98,6 +100,10 @@ export interface RunAgentRequest {
   subAgents?: SubAgentDefinition[];
   /** User-defined skills (from the frontend, stored in the browser) available this turn. */
   skills?: SkillDefinition[];
+  /** User-defined workflows (from the frontend) available this turn. */
+  workflows?: WorkflowDefinition[];
+  /** User-defined roles (from the frontend) available this turn. */
+  roles?: RoleDefinition[];
   /** User-defined todos (from the frontend, stored in the browser) available this turn. */
   todos?: TodoItem[];
   /** The user's memory files (from the frontend, stored in the browser) available this turn. */
@@ -675,6 +681,11 @@ export class AgentRunner {
       const defaultSkills = await resolveDefaultSkills();
       const skillRuntime = createSkillRuntime(mergeDefaultSkills(defaultSkills, request.skills ?? []));
 
+      // Workflow + role runtimes for this turn — enumerate the user's workflows/roles and let the
+      // create/list/read/delete tools manage them. Authored in the frontend and sent with each turn.
+      const workflowRuntime = createWorkflowRuntime(request.workflows ?? []);
+      const roleRuntime = createRoleRuntime(request.roles ?? []);
+
       // Todo runtime for this turn — a browser-backed snapshot of the user's todo list that the
       // TodoWrite / read_todos tools read and update. Present only for main-agent tool calls.
       const todoRuntime = createTodoRuntime(request.todos ?? []);
@@ -887,6 +898,8 @@ export class AgentRunner {
               web,
               subAgents: subAgentRuntime,
               skills: skillRuntime,
+              workflows: workflowRuntime,
+              roles: roleRuntime,
               todos: todoRuntime,
               memory: memoryRuntime,
               knowledge: knowledgeRuntime,

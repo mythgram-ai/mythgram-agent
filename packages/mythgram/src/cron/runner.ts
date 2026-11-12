@@ -40,10 +40,14 @@ import { catalogContextLimit, manualContextLimit } from "../agents/contextLimits
 import type {
   MemoryFile,
   KnowledgeFile,
+  RoleDefinition,
   SkillDefinition,
   SubAgentDefinition,
   TodoItem,
+  WorkflowDefinition,
 } from "../agents/tools/types.js";
+import { normalizeWorkflowList } from "../workflow/index.js";
+import { normalizeRoleList } from "../role/index.js";
 import type { MythgramDatabase } from "../database/index.js";
 import type { MemoryAgentService } from "../agents/memoryagent/index.js";
 import { createScheduleRunId } from "../database/index.js";
@@ -117,6 +121,8 @@ interface ResolvedRunContext {
   mcpServers?: McpServerSelection[];
   subAgents: SubAgentDefinition[];
   skills: SkillDefinition[];
+  workflows: WorkflowDefinition[];
+  roles: RoleDefinition[];
   todos: TodoItem[];
   memory: MemoryFile[];
   knowledge: KnowledgeFile[];
@@ -296,6 +302,8 @@ export class ScheduleRunner {
       firecrawlApiKey: ctx.firecrawlApiKey,
       subAgents: ctx.subAgents,
       skills: ctx.skills,
+      workflows: ctx.workflows,
+      roles: ctx.roles,
       todos: ctx.todos,
       memory: ctx.memory,
       knowledge: ctx.knowledge,
@@ -368,6 +376,8 @@ export class ScheduleRunner {
     // Shared tooling snapshots (normalized exactly like chat turns).
     const subAgents = normalizeSubAgentList(db.appState.get("subAgents"));
     const skills = normalizeSkillList(db.appState.get("skills"));
+    const workflows = normalizeWorkflowList(db.appState.get("workflows"));
+    const roles = normalizeRoleList(db.appState.get("roles"));
     const todos = normalizeTodos(db.appState.get("todos"));
     const memory = normalizeMemoryFiles(db.appState.get("memory"));
     const knowledge = normalizeKnowledgeFiles(db.appState.get("knowledge"));
@@ -409,6 +419,8 @@ export class ScheduleRunner {
       mcpServers: undefined, // undefined = every enabled MCP server (same as chat turns)
       subAgents,
       skills,
+      workflows,
+      roles,
       todos,
       memory,
       knowledge,

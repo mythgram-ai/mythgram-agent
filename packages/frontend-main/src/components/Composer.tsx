@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { Paperclip, ArrowUp, Square, FolderOpen, X, Loader2, ChevronDown, ListChecks, Plus, Layers } from "lucide-react";
-import { PromptLibraryIcon } from "@/components/icons/NavIcons";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Paperclip, ArrowUp, Square, FolderOpen, X, Loader2, ChevronDown, ListChecks, Plus, Layers, Check } from "lucide-react";
+import { PromptLibraryIcon, RoleIcon, WorkflowIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { isCustomProviderId, isLocalProviderId } from "@/lib/providers";
 import { isContextLimitRequired, isMainAgentActive } from "@/lib/contextMeter";
 import { fetchWorkspace, mkdirWorkspace, setWorkspace } from "@/lib/workspace";
 import { buildAttachmentPrompt, uploadFiles, type UploadedFile } from "@/lib/uploads";
+import { buildAttachedWorkflowPrompt } from "@/lib/workflows";
+import { buildAttachedRolePrompt } from "@/lib/roles";
+import { visiblePromptText, withAttachedContext } from "@/lib/promptVisibility";
 import { PLAN_TASK_MODE_ID, DEFAULT_TASK_MODE_ID } from "@/lib/taskModes";
 import { Modal } from "@/components/ui/Modal";
 import { Button, Field, TextArea, TextInput } from "@/components/ui/primitives";
@@ -22,6 +25,8 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
   const workspacePath = useStore((s) => s.workspacePath);
   const setWorkspacePath = useStore((s) => s.setWorkspacePath);
   const promptLibrary = useStore((s) => s.promptLibrary);
+  const workflows = useStore((s) => s.workflows);
+  const roles = useStore((s) => s.roles);
   const composerPrefill = useStore((s) => s.composerPrefill);
   const setComposerPrefill = useStore((s) => s.setComposerPrefill);
   const models = useStore((s) => s.models);
@@ -36,9 +41,11 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
   const removeQueuedPrompt = useStore((s) => s.removeQueuedPrompt);
   const clearPromptQueue = useStore((s) => s.clearPromptQueue);
   const currentQueue = currentId ? (promptQueues[currentId] ?? []) : [];
-  // "/" shortcut stages: "menu" shows the single "Prompt library" option,
-  // "list" shows the saved prompts (title + optional short description).
-  const [slashStage, setSlashStage] = useState<"menu" | "list">("menu");
+  // "/" shortcut stages: "menu" shows the section options, "list" shows saved prompts,
+  // "workflows"/"roles" let the user attach a workflow or role to this prompt.
+  const [slashStage, setSlashStage] = useState<"menu" | "list" | "workflows" | "roles">("menu");
+  const [attachedWorkflows, setAttachedWorkflows] = useState<string[]>([]);
+  const [attachedRoles, setAttachedRoles] = useState<string[]>([]);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -71,6 +78,22 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
       : promptLibrary.filter((item) =>
           `${item.title} ${item.description}`.toLowerCase().includes(slashFilter),
         );
+  const enabledWorkflows = workflows.filter((wf) => wf.enabled);
+  const enabledRoles = roles.filter((r) => r.enabled);
+  const workflowMatches =
+    slashFilter.length === 0
+      ? enabledWorkflows
+      : enabledWorkflows.filter((wf) =>
+          `${wf.name} ${wf.description}`.toLowerCase().includes(slashFilter),
+        );
+  const roleMatches =
+    slashFilter.length === 0
+      ? enabledRoles
+      : enabledRoles.filter((r) =>
+          `${r.name} ${r.description}`.toLowerCase().includes(slashFilter),
+        );
+  const attachedWorkflowItems = workflows.filter((wf) => attachedWorkflows.includes(wf.id));
+  const attachedRoleItems = roles.filter((r) => attachedRoles.includes(r.id));
 
   const autoGrow = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const next = e.target.value;
@@ -118,15 +141,28 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
       manualLimits: settings.manualContextLimits,
     });
 
+  /** Assemble every prompt fragment attached to the current draft (files, workflows, roles). The
+   * file notice stays visible; workflow/role metadata is placed behind a marker so it reaches the
+   * LLM but is hidden from the user in the chat UI. */
+  const buildNotices = () => {
+    const visible = buildAttachmentPrompt(attachments);
+    const hidden = [buildAttachedWorkflowPrompt(attachedWorkflowItems), buildAttachedRolePrompt(attachedRoleItems)]
+      .filter((part) => part.trim().length > 0)
+      .join("\n\n");
+    return withAttachedContext(visible, hidden);
+  };
+
   /** Stage the current draft for automatic sending after the running turn ends. */
   const addToQueue = () => {
     const text = value.trim();
     if (!text || !currentId || uploading) return;
-    const notice = buildAttachmentPrompt(attachments);
+    const notice = buildNotices();
     queuePrompt(currentId, notice ? `${text}\n\n${notice}` : text);
     setValue("");
     setSlashStage("menu");
     setAttachments([]);
+    setAttachedWorkflows([]);
+    setAttachedRoles([]);
     setUploadError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
@@ -150,11 +186,13 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
       return;
     }
     setSection("chat");
-    const notice = buildAttachmentPrompt(attachments);
+    const notice = buildNotices();
     onSend(notice ? `${text}\n\n${notice}` : text);
     setValue("");
     setSlashStage("menu");
     setAttachments([]);
+    setAttachedWorkflows([]);
+    setAttachedRoles([]);
     setUploadError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
@@ -182,7 +220,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Escape" && slashActive) {
       e.preventDefault();
-      if (slashStage === "list") setSlashStage("menu");
+      if (slashStage !== "menu") setSlashStage("menu");
       else {
         setValue("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -205,6 +243,24 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
       el.style.height = Math.min(el.scrollHeight, 200) + "px";
       el.focus();
     });
+  };
+
+  /** Attach a workflow to this prompt (multiple allowed) and close the "/" picker. */
+  const attachWorkflow = (id: string) => {
+    setAttachedWorkflows((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setValue("");
+    setSlashStage("menu");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  /** Attach a role to this prompt (multiple allowed) and close the "/" picker. */
+  const attachRole = (id: string) => {
+    setAttachedRoles((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setValue("");
+    setSlashStage("menu");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
   return (
@@ -252,35 +308,50 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
               className="absolute bottom-full left-0 z-50 mb-2 w-72 max-w-[calc(100vw-3rem)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)] py-1 pop-in"
               style={{ boxShadow: "var(--shadow-pop)" }}
               role="listbox"
-              aria-label="Prompt library shortcuts"
+              aria-label="Composer shortcuts"
             >
               {slashStage === "menu" ? (
-                <button
-                  type="button"
-                  onClick={() => setSlashStage("list")}
-                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-[var(--chip)]"
-                  role="option"
-                  aria-selected="false"
-                >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--chip)] text-[var(--muted)]">
-                    <PromptLibraryIcon className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-medium text-[var(--fg)]">
-                      Prompt library
-                    </span>
-                    <span className="block truncate text-[10px] text-[var(--subtle)]">
-                      {promptLibrary.length === 0
+                <>
+                  <SlashMenuOption
+                    icon={<PromptLibraryIcon className="h-5 w-5" />}
+                    title="Prompt library"
+                    hint={
+                      promptLibrary.length === 0
                         ? "No saved prompts yet"
-                        : `${promptLibrary.length} saved prompt${promptLibrary.length === 1 ? "" : "s"}`}
-                    </span>
-                  </span>
-                </button>
+                        : `${promptLibrary.length} saved prompt${promptLibrary.length === 1 ? "" : "s"}`
+                    }
+                    onClick={() => setSlashStage("list")}
+                  />
+                  <SlashMenuOption
+                    icon={<WorkflowIcon className="h-5 w-5" />}
+                    title="Attach workflow"
+                    hint={
+                      enabledWorkflows.length === 0
+                        ? "No workflows yet"
+                        : `${enabledWorkflows.length} workflow${enabledWorkflows.length === 1 ? "" : "s"}`
+                    }
+                    onClick={() => setSlashStage("workflows")}
+                  />
+                  <SlashMenuOption
+                    icon={<RoleIcon className="h-5 w-5" />}
+                    title="Attach role"
+                    hint={
+                      enabledRoles.length === 0
+                        ? "No roles yet"
+                        : `${enabledRoles.length} role${enabledRoles.length === 1 ? "" : "s"}`
+                    }
+                    onClick={() => setSlashStage("roles")}
+                  />
+                </>
               ) : (
                 <>
                   <div className="flex items-center justify-between px-3 pb-1 pt-2">
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--subtle)]">
-                      Saved prompts
+                      {slashStage === "list"
+                        ? "Saved prompts"
+                        : slashStage === "workflows"
+                          ? "Attach workflow"
+                          : "Attach role"}
                     </span>
                     <button
                       type="button"
@@ -290,36 +361,110 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                       Back
                     </button>
                   </div>
-                  {promptLibrary.length === 0 ? (
+                  {slashStage === "list" ? (
+                    promptLibrary.length === 0 ? (
+                      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
+                        No saved prompts yet. Save one from the Prompt library page or the
+                        bookmark button on any chat prompt.
+                      </p>
+                    ) : slashMatches.length === 0 ? (
+                      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
+                        No saved prompts match “{value.slice(1).trim()}”.
+                      </p>
+                    ) : (
+                      <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
+                        {slashMatches.slice(0, 20).map((item) => (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              onClick={() => insertLibraryPrompt(item.content)}
+                              className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-[var(--chip)]"
+                              role="option"
+                              aria-selected="false"
+                              title={item.content.slice(0, 200)}
+                            >
+                              <PromptLibraryIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium text-[var(--fg)]">
+                                  {item.title}
+                                </span>
+                                <span className="block truncate text-[10px] text-[var(--subtle)]">
+                                  {item.description || "No description."}
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  ) : slashStage === "workflows" ? (
+                    enabledWorkflows.length === 0 ? (
+                      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
+                        No workflows yet. Create one from the Workflows page.
+                      </p>
+                    ) : workflowMatches.length === 0 ? (
+                      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
+                        No workflows match “{value.slice(1).trim()}”.
+                      </p>
+                    ) : (
+                      <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
+                        {workflowMatches.slice(0, 20).map((wf) => (
+                          <li key={wf.id}>
+                            <button
+                              type="button"
+                              onClick={() => attachWorkflow(wf.id)}
+                              className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-[var(--chip)]"
+                              role="option"
+                              aria-selected={attachedWorkflows.includes(wf.id)}
+                            >
+                              <WorkflowIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium text-[var(--fg)]">
+                                  {wf.name}
+                                </span>
+                                <span className="block truncate text-[10px] text-[var(--subtle)]">
+                                  {wf.description || "No description."}
+                                </span>
+                              </span>
+                              {attachedWorkflows.includes(wf.id) && (
+                                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--secondary)]" />
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  ) : enabledRoles.length === 0 ? (
                     <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
-                      No saved prompts yet. Save one from the Prompt library page or the
-                      bookmark button on any chat prompt.
+                      No roles yet. Create one from the Roles page.
                     </p>
-                  ) : slashMatches.length === 0 ? (
+                  ) : roleMatches.length === 0 ? (
                     <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
-                      No saved prompts match “{value.slice(1).trim()}”.
+                      No roles match “{value.slice(1).trim()}”.
                     </p>
                   ) : (
                     <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
-                      {slashMatches.slice(0, 20).map((item) => (
-                        <li key={item.id}>
+                      {roleMatches.slice(0, 20).map((r) => (
+                        <li key={r.id}>
                           <button
                             type="button"
-                            onClick={() => insertLibraryPrompt(item.content)}
+                            onClick={() => attachRole(r.id)}
                             className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-[var(--chip)]"
                             role="option"
-                            aria-selected="false"
-                            title={item.content.slice(0, 200)}
+                            aria-selected={attachedRoles.includes(r.id)}
                           >
-                            <PromptLibraryIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]" />
+                            <RoleIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]" />
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-xs font-medium text-[var(--fg)]">
-                                {item.title}
+                                {r.name}
                               </span>
                               <span className="block truncate text-[10px] text-[var(--subtle)]">
-                                {item.description || "No description."}
+                                {r.description || "No description."}
                               </span>
                             </span>
+                            {attachedRoles.includes(r.id) && (
+                              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--secondary)]" />
+                            )}
                           </button>
                         </li>
                       ))}
@@ -366,6 +511,50 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
               ))}
             </div>
           )}
+          {(attachedWorkflowItems.length > 0 || attachedRoleItems.length > 0) && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {attachedWorkflowItems.map((wf) => (
+                <span
+                  key={`workflow-${wf.id}`}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--chip)] px-2.5 py-1 text-xs text-[var(--fg)]"
+                  title={`Workflow: ${wf.name}`}
+                >
+                  <WorkflowIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />
+                  <span className="max-w-[10rem] truncate">{wf.name}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAttachedWorkflows((prev) => prev.filter((x) => x !== wf.id))
+                    }
+                    className="text-[var(--subtle)] hover:text-[var(--danger)]"
+                    title="Remove workflow"
+                    aria-label={`Remove workflow ${wf.name}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              {attachedRoleItems.map((r) => (
+                <span
+                  key={`role-${r.id}`}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--chip)] px-2.5 py-1 text-xs text-[var(--fg)]"
+                  title={`Role: ${r.name}`}
+                >
+                  <RoleIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />
+                  <span className="max-w-[10rem] truncate">{r.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedRoles((prev) => prev.filter((x) => x !== r.id))}
+                    className="text-[var(--subtle)] hover:text-[var(--danger)]"
+                    title="Remove role"
+                    aria-label={`Remove role ${r.name}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           {uploadError && (
             <p className="mt-2 text-xs text-[var(--danger)]">{uploadError}</p>
           )}
@@ -395,8 +584,11 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                     <span className="w-4 shrink-0 text-center text-[10px] text-[var(--subtle)]">
                       {index + 1}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-xs text-[var(--fg)]" title={queued}>
-                      {queued}
+                    <span
+                      className="min-w-0 flex-1 truncate text-xs text-[var(--fg)]"
+                      title={visiblePromptText(queued)}
+                    >
+                      {visiblePromptText(queued)}
                     </span>
                     <button
                       type="button"
@@ -506,6 +698,36 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
         onClose={() => setWorkspaceOpen(false)}
       />
     </div>
+  );
+}
+
+function SlashMenuOption({
+  icon,
+  title,
+  hint,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-[var(--chip)]"
+      role="option"
+      aria-selected="false"
+    >
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--chip)] text-[var(--muted)]">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium text-[var(--fg)]">{title}</span>
+        <span className="block truncate text-[10px] text-[var(--subtle)]">{hint}</span>
+      </span>
+    </button>
   );
 }
 

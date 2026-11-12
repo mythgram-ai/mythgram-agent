@@ -16,6 +16,7 @@ import { FallbackBlock } from "./FallbackBlock";
 import { ComboBlock } from "./ComboBlock";
 import { InterruptedBlock } from "./InterruptedBlock";
 import { SavePromptModal } from "@/components/panels/PromptLibraryPanel";
+import { visiblePromptText } from "@/lib/promptVisibility";
 
 /** Tools that render as full-width blocks instead of inline chips. */
 function isBlockTool(name: string): boolean {
@@ -43,13 +44,16 @@ function MessageItemImpl({
   const [saveOpen, setSaveOpen] = useState(false);
 
   if (message.role === "user") {
+    // Attached workflow/role documents travel with the stored message so the model keeps them in
+    // history, but they must never be shown to the user. Render only the visible part.
+    const visibleContent = visiblePromptText(message.content);
     return (
       <div className="group flex justify-end fade-in">
         <div className="flex max-w-[85%] flex-col items-end gap-1">
           <div className="whitespace-pre-wrap break-words rounded-[var(--radius-lg)] rounded-br-md bg-[var(--secondary)] px-4 py-2.5 text-sm leading-relaxed text-[var(--secondary-fg)]">
-            {message.content}
+            {visibleContent}
           </div>
-          {message.content.trim().length > 0 && (
+          {visibleContent.trim().length > 0 && (
             <button
               type="button"
               onClick={() => setSaveOpen(true)}
@@ -63,7 +67,7 @@ function MessageItemImpl({
           )}
           <SavePromptModal
             open={saveOpen}
-            initialContent={message.content}
+            initialContent={visibleContent}
             onClose={() => setSaveOpen(false)}
           />
         </div>

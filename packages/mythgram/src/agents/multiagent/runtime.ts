@@ -115,6 +115,10 @@ export interface TeamOrchestratorDeps {
   /** Slides runtime — lets every team agent create, read, present, and manage HTML slides. */
   slides?: import("../../slides/runtime.js").SlidesRuntime;
   skills: SkillRuntime;
+  /** Workflow runtime — lets every team agent (head + members) manage the user's workflows. */
+  workflows?: import("../tools/types.js").WorkflowRuntime;
+  /** Role runtime — lets every team agent (head + members) manage the user's roles. */
+  roles?: import("../tools/types.js").RoleRuntime;
   todos: TodoRuntime;
   subAgentDefinitions: Awaited<ReturnType<typeof resolveDefaultSubAgents>>;
   userSubAgents: import("../tools/types.js").SubAgentDefinition[];
@@ -507,6 +511,8 @@ export class TeamOrchestrator {
       // Each agent gets its own sub-agent runtime (bound to its conversation for context sharing).
       subAgents: actor.subAgentRuntime,
       skills: this.deps.skills,
+      workflows: this.deps.workflows,
+      roles: this.deps.roles,
       todos: this.deps.todos,
       memory: this.deps.memory,
       knowledge: this.deps.knowledge,

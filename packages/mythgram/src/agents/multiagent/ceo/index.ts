@@ -13,6 +13,8 @@ import { createMemoryRuntime } from "../../memory.js";
 import { createKnowledgeRuntime } from "../../knowledge.js";
 import { createSkillRuntime } from "../../skills.js";
 import { mergeDefaultSkills, resolveDefaultSkills } from "../../skills/index.js";
+import { createWorkflowRuntime } from "../../../workflow/index.js";
+import { createRoleRuntime } from "../../../role/index.js";
 import { createTodoRuntime } from "../../todos.js";
 import { createPromptLibraryRuntime } from "../../promptLibrary.js";
 import { createCustomAgentsRuntime } from "../../customAgents.js";
@@ -228,6 +230,8 @@ export class CeoAgentRunner {
       const knowledge = createKnowledgeRuntime(request.knowledge ?? []);
       const defaultSkills = await resolveDefaultSkills();
       const skills = createSkillRuntime(mergeDefaultSkills(defaultSkills, request.skills ?? []));
+      const workflows = createWorkflowRuntime(request.workflows ?? []);
+      const roles = createRoleRuntime(request.roles ?? []);
       const todos = createTodoRuntime(request.todos ?? []);
       const subAgentDefinitions = await resolveDefaultSubAgents();
 
@@ -296,6 +300,8 @@ export class CeoAgentRunner {
         image: this.image,
         slides: this.slides,
         skills,
+        workflows,
+        roles,
         todos,
         subAgentDefinitions,
         userSubAgents: request.subAgents ?? [],

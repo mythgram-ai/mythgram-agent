@@ -284,6 +284,64 @@ export interface BackendSkill {
   enabled: boolean;
 }
 
+/**
+ * A user-defined workflow, stored in the backend SQLite database. A workflow is a single
+ * markdown document ("workflow.md") describing the process the agent should follow for a task.
+ */
+export interface Workflow {
+  id: string;
+  /** Human-readable workflow name. */
+  name: string;
+  description: string;
+  /** Entry markdown file name (defaults to "workflow.md"). */
+  workflowFile: string;
+  /** Complete markdown content of the workflow. */
+  content: string;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Workflow definition in the backend/wire format sent with each turn. */
+export interface BackendWorkflow {
+  id: string;
+  name: string;
+  description: string;
+  /** Entry file name, e.g. "workflow.md". */
+  workflow_file: string;
+  content: string;
+  enabled: boolean;
+}
+
+/**
+ * A user-defined role, stored in the backend SQLite database. A role is a single markdown
+ * document ("role.md") describing the persona the agent should adopt.
+ */
+export interface Role {
+  id: string;
+  /** Human-readable role name. */
+  name: string;
+  description: string;
+  /** Entry markdown file name (defaults to "role.md"). */
+  roleFile: string;
+  /** Complete markdown content of the role. */
+  content: string;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Role definition in the backend/wire format sent with each turn. */
+export interface BackendRole {
+  id: string;
+  name: string;
+  description: string;
+  /** Entry file name, e.g. "role.md". */
+  role_file: string;
+  content: string;
+  enabled: boolean;
+}
+
 /** Role of an agent inside a multi-agent team: the single head/leader, or a specialist member. */
 export type TeamAgentRole = "leader" | "member";
 
@@ -1311,6 +1369,10 @@ export interface StreamRequest {
   mcp_servers?: BackendMcpServer[];
   sub_agents?: BackendSubAgent[];
   skills?: BackendSkill[];
+  /** User-authored workflows available this turn (sent in agent mode only). */
+  workflows?: BackendWorkflow[];
+  /** User-authored roles available this turn (sent in agent mode only). */
+  roles?: BackendRole[];
   todos?: TodoItem[];
   memory?: MemoryFile[];
   knowledge?: KnowledgeFile[];

@@ -32,6 +32,8 @@ const SYNC_KEYS = [
   "settings",
   "subAgents",
   "skills",
+  "workflows",
+  "roles",
   "todos",
   "memory",
   "knowledge",

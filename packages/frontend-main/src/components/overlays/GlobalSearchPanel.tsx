@@ -4,6 +4,7 @@ import { Modal } from "@/components/ui/Modal";
 import { TextInput } from "@/components/ui/primitives";
 import { useStore } from "@/store/useStore";
 import { searchEverything, type SearchResultItem } from "@/lib/globalSearch";
+import { visiblePromptText } from "@/lib/promptVisibility";
 import { cn } from "@/utils/cn";
 
 export function GlobalSearchPanel() {
@@ -26,7 +27,11 @@ export function GlobalSearchPanel() {
       conversations: s.conversations.map((c) => ({
         id: c.id,
         title: c.title,
-        messages: c.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+        messages: c.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.role === "user" ? visiblePromptText(m.content) : m.content,
+        })),
       })),
       memory: s.memory,
       knowledge: s.knowledge,

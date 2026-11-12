@@ -21,6 +21,10 @@ function contextLabel(section: Section, counts: Record<string, number>): string 
       return `${counts.agents} agent${counts.agents === 1 ? "" : "s"}`;
     case "skills":
       return `${counts.skills} skill${counts.skills === 1 ? "" : "s"}`;
+    case "workflows":
+      return `${counts.workflows} workflow${counts.workflows === 1 ? "" : "s"}`;
+    case "roles":
+      return `${counts.roles} role${counts.roles === 1 ? "" : "s"}`;
     case "teams":
       return `${counts.teams} team${counts.teams === 1 ? "" : "s"}`;
     case "ceo":
@@ -74,6 +78,8 @@ export function TopBar() {
   const knowledge = useStore((s) => s.knowledge);
   const subAgents = useStore((s) => s.subAgents);
   const skills = useStore((s) => s.skills);
+  const workflows = useStore((s) => s.workflows);
+  const roles = useStore((s) => s.roles);
   const attachedFiles = useStore((s) => s.attachedFiles);
   const agentTeams = useStore((s) => s.agentTeams);
   const ceoAgents = useStore((s) => s.ceoAgents);
@@ -96,6 +102,8 @@ export function TopBar() {
     knowledge: knowledge.length,
     agents: subAgents.length,
     skills: skills.length,
+    workflows: workflows.length,
+    roles: roles.length,
     teams: agentTeams.length,
     ceo: ceoAgents.length,
     customagents: customAgents.length,

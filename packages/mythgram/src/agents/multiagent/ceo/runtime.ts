@@ -117,6 +117,10 @@ export interface CeoOrchestratorDeps {
   /** Slides runtime — lets CEO/leader/member agents create, read, present, and manage HTML slides. */
   slides?: import("../../../slides/runtime.js").SlidesRuntime;
   skills: SkillRuntime;
+  /** Workflow runtime — lets every CEO-system agent manage the user's workflows. */
+  workflows?: import("../../tools/types.js").WorkflowRuntime;
+  /** Role runtime — lets every CEO-system agent manage the user's roles. */
+  roles?: import("../../tools/types.js").RoleRuntime;
   todos: TodoRuntime;
   subAgentDefinitions: Awaited<ReturnType<typeof resolveDefaultSubAgents>>;
   userSubAgents: import("../../tools/types.js").SubAgentDefinition[];
@@ -557,6 +561,8 @@ export class CeoOrchestrator {
       web: this.deps.web,
       subAgents: actor.subAgentRuntime,
       skills: this.deps.skills,
+      workflows: this.deps.workflows,
+      roles: this.deps.roles,
       todos: this.deps.todos,
       memory: this.deps.memory,
       knowledge: this.deps.knowledge,

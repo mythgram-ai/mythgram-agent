@@ -1,6 +1,6 @@
 {
   "name": "mythgram",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Mythgram AI — a fast, reliable, autonomous local coding agent with a bundled web console. Run `mythgram` to start the API and UI on one port.",
   "type": "module",
   "license": "MIT",

@@ -769,6 +769,128 @@ export class ChannelTurnRunner {
                 !(typeof item.id === "string" && (item.id as string).startsWith("default-"))),
           ),
         );
+        return;
+      }
+      if (data.name === "create_workflow" && data.ok === true) {
+        const payload = (data.result as Record<string, unknown> | undefined)?.data as
+          | Record<string, unknown>
+          | undefined;
+        const created = payload?.created_workflow as Record<string, unknown> | undefined;
+        if (!created || typeof created.name !== "string") return;
+        const raw = this.deps.db.appState.get("workflows");
+        const list: Array<Record<string, unknown>> = Array.isArray(raw)
+          ? (raw as Array<Record<string, unknown>>)
+          : [];
+        const name = created.name.trim();
+        const id =
+          typeof created.id === "string" && created.id.trim()
+            ? (created.id as string).trim()
+            : `workflow_${randomId(8)}`;
+        const entry: Record<string, unknown> = {
+          id,
+          name,
+          description: typeof created.description === "string" ? created.description : "",
+          workflowFile:
+            typeof created.workflow_file === "string" && created.workflow_file.trim()
+              ? (created.workflow_file as string).trim()
+              : "workflow.md",
+          content: typeof created.content === "string" ? created.content : "",
+          enabled: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        const index = list.findIndex(
+          (item) =>
+            item.id === id ||
+            (typeof item.name === "string" &&
+              (item.name as string).trim().toLowerCase() === name.toLowerCase()),
+        );
+        if (index === -1) list.unshift(entry);
+        else list[index] = { ...list[index], ...entry, id: list[index]!.id };
+        this.deps.db.appState.set("workflows", list);
+        return;
+      }
+      if (data.name === "delete_workflow" && data.ok === true) {
+        const payload = (data.result as Record<string, unknown> | undefined)?.data as
+          | Record<string, unknown>
+          | undefined;
+        const deleted = payload?.deleted_workflow;
+        if (typeof deleted !== "string") return;
+        const raw = this.deps.db.appState.get("workflows");
+        if (!Array.isArray(raw)) return;
+        const key = deleted.trim().toLowerCase();
+        this.deps.db.appState.set(
+          "workflows",
+          (raw as Array<Record<string, unknown>>).filter(
+            (item) =>
+              !(
+                item.id === deleted ||
+                (typeof item.name === "string" &&
+                  (item.name as string).trim().toLowerCase() === key)
+              ),
+          ),
+        );
+        return;
+      }
+      if (data.name === "create_role" && data.ok === true) {
+        const payload = (data.result as Record<string, unknown> | undefined)?.data as
+          | Record<string, unknown>
+          | undefined;
+        const created = payload?.created_role as Record<string, unknown> | undefined;
+        if (!created || typeof created.name !== "string") return;
+        const raw = this.deps.db.appState.get("roles");
+        const list: Array<Record<string, unknown>> = Array.isArray(raw)
+          ? (raw as Array<Record<string, unknown>>)
+          : [];
+        const name = created.name.trim();
+        const id =
+          typeof created.id === "string" && created.id.trim()
+            ? (created.id as string).trim()
+            : `role_${randomId(8)}`;
+        const entry: Record<string, unknown> = {
+          id,
+          name,
+          description: typeof created.description === "string" ? created.description : "",
+          roleFile:
+            typeof created.role_file === "string" && created.role_file.trim()
+              ? (created.role_file as string).trim()
+              : "role.md",
+          content: typeof created.content === "string" ? created.content : "",
+          enabled: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        const index = list.findIndex(
+          (item) =>
+            item.id === id ||
+            (typeof item.name === "string" &&
+              (item.name as string).trim().toLowerCase() === name.toLowerCase()),
+        );
+        if (index === -1) list.unshift(entry);
+        else list[index] = { ...list[index], ...entry, id: list[index]!.id };
+        this.deps.db.appState.set("roles", list);
+        return;
+      }
+      if (data.name === "delete_role" && data.ok === true) {
+        const payload = (data.result as Record<string, unknown> | undefined)?.data as
+          | Record<string, unknown>
+          | undefined;
+        const deleted = payload?.deleted_role;
+        if (typeof deleted !== "string") return;
+        const raw = this.deps.db.appState.get("roles");
+        if (!Array.isArray(raw)) return;
+        const key = deleted.trim().toLowerCase();
+        this.deps.db.appState.set(
+          "roles",
+          (raw as Array<Record<string, unknown>>).filter(
+            (item) =>
+              !(
+                item.id === deleted ||
+                (typeof item.name === "string" &&
+                  (item.name as string).trim().toLowerCase() === key)
+              ),
+          ),
+        );
       }
     } catch {
       // Persistence must never break the turn.

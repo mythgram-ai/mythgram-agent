@@ -13,10 +13,12 @@ import {
   KnowledgeIcon,
   McpIcon,
   PromptLibraryIcon,
+  RoleIcon,
   SkillsIcon,
   SlidesIcon,
   SystemPromptIcon,
   TtsIcon,
+  WorkflowIcon,
 } from "@/components/icons/NavIcons";
 
 const NAV: Array<{
@@ -38,6 +40,8 @@ const NAV: Array<{
   { id: "knowledge", label: "Knowledge base", Icon: KnowledgeIcon, iconClassName: "h-6 w-6" },
   { id: "agents", label: "Sub-agents", Icon: Bot },
   { id: "skills", label: "Skills", Icon: SkillsIcon, iconClassName: "h-6 w-6" },
+  { id: "workflows", label: "Workflows", Icon: WorkflowIcon, iconClassName: "h-6 w-6" },
+  { id: "roles", label: "Roles", Icon: RoleIcon, iconClassName: "h-6 w-6" },
   { id: "teams", label: "Agent teams", Icon: Users },
   { id: "ceo", label: "CEO agents", Icon: Crown },
   { id: "connectors", label: "Connectors", Icon: ConnectorsIcon, iconClassName: "h-6 w-6" },

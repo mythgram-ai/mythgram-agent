@@ -7,7 +7,13 @@ import type { PlanApprovalStore } from "../services/planApprovalStore.js";
 import type { QuestionStore } from "../services/questionStore.js";
 import type { AskRequestStore } from "../services/askRequestStore.js";
 import type { SlidesTemplateChoiceStore } from "../slides/choiceStore.js";
-import type { SkillDefinition, SkillFileDefinition, SubAgentDefinition } from "../agents/tools/types.js";
+import type {
+  RoleDefinition,
+  SkillDefinition,
+  SkillFileDefinition,
+  SubAgentDefinition,
+  WorkflowDefinition,
+} from "../agents/tools/types.js";
 import { normalizeEffort } from "../agents/providers/reasoning.js";
 import { sanitizeRetrySettings } from "../retry/index.js";
 import { sanitizeFallbackSettings } from "../fallback/index.js";
@@ -168,6 +174,10 @@ interface StreamBody {
   firecrawl_api_key?: string;
   sub_agents?: unknown;
   skills?: unknown;
+  /** User-authored workflows (workflow.md) available this turn. */
+  workflows?: unknown;
+  /** User-authored roles (role.md) available this turn. */
+  roles?: unknown;
   todos?: unknown;
   memory?: unknown;
   knowledge?: unknown;
@@ -424,6 +434,78 @@ function normalizeSkills(raw: unknown): SkillDefinition[] {
       description: typeof record.description === "string" ? record.description : "",
       skillFile,
       files,
+      enabled: record.enabled !== false,
+    });
+  }
+  return out;
+}
+
+/** Defensively coerce the client-provided workflow definitions into safe, well-typed values. */
+function normalizeWorkflows(raw: unknown): WorkflowDefinition[] {
+  if (!Array.isArray(raw)) return [];
+  const out: WorkflowDefinition[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (!name) continue;
+
+    const workflowFile =
+      typeof record.workflow_file === "string" && record.workflow_file.trim().length > 0
+        ? record.workflow_file.trim()
+        : typeof record.workflowFile === "string" && record.workflowFile.trim().length > 0
+          ? record.workflowFile.trim()
+          : "workflow.md";
+    const id = typeof record.id === "string" && record.id.trim().length > 0 ? record.id.trim() : "";
+    const content =
+      typeof record.content === "string"
+        ? record.content
+        : typeof record.workflow_content === "string"
+          ? record.workflow_content
+          : "";
+
+    out.push({
+      id,
+      name,
+      description: typeof record.description === "string" ? record.description : "",
+      workflowFile,
+      content,
+      enabled: record.enabled !== false,
+    });
+  }
+  return out;
+}
+
+/** Defensively coerce the client-provided role definitions into safe, well-typed values. */
+function normalizeRoles(raw: unknown): RoleDefinition[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RoleDefinition[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (!name) continue;
+
+    const roleFile =
+      typeof record.role_file === "string" && record.role_file.trim().length > 0
+        ? record.role_file.trim()
+        : typeof record.roleFile === "string" && record.roleFile.trim().length > 0
+          ? record.roleFile.trim()
+          : "role.md";
+    const id = typeof record.id === "string" && record.id.trim().length > 0 ? record.id.trim() : "";
+    const content =
+      typeof record.content === "string"
+        ? record.content
+        : typeof record.role_content === "string"
+          ? record.role_content
+          : "";
+
+    out.push({
+      id,
+      name,
+      description: typeof record.description === "string" ? record.description : "",
+      roleFile,
+      content,
       enabled: record.enabled !== false,
     });
   }
@@ -787,6 +869,8 @@ export function buildChatRouter(
           firecrawlApiKey: body.firecrawl_api_key,
           subAgents: normalizeSubAgents(body.sub_agents),
           skills: normalizeSkills(body.skills),
+          workflows: normalizeWorkflows(body.workflows),
+          roles: normalizeRoles(body.roles),
           todos: normalizeTodos(body.todos),
           memory: normalizeMemoryFiles(body.memory),
           knowledge: normalizeKnowledgeFiles(body.knowledge),
@@ -848,6 +932,8 @@ export function buildChatRouter(
           firecrawlApiKey: body.firecrawl_api_key,
           subAgents: normalizeSubAgents(body.sub_agents),
           skills: normalizeSkills(body.skills),
+          workflows: normalizeWorkflows(body.workflows),
+          roles: normalizeRoles(body.roles),
           todos: normalizeTodos(body.todos),
           memory: normalizeMemoryFiles(body.memory),
           knowledge: normalizeKnowledgeFiles(body.knowledge),
@@ -902,6 +988,8 @@ export function buildChatRouter(
         firecrawlApiKey: body.firecrawl_api_key,
         subAgents: normalizeSubAgents(body.sub_agents),
         skills: normalizeSkills(body.skills),
+        workflows: normalizeWorkflows(body.workflows),
+        roles: normalizeRoles(body.roles),
         todos: normalizeTodos(body.todos),
         memory: normalizeMemoryFiles(body.memory),
         knowledge: normalizeKnowledgeFiles(body.knowledge),

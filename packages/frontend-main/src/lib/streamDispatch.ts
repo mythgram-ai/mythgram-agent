@@ -144,6 +144,64 @@ function persistCreatedSkill(s: Store, raw: Record<string, unknown>): void {
   else s.addSkill({ name, description, skillFile, skillContent, files: extraFiles, enabled: true });
 }
 
+function persistCreatedWorkflow(s: Store, raw: Record<string, unknown>): void {
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
+  if (!name) return;
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const description = typeof raw.description === "string" ? raw.description : "";
+  const workflowFile = (
+    typeof raw.workflow_file === "string" && raw.workflow_file.trim().length > 0
+      ? raw.workflow_file
+      : "workflow.md"
+  ).replace(/^[\\/]+/, "");
+  const content = typeof raw.content === "string" ? raw.content : "";
+  const existing = s.workflows.find(
+    (wf) => (id.length > 0 && wf.id === id) || wf.name.trim().toLowerCase() === name.toLowerCase(),
+  );
+  if (existing) {
+    s.updateWorkflow(existing.id, { name, description, workflowFile, content, enabled: true });
+  } else {
+    s.addWorkflow({ id: id || undefined, name, description, workflowFile, content, enabled: true });
+  }
+}
+
+function persistDeletedWorkflow(s: Store, rawId: unknown): void {
+  const id = typeof rawId === "string" ? rawId.trim() : "";
+  if (!id) return;
+  const target = s.workflows.find(
+    (wf) => wf.id === id || wf.name.trim().toLowerCase() === id.toLowerCase(),
+  );
+  if (target) s.deleteWorkflow(target.id);
+}
+
+function persistCreatedRole(s: Store, raw: Record<string, unknown>): void {
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
+  if (!name) return;
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const description = typeof raw.description === "string" ? raw.description : "";
+  const roleFile = (
+    typeof raw.role_file === "string" && raw.role_file.trim().length > 0 ? raw.role_file : "role.md"
+  ).replace(/^[\\/]+/, "");
+  const content = typeof raw.content === "string" ? raw.content : "";
+  const existing = s.roles.find(
+    (r) => (id.length > 0 && r.id === id) || r.name.trim().toLowerCase() === name.toLowerCase(),
+  );
+  if (existing) {
+    s.updateRole(existing.id, { name, description, roleFile, content, enabled: true });
+  } else {
+    s.addRole({ id: id || undefined, name, description, roleFile, content, enabled: true });
+  }
+}
+
+function persistDeletedRole(s: Store, rawId: unknown): void {
+  const id = typeof rawId === "string" ? rawId.trim() : "";
+  if (!id) return;
+  const target = s.roles.find(
+    (r) => r.id === id || r.name.trim().toLowerCase() === id.toLowerCase(),
+  );
+  if (target) s.deleteRole(target.id);
+}
+
 /**
  * Agent tag carried by top-level summarization events ("main" default keeps older
  * payloads valid). Custom agents compact through the same pipeline as the Main
@@ -363,6 +421,18 @@ export function dispatchStreamEvent(event: string, data: SSEEventData, ctx: Disp
       }
       if (ok && name === "delete_skill" && payload?.deleted_skill) {
         persistDeletedSkill(s, payload.deleted_skill);
+      }
+      if (ok && name === "create_workflow" && payload?.created_workflow) {
+        persistCreatedWorkflow(s, payload.created_workflow as Record<string, unknown>);
+      }
+      if (ok && name === "delete_workflow" && payload?.deleted_workflow) {
+        persistDeletedWorkflow(s, payload.deleted_workflow);
+      }
+      if (ok && name === "create_role" && payload?.created_role) {
+        persistCreatedRole(s, payload.created_role as Record<string, unknown>);
+      }
+      if (ok && name === "delete_role" && payload?.deleted_role) {
+        persistDeletedRole(s, payload.deleted_role);
       }
       if ((name === "TodoWrite" || name === "read_todos") && Array.isArray(payload?.todos)) {
         s.setTodos(payload.todos as TodoItem[]);

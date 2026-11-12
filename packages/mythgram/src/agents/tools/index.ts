@@ -60,6 +60,14 @@ import { deleteSubAgentTool } from "./delete_sub_agent.js";
 import { listSubAgentSessionsTool } from "./list_sub_agent_sessions.js";
 import { reuseSameSubAgentSessionTool } from "./reuse_same_sub_agent_session.js";
 import { deleteSkillTool } from "./delete_skill.js";
+import { createWorkflowTool } from "./create_workflow.js";
+import { listWorkflowTool } from "./list_workflow.js";
+import { readWorkflowTool } from "./read_workflow.js";
+import { deleteWorkflowTool } from "./delete_workflow.js";
+import { createRoleTool } from "./create_role.js";
+import { listRoleTool } from "./list_role.js";
+import { readRoleTool } from "./read_role.js";
+import { deleteRoleTool } from "./delete_role.js";
 import { createAgentTool } from "./create_agent.js";
 import { listAvailableAgentsTool } from "./list_available_agents.js";
 import { deleteAgentTool } from "./delete_agent.js";
@@ -132,6 +140,12 @@ export type {
   SkillDefinition,
   SkillFileDefinition,
   SkillRuntime,
+  WorkflowDefinition,
+  WorkflowListEntry,
+  WorkflowRuntime,
+  RoleDefinition,
+  RoleListEntry,
+  RoleRuntime,
   TodoItem,
   TodoRuntime,
   AgentSelfInfo,
@@ -238,6 +252,24 @@ export { deleteSubAgentTool, DELETE_DEFAULT_SUB_AGENT_ERROR } from "./delete_sub
 export { listSubAgentSessionsTool } from "./list_sub_agent_sessions.js";
 export { reuseSameSubAgentSessionTool } from "./reuse_same_sub_agent_session.js";
 export { deleteSkillTool, DELETE_DEFAULT_SKILL_ERROR } from "./delete_skill.js";
+export { createWorkflowTool } from "./create_workflow.js";
+export { listWorkflowTool } from "./list_workflow.js";
+export { readWorkflowTool } from "./read_workflow.js";
+export { deleteWorkflowTool } from "./delete_workflow.js";
+export {
+  WORKFLOW_MANAGEMENT_TOOL_NAMES,
+  isWorkflowManagementTool,
+  requireWorkflows,
+} from "./workflowManagement.js";
+export { createRoleTool } from "./create_role.js";
+export { listRoleTool } from "./list_role.js";
+export { readRoleTool } from "./read_role.js";
+export { deleteRoleTool } from "./delete_role.js";
+export {
+  ROLE_MANAGEMENT_TOOL_NAMES,
+  isRoleManagementTool,
+  requireRoles,
+} from "./roleManagement.js";
 export { createAgentTool } from "./create_agent.js";
 export { listAvailableAgentsTool } from "./list_available_agents.js";
 export { deleteAgentTool } from "./delete_agent.js";
@@ -425,6 +457,14 @@ export function createToolRegistry(): ToolRegistry {
     listSubAgentSessionsTool,
     reuseSameSubAgentSessionTool,
     deleteSkillTool,
+    createWorkflowTool,
+    listWorkflowTool,
+    readWorkflowTool,
+    deleteWorkflowTool,
+    createRoleTool,
+    listRoleTool,
+    readRoleTool,
+    deleteRoleTool,
     createAgentTool,
     listAvailableAgentsTool,
     deleteAgentTool,
@@ -549,6 +589,14 @@ export const tools = {
   listSubAgentSessionsTool,
   reuseSameSubAgentSessionTool,
   deleteSkillTool,
+  createWorkflowTool,
+  listWorkflowTool,
+  readWorkflowTool,
+  deleteWorkflowTool,
+  createRoleTool,
+  listRoleTool,
+  readRoleTool,
+  deleteRoleTool,
   createAgentTool,
   listAvailableAgentsTool,
   deleteAgentTool,

@@ -262,6 +262,8 @@ export async function resolveAcpTurn(deps: AcpTurnDeps, acp: AcpConfig): Promise
     firecrawl_api_key: base.firecrawlApiKey,
     sub_agents: base.subAgents,
     skills: buildSkills(db.appState.get("skills")),
+    workflows: base.workflows,
+    roles: base.roles,
     todos: base.todos,
     memory: base.memory,
     knowledge: base.knowledge,

@@ -302,3 +302,54 @@ export function TtsIcon({ className, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function WorkflowIcon({ className, ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width={24}
+      height={24}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+    >
+      <rect x="3" y="3" width="6" height="5" rx="1.5" />
+      <rect x="15" y="16" width="6" height="5" rx="1.5" />
+      <rect x="3" y="16" width="6" height="5" rx="1.5" />
+      <path d="M9 5.5h4.5a2 2 0 0 1 2 2V16" />
+      <path d="M6 8v8" />
+      <path d="M13.5 16h1.5" />
+    </svg>
+  );
+}
+
+export function RoleIcon({ className, ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width={24}
+      height={24}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+    >
+      <circle cx="10" cy="8" r="3.5" />
+      <path d="M3.5 20c.9-3.4 3.4-5 6.5-5 1.6 0 3 .4 4.1 1.2" />
+      <path d="M18 13.5l1 2 2.2.3-1.6 1.6.4 2.2-2-1-2 1 .4-2.2-1.6-1.6 2.2-.3z" />
+    </svg>
+  );
+}

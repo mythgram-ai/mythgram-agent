@@ -12,14 +12,17 @@ import { activeTeam } from "@/lib/defaultTeams";
 import { activeCeo, toBackendCeo } from "@/lib/defaultCeo";
 import { findActiveCustomAgent, toBackendCustomAgent } from "@/lib/customAgents";
 import { findActiveMainAgentPrompt } from "@/lib/mainAgentPrompts";
+import { visiblePromptText } from "@/lib/promptVisibility";
 import { taskModePromptFor } from "@/lib/taskModes";
 import { useStore, type ActiveRun } from "@/store/useStore";
 import { uid } from "@/utils/id";
 import type {
   BackendConnector,
   BackendMessage,
+  BackendRole,
   BackendSkill,
   BackendSubAgent,
+  BackendWorkflow,
   ChatMessage,
   ComboChain,
   CustomProvider,
@@ -134,6 +137,24 @@ function buildStartRequest(convId: string, text: string): StreamRequest {
   const memory: MemoryFile[] = store.memory;
   const knowledge: KnowledgeFile[] = store.knowledge;
 
+  const workflows: BackendWorkflow[] = store.workflows.map((wf) => ({
+    id: wf.id,
+    name: wf.name,
+    description: wf.description,
+    workflow_file: wf.workflowFile.trim() || "workflow.md",
+    content: wf.content,
+    enabled: wf.enabled,
+  }));
+
+  const roles: BackendRole[] = store.roles.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    role_file: r.roleFile.trim() || "role.md",
+    content: r.content,
+    enabled: r.enabled,
+  }));
+
   // Top-level conversation mode. Chat mode is a lightweight conversational assistant with
   // only memory + knowledge + web tools. Task modes are agent-only and never apply here.
   const isChatMode = store.agentMode === "chat";
@@ -231,6 +252,8 @@ function buildStartRequest(convId: string, text: string): StreamRequest {
     agent_mode: isChatMode ? "chat" : "agent",
     sub_agents: isChatMode ? [] : subAgents,
     skills: isChatMode ? [] : skills,
+    workflows: isChatMode ? [] : workflows,
+    roles: isChatMode ? [] : roles,
     todos: isChatMode ? [] : todos,
     memory,
     knowledge,
@@ -459,7 +482,8 @@ export function useChatStream(onFilesChanged?: () => void) {
       store.addMessage(convId, userMsg);
 
       if (conv.messages.length === 0) {
-        store.renameConversation(convId, trimmed.slice(0, 48) + (trimmed.length > 48 ? "..." : ""));
+        const title = visiblePromptText(trimmed);
+        store.renameConversation(convId, title.slice(0, 48) + (title.length > 48 ? "..." : ""));
       }
 
       const assistantId = uid("msg");

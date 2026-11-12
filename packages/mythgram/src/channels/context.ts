@@ -11,10 +11,14 @@ import type { McpServerSelection } from "../agents/mcp/index.js";
 import type {
   KnowledgeFile,
   MemoryFile,
+  RoleDefinition,
   SkillDefinition,
   SubAgentDefinition,
   TodoItem,
+  WorkflowDefinition,
 } from "../agents/tools/types.js";
+import { normalizeWorkflowList } from "../workflow/index.js";
+import { normalizeRoleList } from "../role/index.js";
 
 /**
  * Provider credentials + shared tooling snapshot resolved from the persisted
@@ -42,6 +46,8 @@ export interface ChannelRunContext {
   mcpServers?: McpServerSelection[];
   subAgents: SubAgentDefinition[];
   skills: SkillDefinition[];
+  workflows: WorkflowDefinition[];
+  roles: RoleDefinition[];
   todos: TodoItem[];
   memory: MemoryFile[];
   knowledge: KnowledgeFile[];
@@ -147,6 +153,8 @@ export function resolveChannelRunContext(
     mcpServers: undefined,
     subAgents: normalizeSubAgentList(db.appState.get("subAgents")),
     skills: normalizeSkillList(db.appState.get("skills")),
+    workflows: normalizeWorkflowList(db.appState.get("workflows")),
+    roles: normalizeRoleList(db.appState.get("roles")),
     todos: normalizeTodos(db.appState.get("todos")),
     memory: normalizeMemoryFiles(db.appState.get("memory")),
     knowledge: normalizeKnowledgeFiles(db.appState.get("knowledge")),

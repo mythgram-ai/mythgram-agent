@@ -36,6 +36,7 @@ import type {
   PlanApprovalStatus,
   PromptLibraryItem,
   ProviderMeta,
+  Role,
   RetrySettings,
   FallbackMethod,
   FallbackSettings,
@@ -62,6 +63,7 @@ import type {
   TtsProvider,
   ImageGenProvider,
   UserProfile,
+  Workflow,
 } from "@/types";
 import { uid, newSessionId } from "@/utils/id";
 import type { Schedule } from "@/lib/schedules";
@@ -300,6 +302,8 @@ export type Section =
   | "knowledge"
   | "agents"
   | "skills"
+  | "workflows"
+  | "roles"
   | "teams"
   | "ceo"
   | "customagents"
@@ -350,6 +354,10 @@ interface AppState {
   settings: Settings;
   subAgents: SubAgent[];
   skills: Skill[];
+  /** User-authored workflows (workflow.md documents). */
+  workflows: Workflow[];
+  /** User-authored roles (role.md documents). */
+  roles: Role[];
   todos: TodoItem[];
   memory: MemoryFile[];
   knowledge: KnowledgeFile[];
@@ -925,6 +933,22 @@ interface AppState {
   deleteSkill: (id: string) => void;
   toggleSkill: (id: string) => void;
 
+  // Workflow management
+  addWorkflow: (
+    input: Omit<Workflow, "id" | "createdAt" | "updatedAt"> & { id?: string; createdAt?: number },
+  ) => void;
+  updateWorkflow: (id: string, patch: Partial<Omit<Workflow, "id" | "createdAt">>) => void;
+  deleteWorkflow: (id: string) => void;
+  toggleWorkflow: (id: string) => void;
+
+  // Role management
+  addRole: (
+    input: Omit<Role, "id" | "createdAt" | "updatedAt"> & { id?: string; createdAt?: number },
+  ) => void;
+  updateRole: (id: string, patch: Partial<Omit<Role, "id" | "createdAt">>) => void;
+  deleteRole: (id: string) => void;
+  toggleRole: (id: string) => void;
+
   // Todos / memory / knowledge
   setTodos: (todos: TodoItem[]) => void;
   setMemory: (files: MemoryFile[]) => void;
@@ -1297,6 +1321,8 @@ function freshProfileSnapshot(): ProfileSnapshot {
     settings: { ...defaultSettings },
     subAgents: DEFAULT_SUB_AGENTS.map((a) => ({ ...a })),
     skills: DEFAULT_SKILLS.map((sk) => ({ ...sk })),
+    workflows: [],
+    roles: [],
     todos: [],
     memory: DEFAULT_MEMORY_FILES.map((f) => ({ ...f })),
     knowledge: [],
@@ -1325,6 +1351,8 @@ function captureProfileSnapshot(s: AppState): ProfileSnapshot {
     settings: cloneJson(s.settings),
     subAgents: cloneJson(s.subAgents),
     skills: cloneJson(s.skills),
+    workflows: cloneJson(s.workflows),
+    roles: cloneJson(s.roles),
     todos: cloneJson(s.todos),
     memory: cloneJson(s.memory),
     knowledge: cloneJson(s.knowledge),
@@ -1369,6 +1397,8 @@ export const useStore = create<AppState>()(
       settings: defaultSettings,
       subAgents: [...DEFAULT_SUB_AGENTS],
       skills: [...DEFAULT_SKILLS],
+      workflows: [],
+      roles: [],
       todos: [],
       memory: DEFAULT_MEMORY_FILES.map((f) => ({ ...f })),
       knowledge: [],
@@ -1558,6 +1588,8 @@ export const useStore = create<AppState>()(
           skills: mergeSkillsWithDefaults(
             Array.isArray(p.skills) ? p.skills : defaults.skills,
           ),
+          workflows: Array.isArray(p.workflows) ? (p.workflows as Workflow[]) : defaults.workflows,
+          roles: Array.isArray(p.roles) ? (p.roles as Role[]) : defaults.roles,
           todos: Array.isArray(p.todos) ? p.todos : defaults.todos,
           memory: mergeMemoryWithDefaults(
             Array.isArray(p.memory) ? p.memory : defaults.memory,
@@ -2915,6 +2947,8 @@ export const useStore = create<AppState>()(
           ...next,
           subAgents: mergeSubAgentsWithDefaults(next.subAgents),
           skills: mergeSkillsWithDefaults(next.skills),
+          workflows: cloneJson(next.workflows ?? []),
+          roles: cloneJson(next.roles ?? []),
           memory: mergeMemoryWithDefaults(next.memory),
           knowledge: sanitizeKnowledge(next.knowledge),
           agentTeams: mergeTeamsWithDefaults(next.agentTeams),
@@ -2975,6 +3009,8 @@ export const useStore = create<AppState>()(
           ...next,
           subAgents: mergeSubAgentsWithDefaults(next.subAgents),
           skills: mergeSkillsWithDefaults(next.skills),
+          workflows: cloneJson(next.workflows ?? []),
+          roles: cloneJson(next.roles ?? []),
           memory: mergeMemoryWithDefaults(next.memory),
           knowledge: sanitizeKnowledge(next.knowledge),
           agentTeams: mergeTeamsWithDefaults(next.agentTeams),
@@ -3074,6 +3110,8 @@ export const useStore = create<AppState>()(
           models: activeModelsFor(prev.modelsByProvider, snap.settings.provider),
           subAgents: mergeSubAgentsWithDefaults(snap.subAgents),
           skills: mergeSkillsWithDefaults(snap.skills),
+          workflows: cloneJson(snap.workflows ?? []),
+          roles: cloneJson(snap.roles ?? []),
           memory: mergeMemoryWithDefaults(snap.memory),
           knowledge: sanitizeKnowledge(snap.knowledge),
           agentTeams: mergeTeamsWithDefaults(snap.agentTeams),
@@ -3163,6 +3201,8 @@ export const useStore = create<AppState>()(
           models: activeModelsFor(s.modelsByProvider, fresh.settings.provider),
           subAgents: mergeSubAgentsWithDefaults(fresh.subAgents),
           skills: mergeSkillsWithDefaults(fresh.skills),
+          workflows: cloneJson(fresh.workflows ?? []),
+          roles: cloneJson(fresh.roles ?? []),
           memory: mergeMemoryWithDefaults(fresh.memory),
           knowledge: sanitizeKnowledge(fresh.knowledge),
           agentTeams: mergeTeamsWithDefaults(fresh.agentTeams),
@@ -3365,6 +3405,71 @@ export const useStore = create<AppState>()(
         set((s) => ({
           skills: s.skills.map((sk) =>
             sk.id === id ? { ...sk, enabled: !sk.enabled, updatedAt: Date.now() } : sk,
+          ),
+        })),
+
+      addWorkflow: (input) =>
+        set((s) => {
+          const now = Date.now();
+          const workflow: Workflow = {
+            id: input.id?.trim() || uid("workflow"),
+            createdAt: input.createdAt ?? now,
+            updatedAt: now,
+            name: input.name,
+            description: input.description,
+            workflowFile: input.workflowFile,
+            content: input.content,
+            enabled: input.enabled,
+          };
+          return { workflows: [workflow, ...s.workflows] };
+        }),
+
+      updateWorkflow: (id, patch) =>
+        set((s) => ({
+          workflows: s.workflows.map((wf) =>
+            wf.id === id ? { ...wf, ...patch, updatedAt: Date.now() } : wf,
+          ),
+        })),
+
+      deleteWorkflow: (id) =>
+        set((s) => ({ workflows: s.workflows.filter((wf) => wf.id !== id) })),
+
+      toggleWorkflow: (id) =>
+        set((s) => ({
+          workflows: s.workflows.map((wf) =>
+            wf.id === id ? { ...wf, enabled: !wf.enabled, updatedAt: Date.now() } : wf,
+          ),
+        })),
+
+      addRole: (input) =>
+        set((s) => {
+          const now = Date.now();
+          const role: Role = {
+            id: input.id?.trim() || uid("role"),
+            createdAt: input.createdAt ?? now,
+            updatedAt: now,
+            name: input.name,
+            description: input.description,
+            roleFile: input.roleFile,
+            content: input.content,
+            enabled: input.enabled,
+          };
+          return { roles: [role, ...s.roles] };
+        }),
+
+      updateRole: (id, patch) =>
+        set((s) => ({
+          roles: s.roles.map((r) =>
+            r.id === id ? { ...r, ...patch, updatedAt: Date.now() } : r,
+          ),
+        })),
+
+      deleteRole: (id) => set((s) => ({ roles: s.roles.filter((r) => r.id !== id) })),
+
+      toggleRole: (id) =>
+        set((s) => ({
+          roles: s.roles.map((r) =>
+            r.id === id ? { ...r, enabled: !r.enabled, updatedAt: Date.now() } : r,
           ),
         })),
 

@@ -8,6 +8,8 @@ import { MemoryPanel } from "@/components/panels/MemoryPanel";
 import { KnowledgePanel } from "@/components/panels/KnowledgePanel";
 import { AgentsPanel } from "@/components/panels/AgentsPanel";
 import { SkillsPanel } from "@/components/panels/SkillsPanel";
+import { WorkflowsPanel } from "@/components/panels/WorkflowsPanel";
+import { RolesPanel } from "@/components/panels/RolesPanel";
 import { TeamsPanel } from "@/components/panels/TeamsPanel";
 import { CeoPanel } from "@/components/panels/CeoPanel";
 import { CustomAgentsPanel } from "@/components/panels/CustomAgentsPanel";
@@ -178,6 +180,8 @@ export function App() {
               {section === "knowledge" && <KnowledgePanel />}
               {section === "agents" && <AgentsPanel />}
               {section === "skills" && <SkillsPanel />}
+              {section === "workflows" && <WorkflowsPanel />}
+              {section === "roles" && <RolesPanel />}
               {section === "teams" && <TeamsPanel />}
               {section === "ceo" && <CeoPanel />}
               {section === "customagents" && <CustomAgentsPanel />}

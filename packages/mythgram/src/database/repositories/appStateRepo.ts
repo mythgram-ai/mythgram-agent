@@ -12,6 +12,8 @@ export const APP_STATE_KEYS = [
   "settings",
   "subAgents",
   "skills",
+  "workflows",
+  "roles",
   "todos",
   "memory",
   "knowledge",

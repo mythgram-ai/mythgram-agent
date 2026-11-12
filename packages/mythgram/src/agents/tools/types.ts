@@ -764,6 +764,96 @@ export interface SkillRuntime {
   ): Promise<SkillInitializeResult>;
 }
 
+/**
+ * A user-defined workflow. A workflow is a single markdown document ("workflow.md") in which the
+ * user describes the process the agent should follow for a task. Definitions are authored in the
+ * frontend (or created by the agent via create_workflow) and travel with each turn.
+ */
+export interface WorkflowDefinition {
+  /** Stable unique id (frontend-generated, or assigned by create_workflow). */
+  id: string;
+  /** Human-readable workflow name. */
+  name: string;
+  /** Short description surfaced by list_workflow. */
+  description: string;
+  /** Entry markdown file name (defaults to "workflow.md"). */
+  workflowFile: string;
+  /** Complete markdown content of the workflow. */
+  content: string;
+  /** When false the workflow is hidden from list_workflow and cannot be read. */
+  enabled?: boolean;
+}
+
+/** A workflow as surfaced to the agent by list_workflow — id, name, and description. */
+export interface WorkflowListEntry {
+  id: string;
+  name: string;
+  description: string;
+}
+
+/**
+ * Runtime bridge injected into the ToolContext for the surfaces that expose the workflow tools
+ * (Main Agent, Custom Agents, and every team/CEO agent). Absent from sub-agents, chat mode, and the
+ * memory agent, which is why the workflow tools are unavailable there.
+ */
+export interface WorkflowRuntime {
+  /** All workflow definitions provided this turn (enabled + disabled). */
+  readonly definitions: WorkflowDefinition[];
+  /** Enabled workflows with id + name + description — what list_workflow returns. */
+  list(): WorkflowListEntry[];
+  /** Look up one enabled workflow by its exact id (falls back to a name match). */
+  get(id: string): WorkflowDefinition | undefined;
+  /** Add (or replace, matched by id or case-insensitive name) a workflow; returns it with its id. */
+  register(workflow: WorkflowDefinition): WorkflowDefinition;
+  /** Remove a workflow by id (or name); returns false when nothing matched. */
+  remove(id: string): boolean;
+}
+
+/**
+ * A user-defined role. A role is a single markdown document ("role.md") describing the persona the
+ * agent should adopt. Definitions are authored in the frontend (or created by the agent via
+ * create_role) and travel with each turn.
+ */
+export interface RoleDefinition {
+  /** Stable unique id (frontend-generated, or assigned by create_role). */
+  id: string;
+  /** Human-readable role name. */
+  name: string;
+  /** Short description surfaced by list_role. */
+  description: string;
+  /** Entry markdown file name (defaults to "role.md"). */
+  roleFile: string;
+  /** Complete markdown content of the role. */
+  content: string;
+  /** When false the role is hidden from list_role and cannot be read. */
+  enabled?: boolean;
+}
+
+/** A role as surfaced to the agent by list_role — id, name, and description. */
+export interface RoleListEntry {
+  id: string;
+  name: string;
+  description: string;
+}
+
+/**
+ * Runtime bridge injected into the ToolContext for the surfaces that expose the role tools
+ * (Main Agent, Custom Agents, and every team/CEO agent). Absent from sub-agents, chat mode, and the
+ * memory agent, which is why the role tools are unavailable there.
+ */
+export interface RoleRuntime {
+  /** All role definitions provided this turn (enabled + disabled). */
+  readonly definitions: RoleDefinition[];
+  /** Enabled roles with id + name + description — what list_role returns. */
+  list(): RoleListEntry[];
+  /** Look up one enabled role by its exact id (falls back to a name match). */
+  get(id: string): RoleDefinition | undefined;
+  /** Add (or replace, matched by id or case-insensitive name) a role; returns it with its id. */
+  register(role: RoleDefinition): RoleDefinition;
+  /** Remove a role by id (or name); returns false when nothing matched. */
+  remove(id: string): boolean;
+}
+
 /** Raw audio + metadata produced by one speech synthesis request. */
 export interface SpeechSynthesis {
   /** Audio bytes, base64-encoded. */
@@ -958,6 +1048,14 @@ export interface ToolContext {
   /** Skill runtime — present for main-agent tool calls and forwarded to sub-agent tool calls so a
    * sub-agent granted list_skills / skill_initialize / create_skill can use them. */
   skills?: SkillRuntime;
+  /** Workflow runtime — present for the Main Agent, every Custom Agent, and every team/CEO agent.
+   * Lets the workflow tools (create/list/read/delete_workflow) manage the user's workflows. Absent
+   * for sub-agents, chat mode, and the memory agent. */
+  workflows?: WorkflowRuntime;
+  /** Role runtime — present for the Main Agent, every Custom Agent, and every team/CEO agent. Lets
+   * the role tools (create/list/read/delete_role) manage the user's roles. Absent for sub-agents,
+   * chat mode, and the memory agent. */
+  roles?: RoleRuntime;
   /** Todo runtime — present only for main-agent tool calls, never for sub-agent tool calls
    * (the todo tools are restricted from sub-agents). */
   todos?: TodoRuntime;

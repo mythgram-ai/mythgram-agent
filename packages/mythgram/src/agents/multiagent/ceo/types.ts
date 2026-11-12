@@ -4,9 +4,11 @@ import type { McpServerSelection } from "../../mcp/index.js";
 import type {
   KnowledgeFile,
   MemoryFile,
+  RoleDefinition,
   SkillDefinition,
   SubAgentDefinition,
   TodoItem,
+  WorkflowDefinition,
 } from "../../tools/types.js";
 import type { AgentTeamDefinition } from "../types.js";
 
@@ -61,6 +63,10 @@ export interface RunCeoRequest {
   // Shared tooling — every agent (CEO + leaders + members) shares one memory/knowledge/skill/sub-agent surface.
   subAgents?: SubAgentDefinition[];
   skills?: SkillDefinition[];
+  /** User-defined workflows available this turn. */
+  workflows?: WorkflowDefinition[];
+  /** User-defined roles available this turn. */
+  roles?: RoleDefinition[];
   todos?: TodoItem[];
   memory?: MemoryFile[];
   knowledge?: KnowledgeFile[];
