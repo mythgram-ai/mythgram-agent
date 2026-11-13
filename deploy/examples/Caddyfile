@@ -1,0 +1,34 @@
+# deploy/examples/Caddyfile
+#
+# Caddy reverse proxy with automatic HTTPS, basic auth, and correct SSE handling.
+#
+# Generate a password hash:  caddy hash-password --plaintext 'your-password'
+# Replace the hash below, then:  caddy run --config deploy/examples/Caddyfile
+#
+# `flush_interval -1` disables buffering so streaming responses are flushed to the
+# client immediately (agent SSE would otherwise stall).
+
+mythgram.example.com {
+	encode zstd gzip
+
+	basic_auth {
+		# admin / replace-with-your-hash
+		admin $2a$14$REPLACE_WITH_BCRYPT_HASH_FROM_caddy_hash-password
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8787 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8787 {
+			flush_interval -1
+		}
+	}
+
+	request_body {
+		max_size 300MB
+	}
+}

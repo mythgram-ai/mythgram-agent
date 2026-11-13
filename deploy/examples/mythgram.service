@@ -1,0 +1,52 @@
+# /etc/systemd/system/mythgram.service
+#
+# System-level unit that runs the Mythgram backend directly (no internal
+# daemon). systemd provides supervision, restart-on-failure, and boot start.
+#
+# Install:
+#   sudo cp deploy/examples/mythgram.service /etc/systemd/system/mythgram.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mythgram
+#   systemctl status mythgram
+#   journalctl -u mythgram -f
+#
+# Adjust User, paths, and PORT to match your environment. WORKSPACE_ROOT is the
+# folder the agent is allowed to read/write and where .mythgram/ is created.
+
+[Unit]
+Description=Mythgram AI agent (backend + bundled web console)
+Documentation=https://github.com/mythgram-ai/mythgram-agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mythgram
+Group=mythgram
+WorkingDirectory=/srv/mythgram-workspace
+
+Environment=NODE_ENV=production
+Environment=PORT=8787
+Environment=WORKSPACE_ROOT=/srv/mythgram-workspace
+Environment=MYTHGRAM_DATA_DIR=/srv/mythgram-workspace/.mythgram
+# Set this once you put an authenticating proxy in front of the app:
+# Environment=CORS_ORIGINS=https://mythgram.example.com
+
+# Run the compiled server directly: /opt/mythgram is a source checkout built with
+# ./scripts/build.sh (or a global install at $(npm root -g)/mythgram).
+ExecStart=/usr/bin/env node /opt/mythgram/packages/mythgram/dist/index.js
+
+Restart=always
+RestartSec=3
+# Give SQLite migrations time to finish on first boot before systemd gives up.
+TimeoutStartSec=120
+
+# Basic hardening (the agent still needs write access to the workspace).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/mythgram-workspace
+
+[Install]
+WantedBy=multi-user.target

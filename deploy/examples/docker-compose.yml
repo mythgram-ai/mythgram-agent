@@ -1,0 +1,43 @@
+# deploy/examples/docker-compose.yml
+#
+#   docker compose -f deploy/examples/docker-compose.yml up -d --build
+#   docker compose -f deploy/examples/docker-compose.yml logs -f
+#   docker compose -f deploy/examples/docker-compose.yml down
+#
+# The build context is the repository root (../..), and the corrected Dockerfile
+# lives in this same directory. Ports are published on 127.0.0.1 only — put an
+# authenticating reverse proxy in front for remote access.
+
+services:
+  mythgram:
+    build:
+      context: ../..
+      dockerfile: deploy/examples/Dockerfile
+    image: mythgram:local
+    container_name: mythgram
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      NODE_ENV: production
+      PORT: "8787"
+      WORKSPACE_ROOT: /workspace
+      MYTHGRAM_DATA_DIR: /workspace/.mythgram
+      # CORS_ORIGINS: "https://mythgram.example.com"
+    volumes:
+      # Named volume keeps .mythgram/ (SQLite + state) across container rebuilds.
+      # Swap for a bind mount like ./workspace:/workspace to edit files on the host.
+      - mythgram-data:/workspace
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  mythgram-data:
