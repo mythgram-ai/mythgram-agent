@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Paperclip, ArrowUp, Square, FolderOpen, X, Loader2, ChevronDown, ListChecks, Plus, Layers, Check } from "lucide-react";
-import { PromptLibraryIcon, RoleIcon, WorkflowIcon } from "@/components/icons/NavIcons";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Paperclip, ArrowUp, Square, FolderOpen, X, Loader2, ChevronDown, ListChecks, Plus, Layers, Check, Brain, Bot, KeyRound, ArrowUpRight } from "lucide-react";
+import { PromptLibraryIcon, RoleIcon, WorkflowIcon, SkillsIcon, ConnectorsIcon, McpIcon, KnowledgeIcon } from "@/components/icons/NavIcons";
 import { useStore } from "@/store/useStore";
 import { isCustomProviderId, isLocalProviderId } from "@/lib/providers";
 import { isContextLimitRequired, isMainAgentActive } from "@/lib/contextMeter";
@@ -8,11 +8,64 @@ import { fetchWorkspace, mkdirWorkspace, setWorkspace } from "@/lib/workspace";
 import { buildAttachmentPrompt, uploadFiles, type UploadedFile } from "@/lib/uploads";
 import { buildAttachedWorkflowPrompt } from "@/lib/workflows";
 import { buildAttachedRolePrompt } from "@/lib/roles";
+import {
+  buildAttachedConnectorsPrompt,
+  buildAttachedKnowledgePrompt,
+  buildAttachedMcpPrompt,
+  buildAttachedMemoryPrompt,
+  buildAttachedSkillsPrompt,
+  buildAttachedSubAgentsPrompt,
+  type AttachedConnector,
+} from "@/lib/composerAttachments";
+import { fetchConnectorsOverview, validateComposioKey } from "@/lib/connectors";
+import { saveStateKey } from "@/lib/backendState";
 import { visiblePromptText, withAttachedContext } from "@/lib/promptVisibility";
 import { PLAN_TASK_MODE_ID, DEFAULT_TASK_MODE_ID } from "@/lib/taskModes";
 import { Modal } from "@/components/ui/Modal";
 import { Button, Field, TextArea, TextInput } from "@/components/ui/primitives";
 import { cn } from "@/utils/cn";
+import type { ConnectorOverviewItem } from "@/types";
+
+/** The sections the composer's "/" picker can show. */
+type SlashStage =
+  | "menu"
+  | "prompts"
+  | "workflows"
+  | "roles"
+  | "skills"
+  | "connectors"
+  | "subagents"
+  | "mcp"
+  | "knowledge"
+  | "memory";
+
+/** One selectable row in a "/" picker list stage (prompt library, attachments, ...). */
+interface SlashListItem {
+  key: string;
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  /** Render the title in a monospace font (used for file paths). */
+  mono?: boolean;
+  selected?: boolean;
+  onSelect: () => void;
+}
+
+/** Class shared by every list-row icon in the "/" picker. */
+const SLASH_ICON_CLASS = "mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]";
+
+/** Human-readable size of a knowledge/memory file's content. */
+function charCount(content: string): string {
+  return `${content.length.toLocaleString()} characters`;
+}
+
+/** Toggle one id in an attachment list (multiple selection, toggling removes). */
+function toggleId(
+  setter: (updater: (prev: string[]) => string[]) => void,
+  id: string,
+): void {
+  setter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+}
 
 export function Composer({ onSend, onStop }: { onSend: (text: string) => void; onStop: () => void }) {
   const [value, setValue] = useState("");
@@ -29,6 +82,11 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
   const promptLibrary = useStore((s) => s.promptLibrary);
   const workflows = useStore((s) => s.workflows);
   const roles = useStore((s) => s.roles);
+  const skills = useStore((s) => s.skills);
+  const subAgents = useStore((s) => s.subAgents);
+  const mcpServers = useStore((s) => s.mcpServers);
+  const knowledge = useStore((s) => s.knowledge);
+  const memory = useStore((s) => s.memory);
   const composerPrefill = useStore((s) => s.composerPrefill);
   const setComposerPrefill = useStore((s) => s.setComposerPrefill);
   const models = useStore((s) => s.models);
@@ -43,11 +101,24 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
   const removeQueuedPrompt = useStore((s) => s.removeQueuedPrompt);
   const clearPromptQueue = useStore((s) => s.clearPromptQueue);
   const currentQueue = currentId ? (promptQueues[currentId] ?? []) : [];
-  // "/" shortcut stages: "menu" shows the section options, "list" shows saved prompts,
-  // "workflows"/"roles" let the user attach a workflow or role to this prompt.
-  const [slashStage, setSlashStage] = useState<"menu" | "list" | "workflows" | "roles">("menu");
+  // "/" shortcut stages: "menu" shows the section options; the other stages show a pickable list
+  // (saved prompts, or a capability — workflow/role/skill/connector/sub-agent/MCP/knowledge/memory
+  // — that can be attached to this prompt).
+  const [slashStage, setSlashStage] = useState<SlashStage>("menu");
   const [attachedWorkflows, setAttachedWorkflows] = useState<string[]>([]);
   const [attachedRoles, setAttachedRoles] = useState<string[]>([]);
+  const [attachedSkills, setAttachedSkills] = useState<string[]>([]);
+  const [attachedSubAgents, setAttachedSubAgents] = useState<string[]>([]);
+  const [attachedMcp, setAttachedMcp] = useState<string[]>([]);
+  const [attachedKnowledge, setAttachedKnowledge] = useState<string[]>([]);
+  const [attachedMemory, setAttachedMemory] = useState<string[]>([]);
+  const [attachedConnectors, setAttachedConnectors] = useState<AttachedConnector[]>([]);
+  // Live connector catalog for the "/" connectors stage (connected apps only).
+  const [connectorItems, setConnectorItems] = useState<ConnectorOverviewItem[]>([]);
+  const [connectorConfigured, setConnectorConfigured] = useState(true);
+  const [connectorLoading, setConnectorLoading] = useState(false);
+  const [connectorError, setConnectorError] = useState<string | null>(null);
+  const [composioKeyOpen, setComposioKeyOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -71,31 +142,36 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
     }
   }
 
-  // The "/" shortcut is active while the composer starts with "/".
+  // The "/" shortcut is active while the composer starts with "/". The text after the slash filters
+  // whichever list stage is open.
   const slashActive = !streaming && value.startsWith("/");
   const slashFilter = slashActive ? value.slice(1).trim().toLowerCase() : "";
-  const slashMatches =
-    slashFilter.length === 0
-      ? promptLibrary
-      : promptLibrary.filter((item) =>
-          `${item.title} ${item.description}`.toLowerCase().includes(slashFilter),
-        );
+  const slashMatches = (text: string) =>
+    slashFilter.length === 0 || text.toLowerCase().includes(slashFilter);
+
   const enabledWorkflows = workflows.filter((wf) => wf.enabled);
   const enabledRoles = roles.filter((r) => r.enabled);
-  const workflowMatches =
-    slashFilter.length === 0
-      ? enabledWorkflows
-      : enabledWorkflows.filter((wf) =>
-          `${wf.name} ${wf.description}`.toLowerCase().includes(slashFilter),
-        );
-  const roleMatches =
-    slashFilter.length === 0
-      ? enabledRoles
-      : enabledRoles.filter((r) =>
-          `${r.name} ${r.description}`.toLowerCase().includes(slashFilter),
-        );
+  const enabledSkills = skills.filter((sk) => sk.enabled);
+  const enabledSubAgents = subAgents.filter((a) => a.enabled);
+  const enabledMcp = mcpServers.filter((m) => m.enabled && m.status === "connected");
+
   const attachedWorkflowItems = workflows.filter((wf) => attachedWorkflows.includes(wf.id));
   const attachedRoleItems = roles.filter((r) => attachedRoles.includes(r.id));
+  const attachedSkillItems = skills.filter((sk) => attachedSkills.includes(sk.id));
+  const attachedSubAgentItems = subAgents.filter((a) => attachedSubAgents.includes(a.id));
+  const attachedMcpItems = mcpServers.filter((m) => attachedMcp.includes(m.id));
+  const attachedKnowledgeItems = knowledge.filter((f) => attachedKnowledge.includes(f.path));
+  const attachedMemoryItems = memory.filter((f) => attachedMemory.includes(f.path));
+
+  const hasAttachments =
+    attachedWorkflowItems.length > 0 ||
+    attachedRoleItems.length > 0 ||
+    attachedSkillItems.length > 0 ||
+    attachedSubAgentItems.length > 0 ||
+    attachedMcpItems.length > 0 ||
+    attachedKnowledgeItems.length > 0 ||
+    attachedMemoryItems.length > 0 ||
+    attachedConnectors.length > 0;
 
   const autoGrow = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const next = e.target.value;
@@ -114,6 +190,27 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
       .then((workspace) => setWorkspacePath(workspace))
       .catch(() => {});
   }, [workspacePath, setWorkspacePath]);
+
+  /** Load the live connector catalog (connected apps only) for the "/" connectors stage. */
+  const loadConnectors = useCallback(async () => {
+    setConnectorLoading(true);
+    setConnectorError(null);
+    try {
+      const overview = await fetchConnectorsOverview();
+      setConnectorConfigured(overview.configured);
+      setConnectorItems(overview.connectors.filter((c) => c.status === "active"));
+    } catch (e) {
+      setConnectorError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setConnectorLoading(false);
+    }
+  }, []);
+
+  /** Open the connectors stage and refresh the connected-app catalog. */
+  const openConnectorsStage = () => {
+    setSlashStage("connectors");
+    void loadConnectors();
+  };
 
   const isCustom = isCustomProviderId(settings.provider);
   const customProvider = customProviders.find((p) => p.id === settings.provider);
@@ -143,12 +240,35 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
       manualLimits: settings.manualContextLimits,
     });
 
-  /** Assemble every prompt fragment attached to the current draft (files, workflows, roles). The
-   * file notice stays visible; workflow/role metadata is placed behind a marker so it reaches the
-   * LLM but is hidden from the user in the chat UI. */
+  /** Clear every staged attachment after the draft is sent (or queued). */
+  const clearAttachments = () => {
+    setAttachments([]);
+    setAttachedWorkflows([]);
+    setAttachedRoles([]);
+    setAttachedSkills([]);
+    setAttachedSubAgents([]);
+    setAttachedMcp([]);
+    setAttachedKnowledge([]);
+    setAttachedMemory([]);
+    setAttachedConnectors([]);
+  };
+
+  /** Assemble every prompt fragment attached to the current draft (files plus workflows, roles,
+   * skills, connectors, sub-agents, MCP servers, knowledge and memory). The file notice stays
+   * visible; every capability fragment is placed behind a marker so it reaches the LLM but is
+   * hidden from the user in the chat UI. */
   const buildNotices = () => {
     const visible = buildAttachmentPrompt(attachments);
-    const hidden = [buildAttachedWorkflowPrompt(attachedWorkflowItems), buildAttachedRolePrompt(attachedRoleItems)]
+    const hidden = [
+      buildAttachedWorkflowPrompt(attachedWorkflowItems),
+      buildAttachedRolePrompt(attachedRoleItems),
+      buildAttachedSkillsPrompt(attachedSkillItems),
+      buildAttachedConnectorsPrompt(attachedConnectors),
+      buildAttachedSubAgentsPrompt(attachedSubAgentItems),
+      buildAttachedMcpPrompt(attachedMcpItems),
+      buildAttachedKnowledgePrompt(attachedKnowledgeItems),
+      buildAttachedMemoryPrompt(attachedMemoryItems),
+    ]
       .filter((part) => part.trim().length > 0)
       .join("\n\n");
     return withAttachedContext(visible, hidden);
@@ -162,9 +282,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
     queuePrompt(currentId, notice ? `${text}\n\n${notice}` : text);
     setValue("");
     setSlashStage("menu");
-    setAttachments([]);
-    setAttachedWorkflows([]);
-    setAttachedRoles([]);
+    clearAttachments();
     setUploadError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
@@ -192,9 +310,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
     onSend(notice ? `${text}\n\n${notice}` : text);
     setValue("");
     setSlashStage("menu");
-    setAttachments([]);
-    setAttachedWorkflows([]);
-    setAttachedRoles([]);
+    clearAttachments();
     setUploadError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
@@ -247,23 +363,215 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
     });
   };
 
-  /** Attach a workflow to this prompt (multiple allowed) and close the "/" picker. */
-  const attachWorkflow = (id: string) => {
-    setAttachedWorkflows((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  /** Close the "/" picker and refocus the composer after attaching (multiple allowed). */
+  const finishAttach = () => {
     setValue("");
     setSlashStage("menu");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
-  /** Attach a role to this prompt (multiple allowed) and close the "/" picker. */
-  const attachRole = (id: string) => {
-    setAttachedRoles((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  /** Toggle a connected app from the "/" connectors stage. */
+  const toggleConnector = (item: ConnectorOverviewItem) => {
+    const entry: AttachedConnector = {
+      id: item.id,
+      name: item.name,
+      accountLabel: item.account_label,
+    };
+    setAttachedConnectors((prev) =>
+      prev.some((c) => c.id === entry.id)
+        ? prev.filter((c) => c.id !== entry.id)
+        : [...prev, entry],
+    );
+    finishAttach();
+  };
+
+  /** Open the Connectors page from the "/" connectors stage. */
+  const openConnectorsPage = () => {
     setValue("");
     setSlashStage("menu");
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
-    requestAnimationFrame(() => textareaRef.current?.focus());
+    setSection("connectors");
   };
+
+  /** Header title for the currently open "/" list stage. */
+  const slashStageTitle: Record<SlashStage, string> = {
+    menu: "",
+    prompts: "Saved prompts",
+    skills: "Attach skill",
+    subagents: "Attach sub-agent",
+    mcp: "Attach MCP server",
+    connectors: "Attach connector",
+    knowledge: "Attach knowledge",
+    memory: "Attach memory",
+    workflows: "Attach workflow",
+    roles: "Attach role",
+  };
+
+  /** The selectable rows for the active "/" list stage (filtered by the text after "/"). */
+  const slashListItems: SlashListItem[] = (() => {
+    switch (slashStage) {
+      case "prompts":
+        return promptLibrary
+          .filter((item) => slashMatches(`${item.title} ${item.description}`))
+          .slice(0, 20)
+          .map((item) => ({
+            key: item.id,
+            icon: <PromptLibraryIcon className={SLASH_ICON_CLASS} />,
+            title: item.title,
+            subtitle: item.description || "No description.",
+            onSelect: () => insertLibraryPrompt(item.content),
+          }));
+      case "workflows":
+        return enabledWorkflows
+          .filter((wf) => slashMatches(`${wf.name} ${wf.description}`))
+          .slice(0, 20)
+          .map((wf) => ({
+            key: wf.id,
+            icon: <WorkflowIcon className={SLASH_ICON_CLASS} />,
+            title: wf.name,
+            subtitle: wf.description || "No description.",
+            selected: attachedWorkflows.includes(wf.id),
+            onSelect: () => {
+              toggleId(setAttachedWorkflows, wf.id);
+              finishAttach();
+            },
+          }));
+      case "roles":
+        return enabledRoles
+          .filter((r) => slashMatches(`${r.name} ${r.description}`))
+          .slice(0, 20)
+          .map((r) => ({
+            key: r.id,
+            icon: <RoleIcon className={SLASH_ICON_CLASS} />,
+            title: r.name,
+            subtitle: r.description || "No description.",
+            selected: attachedRoles.includes(r.id),
+            onSelect: () => {
+              toggleId(setAttachedRoles, r.id);
+              finishAttach();
+            },
+          }));
+      case "skills":
+        return enabledSkills
+          .filter((sk) => slashMatches(`${sk.name} ${sk.description}`))
+          .slice(0, 20)
+          .map((sk) => ({
+            key: sk.id,
+            icon: <SkillsIcon className={SLASH_ICON_CLASS} />,
+            title: sk.name,
+            subtitle: sk.description || "No description.",
+            selected: attachedSkills.includes(sk.id),
+            onSelect: () => {
+              toggleId(setAttachedSkills, sk.id);
+              finishAttach();
+            },
+          }));
+      case "subagents":
+        return enabledSubAgents
+          .filter((a) => slashMatches(`${a.name} ${a.description}`))
+          .slice(0, 20)
+          .map((a) => ({
+            key: a.id,
+            icon: <Bot className={SLASH_ICON_CLASS} />,
+            title: a.name,
+            subtitle: a.description || "No description.",
+            selected: attachedSubAgents.includes(a.id),
+            onSelect: () => {
+              toggleId(setAttachedSubAgents, a.id);
+              finishAttach();
+            },
+          }));
+      case "mcp":
+        return enabledMcp
+          .filter((m) => slashMatches(`${m.name} ${m.description}`))
+          .slice(0, 20)
+          .map((m) => ({
+            key: m.id,
+            icon: <McpIcon className={SLASH_ICON_CLASS} />,
+            title: m.name,
+            subtitle: m.description || "Connected MCP server.",
+            selected: attachedMcp.includes(m.id),
+            onSelect: () => {
+              toggleId(setAttachedMcp, m.id);
+              finishAttach();
+            },
+          }));
+      case "knowledge":
+        return knowledge
+          .filter((f) => slashMatches(f.path))
+          .slice(0, 20)
+          .map((f) => ({
+            key: f.path,
+            icon: <KnowledgeIcon className={SLASH_ICON_CLASS} />,
+            title: f.path,
+            subtitle: charCount(f.content),
+            mono: true,
+            selected: attachedKnowledge.includes(f.path),
+            onSelect: () => {
+              toggleId(setAttachedKnowledge, f.path);
+              finishAttach();
+            },
+          }));
+      case "memory":
+        return memory
+          .filter((f) => slashMatches(f.path))
+          .slice(0, 20)
+          .map((f) => ({
+            key: f.path,
+            icon: <Brain className={SLASH_ICON_CLASS} />,
+            title: f.path,
+            subtitle: charCount(f.content),
+            mono: true,
+            selected: attachedMemory.includes(f.path),
+            onSelect: () => {
+              toggleId(setAttachedMemory, f.path);
+              finishAttach();
+            },
+          }));
+      default:
+        return [];
+    }
+  })();
+
+  /** Empty-state message for the active "/" list stage. */
+  const slashEmptyMessage = (() => {
+    switch (slashStage) {
+      case "prompts":
+        return promptLibrary.length === 0
+          ? "No saved prompts yet. Save one from the Prompt library page or the bookmark button on any chat prompt."
+          : `No saved prompts match “${value.slice(1).trim()}”.`;
+      case "workflows":
+        return enabledWorkflows.length === 0
+          ? "No workflows yet. Create one from the Workflows page."
+          : `No workflows match “${value.slice(1).trim()}”.`;
+      case "roles":
+        return enabledRoles.length === 0
+          ? "No roles yet. Create one from the Roles page."
+          : `No roles match “${value.slice(1).trim()}”.`;
+      case "skills":
+        return enabledSkills.length === 0
+          ? "No skills yet. Create one from the Skills page."
+          : `No skills match “${value.slice(1).trim()}”.`;
+      case "subagents":
+        return enabledSubAgents.length === 0
+          ? "No sub-agents yet. Create one from the Sub-agents page."
+          : `No sub-agents match “${value.slice(1).trim()}”.`;
+      case "mcp":
+        return enabledMcp.length === 0
+          ? "No connected MCP servers yet. Connect one from the MCP servers page."
+          : `No MCP servers match “${value.slice(1).trim()}”.`;
+      case "knowledge":
+        return knowledge.length === 0
+          ? "No knowledge files yet. Add one from the Knowledge base page."
+          : `No knowledge files match “${value.slice(1).trim()}”.`;
+      case "memory":
+        return memory.length === 0
+          ? "No memory files yet."
+          : `No memory files match “${value.slice(1).trim()}”.`;
+      default:
+        return "";
+    }
+  })();
 
   return (
     <div className="relative shrink-0 px-6 pb-5 pt-2 max-[640px]:px-3 max-[640px]:pb-3">
@@ -307,7 +615,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
         >
           {slashActive && (
             <div
-              className="absolute bottom-full left-0 z-50 mb-2 w-72 max-w-[calc(100vw-3rem)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)] py-1 pop-in"
+              className="absolute bottom-full left-0 z-50 mb-2 max-h-[70vh] w-72 max-w-[calc(100vw-3rem)] overflow-y-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)] py-1 pop-in"
               style={{ boxShadow: "var(--shadow-pop)" }}
               role="listbox"
               aria-label="Composer shortcuts"
@@ -322,7 +630,63 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                         ? "No saved prompts yet"
                         : `${promptLibrary.length} saved prompt${promptLibrary.length === 1 ? "" : "s"}`
                     }
-                    onClick={() => setSlashStage("list")}
+                    onClick={() => setSlashStage("prompts")}
+                  />
+                  <SlashMenuOption
+                    icon={<SkillsIcon className="h-5 w-5" />}
+                    title="Attach skill"
+                    hint={
+                      enabledSkills.length === 0
+                        ? "No skills yet"
+                        : `${enabledSkills.length} skill${enabledSkills.length === 1 ? "" : "s"}`
+                    }
+                    onClick={() => setSlashStage("skills")}
+                  />
+                  <SlashMenuOption
+                    icon={<Bot className="h-5 w-5" />}
+                    title="Attach sub-agent"
+                    hint={
+                      enabledSubAgents.length === 0
+                        ? "No sub-agents yet"
+                        : `${enabledSubAgents.length} sub-agent${enabledSubAgents.length === 1 ? "" : "s"}`
+                    }
+                    onClick={() => setSlashStage("subagents")}
+                  />
+                  <SlashMenuOption
+                    icon={<McpIcon className="h-5 w-5" />}
+                    title="Attach MCP server"
+                    hint={
+                      enabledMcp.length === 0
+                        ? "No connected servers"
+                        : `${enabledMcp.length} connected server${enabledMcp.length === 1 ? "" : "s"}`
+                    }
+                    onClick={() => setSlashStage("mcp")}
+                  />
+                  <SlashMenuOption
+                    icon={<ConnectorsIcon className="h-5 w-5" />}
+                    title="Attach connector"
+                    hint="Connected apps only"
+                    onClick={openConnectorsStage}
+                  />
+                  <SlashMenuOption
+                    icon={<KnowledgeIcon className="h-5 w-5" />}
+                    title="Attach knowledge"
+                    hint={
+                      knowledge.length === 0
+                        ? "No knowledge files yet"
+                        : `${knowledge.length} knowledge file${knowledge.length === 1 ? "" : "s"}`
+                    }
+                    onClick={() => setSlashStage("knowledge")}
+                  />
+                  <SlashMenuOption
+                    icon={<Brain className="h-5 w-5" />}
+                    title="Attach memory"
+                    hint={
+                      memory.length === 0
+                        ? "No memory files yet"
+                        : `${memory.length} memory file${memory.length === 1 ? "" : "s"}`
+                    }
+                    onClick={() => setSlashStage("memory")}
                   />
                   <SlashMenuOption
                     icon={<WorkflowIcon className="h-5 w-5" />}
@@ -349,11 +713,7 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                 <>
                   <div className="flex items-center justify-between px-3 pb-1 pt-2">
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--subtle)]">
-                      {slashStage === "list"
-                        ? "Saved prompts"
-                        : slashStage === "workflows"
-                          ? "Attach workflow"
-                          : "Attach role"}
+                      {slashStageTitle[slashStage]}
                     </span>
                     <button
                       type="button"
@@ -363,114 +723,25 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
                       Back
                     </button>
                   </div>
-                  {slashStage === "list" ? (
-                    promptLibrary.length === 0 ? (
-                      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
-                        No saved prompts yet. Save one from the Prompt library page or the
-                        bookmark button on any chat prompt.
-                      </p>
-                    ) : slashMatches.length === 0 ? (
-                      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
-                        No saved prompts match “{value.slice(1).trim()}”.
-                      </p>
-                    ) : (
-                      <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
-                        {slashMatches.slice(0, 20).map((item) => (
-                          <li key={item.id}>
-                            <button
-                              type="button"
-                              onClick={() => insertLibraryPrompt(item.content)}
-                              className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-[var(--chip)]"
-                              role="option"
-                              aria-selected="false"
-                              title={item.content.slice(0, 200)}
-                            >
-                              <PromptLibraryIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]" />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-xs font-medium text-[var(--fg)]">
-                                  {item.title}
-                                </span>
-                                <span className="block truncate text-[10px] text-[var(--subtle)]">
-                                  {item.description || "No description."}
-                                </span>
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )
-                  ) : slashStage === "workflows" ? (
-                    enabledWorkflows.length === 0 ? (
-                      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
-                        No workflows yet. Create one from the Workflows page.
-                      </p>
-                    ) : workflowMatches.length === 0 ? (
-                      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
-                        No workflows match “{value.slice(1).trim()}”.
-                      </p>
-                    ) : (
-                      <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
-                        {workflowMatches.slice(0, 20).map((wf) => (
-                          <li key={wf.id}>
-                            <button
-                              type="button"
-                              onClick={() => attachWorkflow(wf.id)}
-                              className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-[var(--chip)]"
-                              role="option"
-                              aria-selected={attachedWorkflows.includes(wf.id)}
-                            >
-                              <WorkflowIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]" />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-xs font-medium text-[var(--fg)]">
-                                  {wf.name}
-                                </span>
-                                <span className="block truncate text-[10px] text-[var(--subtle)]">
-                                  {wf.description || "No description."}
-                                </span>
-                              </span>
-                              {attachedWorkflows.includes(wf.id) && (
-                                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--secondary)]" />
-                              )}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )
-                  ) : enabledRoles.length === 0 ? (
+                  {slashStage === "connectors" ? (
+                    <ConnectorStage
+                      configured={connectorConfigured}
+                      loading={connectorLoading}
+                      error={connectorError}
+                      items={connectorItems}
+                      attachedIds={attachedConnectors.map((c) => c.id)}
+                      onAddKey={() => setComposioKeyOpen(true)}
+                      onOpenPage={openConnectorsPage}
+                      onToggle={toggleConnector}
+                      matches={slashMatches}
+                      query={value.slice(1).trim()}
+                    />
+                  ) : slashListItems.length === 0 ? (
                     <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
-                      No roles yet. Create one from the Roles page.
-                    </p>
-                  ) : roleMatches.length === 0 ? (
-                    <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
-                      No roles match “{value.slice(1).trim()}”.
+                      {slashEmptyMessage}
                     </p>
                   ) : (
-                    <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
-                      {roleMatches.slice(0, 20).map((r) => (
-                        <li key={r.id}>
-                          <button
-                            type="button"
-                            onClick={() => attachRole(r.id)}
-                            className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-[var(--chip)]"
-                            role="option"
-                            aria-selected={attachedRoles.includes(r.id)}
-                          >
-                            <RoleIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]" />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-xs font-medium text-[var(--fg)]">
-                                {r.name}
-                              </span>
-                              <span className="block truncate text-[10px] text-[var(--subtle)]">
-                                {r.description || "No description."}
-                              </span>
-                            </span>
-                            {attachedRoles.includes(r.id) && (
-                              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--secondary)]" />
-                            )}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                    <SlashList items={slashListItems} />
                   )}
                 </>
               )}
@@ -513,47 +784,91 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
               ))}
             </div>
           )}
-          {(attachedWorkflowItems.length > 0 || attachedRoleItems.length > 0) && (
+          {hasAttachments && (
             <div className="mt-2 flex flex-wrap gap-1.5">
+              {attachedSkillItems.map((sk) => (
+                <AttachmentChip
+                  key={`skill-${sk.id}`}
+                  icon={<SkillsIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />}
+                  label={sk.name}
+                  title={`Skill: ${sk.name}`}
+                  removeLabel={`Remove skill ${sk.name}`}
+                  onRemove={() => toggleId(setAttachedSkills, sk.id)}
+                />
+              ))}
+              {attachedConnectors.map((c) => (
+                <AttachmentChip
+                  key={`connector-${c.id}`}
+                  icon={<ConnectorsIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />}
+                  label={c.name || c.id}
+                  title={`Connector: ${c.name || c.id}`}
+                  removeLabel={`Remove connector ${c.name || c.id}`}
+                  onRemove={() =>
+                    setAttachedConnectors((prev) => prev.filter((x) => x.id !== c.id))
+                  }
+                />
+              ))}
+              {attachedSubAgentItems.map((a) => (
+                <AttachmentChip
+                  key={`subagent-${a.id}`}
+                  icon={<Bot className="h-3 w-3 shrink-0 text-[var(--muted)]" />}
+                  label={a.name}
+                  title={`Sub-agent: ${a.name}`}
+                  removeLabel={`Remove sub-agent ${a.name}`}
+                  onRemove={() => toggleId(setAttachedSubAgents, a.id)}
+                />
+              ))}
+              {attachedMcpItems.map((m) => (
+                <AttachmentChip
+                  key={`mcp-${m.id}`}
+                  icon={<McpIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />}
+                  label={m.name}
+                  title={`MCP server: ${m.name}`}
+                  removeLabel={`Remove MCP server ${m.name}`}
+                  onRemove={() => toggleId(setAttachedMcp, m.id)}
+                />
+              ))}
+              {attachedKnowledgeItems.map((f) => (
+                <AttachmentChip
+                  key={`knowledge-${f.path}`}
+                  icon={<KnowledgeIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />}
+                  label={f.path}
+                  mono
+                  title={`Knowledge: ${f.path}`}
+                  removeLabel={`Remove knowledge ${f.path}`}
+                  onRemove={() => toggleId(setAttachedKnowledge, f.path)}
+                />
+              ))}
+              {attachedMemoryItems.map((f) => (
+                <AttachmentChip
+                  key={`memory-${f.path}`}
+                  icon={<Brain className="h-3 w-3 shrink-0 text-[var(--muted)]" />}
+                  label={f.path}
+                  mono
+                  title={`Memory: ${f.path}`}
+                  removeLabel={`Remove memory ${f.path}`}
+                  onRemove={() => toggleId(setAttachedMemory, f.path)}
+                />
+              ))}
               {attachedWorkflowItems.map((wf) => (
-                <span
+                <AttachmentChip
                   key={`workflow-${wf.id}`}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--chip)] px-2.5 py-1 text-xs text-[var(--fg)]"
+                  icon={<WorkflowIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />}
+                  label={wf.name}
                   title={`Workflow: ${wf.name}`}
-                >
-                  <WorkflowIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />
-                  <span className="max-w-[10rem] truncate">{wf.name}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAttachedWorkflows((prev) => prev.filter((x) => x !== wf.id))
-                    }
-                    className="text-[var(--subtle)] hover:text-[var(--danger)]"
-                    title="Remove workflow"
-                    aria-label={`Remove workflow ${wf.name}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
+                  removeLabel={`Remove workflow ${wf.name}`}
+                  onRemove={() => toggleId(setAttachedWorkflows, wf.id)}
+                />
               ))}
               {attachedRoleItems.map((r) => (
-                <span
+                <AttachmentChip
                   key={`role-${r.id}`}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--chip)] px-2.5 py-1 text-xs text-[var(--fg)]"
+                  icon={<RoleIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />}
+                  label={r.name}
                   title={`Role: ${r.name}`}
-                >
-                  <RoleIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />
-                  <span className="max-w-[10rem] truncate">{r.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAttachedRoles((prev) => prev.filter((x) => x !== r.id))}
-                    className="text-[var(--subtle)] hover:text-[var(--danger)]"
-                    title="Remove role"
-                    aria-label={`Remove role ${r.name}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
+                  removeLabel={`Remove role ${r.name}`}
+                  onRemove={() => toggleId(setAttachedRoles, r.id)}
+                />
               ))}
             </div>
           )}
@@ -698,6 +1013,11 @@ export function Composer({ onSend, onStop }: { onSend: (text: string) => void; o
       <WorkspaceModal
         open={workspaceOpen}
         onClose={() => setWorkspaceOpen(false)}
+      />
+      <ComposioKeyModal
+        open={composioKeyOpen}
+        onClose={() => setComposioKeyOpen(false)}
+        onSaved={() => void loadConnectors()}
       />
     </div>
   );
@@ -1170,5 +1490,276 @@ function ComboOption({
       </span>
       {active && <span className="text-[10px] font-semibold text-[var(--secondary)]">Active</span>}
     </button>
+  );
+}
+
+/** A removable chip showing one capability attached to the current prompt. */
+function AttachmentChip({
+  icon,
+  label,
+  title,
+  removeLabel,
+  onRemove,
+  mono,
+}: {
+  icon: ReactNode;
+  label: string;
+  title: string;
+  removeLabel: string;
+  onRemove: () => void;
+  mono?: boolean;
+}) {
+  return (
+    <span
+      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--chip)] px-2.5 py-1 text-xs text-[var(--fg)]"
+      title={title}
+    >
+      {icon}
+      <span className={cn("max-w-[10rem] truncate", mono && "font-mono")}>{label}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-[var(--subtle)] hover:text-[var(--danger)]"
+        title={removeLabel}
+        aria-label={removeLabel}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
+/** The generic scrollable list of selectable rows used by every "/" list stage. */
+function SlashList({ items }: { items: SlashListItem[] }) {
+  return (
+    <ul className="m-0 max-h-72 list-none overflow-y-auto p-0">
+      {items.map((item) => (
+        <li key={item.key}>
+          <button
+            type="button"
+            onClick={item.onSelect}
+            className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-[var(--chip)]"
+            role="option"
+            aria-selected={Boolean(item.selected)}
+          >
+            {item.icon}
+            <span className="min-w-0 flex-1">
+              <span
+                className={cn(
+                  "block truncate text-xs font-medium text-[var(--fg)]",
+                  item.mono && "font-mono",
+                )}
+              >
+                {item.title}
+              </span>
+              <span className="block truncate text-[10px] text-[var(--subtle)]">
+                {item.subtitle}
+              </span>
+            </span>
+            {item.selected && (
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--secondary)]" />
+            )}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The "/" connectors stage: lists only CONNECTED apps and offers a button to add the Composio API
+ * key (when none is configured) plus a button to jump to the full Connectors page.
+ */
+function ConnectorStage({
+  configured,
+  loading,
+  error,
+  items,
+  attachedIds,
+  onAddKey,
+  onOpenPage,
+  onToggle,
+  matches,
+  query,
+}: {
+  configured: boolean;
+  loading: boolean;
+  error: string | null;
+  items: ConnectorOverviewItem[];
+  attachedIds: string[];
+  onAddKey: () => void;
+  onOpenPage: () => void;
+  onToggle: (item: ConnectorOverviewItem) => void;
+  matches: (text: string) => boolean;
+  query: string;
+}) {
+  const rowIcon = "mt-0.5 h-4 w-4 shrink-0 text-[var(--subtle)]";
+
+  const openPageButton = (
+    <button
+      type="button"
+      onClick={onOpenPage}
+      className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-xs font-medium text-[var(--secondary)] hover:bg-[var(--chip)]"
+    >
+      <ArrowUpRight className="h-3.5 w-3.5 shrink-0" /> Open connectors page
+    </button>
+  );
+
+  if (!configured) {
+    return (
+      <div className="px-3 py-2">
+        <p className="m-0 text-xs text-[var(--muted)]">
+          Connectors are powered by Composio. Add your Composio API key to connect apps like GitHub,
+          Slack, and Notion.
+        </p>
+        <button
+          type="button"
+          onClick={onAddKey}
+          className="mt-2 flex w-full items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--chip)] px-3 py-2 text-left text-xs font-medium text-[var(--fg)] hover:border-[var(--secondary)]"
+        >
+          <KeyRound className="h-3.5 w-3.5 shrink-0" /> Add Composio API key
+        </button>
+        <div className="mt-1">{openPageButton}</div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <p className="m-0 flex items-center gap-2 px-3 py-2 text-xs text-[var(--muted)]">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading connected apps…
+      </p>
+    );
+  }
+
+  const filtered = items.filter((c) =>
+    matches(`${c.name} ${c.description} ${c.id} ${c.account_label ?? ""}`),
+  );
+
+  if (items.length === 0) {
+    return (
+      <div className="px-3 py-2">
+        <p className="m-0 text-xs text-[var(--muted)]">No connected apps yet.</p>
+        <div className="mt-1">{openPageButton}</div>
+      </div>
+    );
+  }
+
+  if (filtered.length === 0) {
+    return (
+      <p className="m-0 px-3 py-2 text-xs text-[var(--muted)]">
+        No connected apps match “{query}”.
+      </p>
+    );
+  }
+
+  const rows: SlashListItem[] = filtered.map((c) => ({
+    key: c.id,
+    icon: <ConnectorsIcon className={rowIcon} />,
+    title: c.name,
+    subtitle: c.account_label || c.description || c.id,
+    selected: attachedIds.includes(c.id),
+    onSelect: () => onToggle(c),
+  }));
+
+  return (
+    <>
+      <SlashList items={rows} />
+      <div className="mt-1 border-t border-[var(--border)]">{openPageButton}</div>
+      {error && <p className="m-0 px-3 py-1 text-[10px] text-[var(--danger)]">{error}</p>}
+    </>
+  );
+}
+
+/** Inline Composio API-key entry used from the "/" connectors stage. */
+function ComposioKeyModal({
+  open,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const settings = useStore((s) => s.settings);
+  const setSettings = useStore((s) => s.setSettings);
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset the form whenever the modal opens (derived during render, like WorkspaceModal).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setKey(settings.composioApiKey ?? "");
+      setError(null);
+    }
+  }
+
+  const save = async () => {
+    const trimmed = key.trim();
+    if (!trimmed) {
+      setError("Enter your Composio API key.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const valid = await validateComposioKey(trimmed);
+      if (!valid) {
+        setError("That key could not be validated. Check it and try again.");
+        return;
+      }
+      setSettings({ composioApiKey: trimmed });
+      await saveStateKey("settings", {
+        ...useStore.getState().settings,
+        composioApiKey: trimmed,
+      });
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      icon={<KeyRound className="h-4 w-4" />}
+      title="Add Composio API key"
+      size="md"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={() => void save()} disabled={busy}>
+            {busy ? "Validating…" : "Save key"}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4 p-5">
+        <p className="m-0 text-xs text-[var(--muted)]">
+          Connectors are powered by Composio. Add your Composio API key to connect apps like GitHub,
+          Slack, and Notion. The key is stored in your profile settings.
+        </p>
+        <Field label="Composio API key" hint="stored in your profile settings">
+          <TextInput
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="cmp_..."
+            className="font-mono text-xs"
+            autoComplete="off"
+          />
+        </Field>
+        {error && <p className="m-0 text-xs text-[var(--danger)]">{error}</p>}
+      </div>
+    </Modal>
   );
 }
