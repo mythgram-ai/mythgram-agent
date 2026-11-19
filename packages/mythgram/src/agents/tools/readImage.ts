@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
-import { isPathAllowed, safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
+import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 
 /** Supported image file extensions (lowercase, with a leading dot). */
 export const SUPPORTED_IMAGE_EXTENSIONS: readonly string[] = [
@@ -19,8 +19,6 @@ export const SUPPORTED_IMAGE_EXTENSIONS: readonly string[] = [
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 /** Timeout for fetching remote images over HTTP(S). */
 const REMOTE_FETCH_TIMEOUT_MS = 60_000;
-/** Virtual mount prefix the model may use to reference the workspace root. */
-const WORKSPACE_MOUNT = "/workspace";
 
 /** Field in the tool's `data` carrying the loaded image so the agent loop can inject it. */
 export const IMAGE_ATTACHMENT_KEY = "image";
@@ -41,7 +39,7 @@ const schema = z.object({
     .trim()
     .min(1, "file_path must be a non-empty string")
     .describe(
-      "Absolute path starting Example: project/src/image.png Or enter a live image url example: https://example.com/images/image.png",
+      "Absolute path to a local image file (e.g. /home/user/project/src/image.png), or a live image URL (e.g. https://example.com/images/image.png). Relative paths are rejected.",
     ),
 });
 
@@ -51,7 +49,7 @@ const descriptionParameters = {
     file_path: {
       type: "string",
       description:
-        "Absolute path starting Example: project/src/image.png Or enter a live image url example: https://example.com/images/image.png",
+        "Absolute path to a local image file (e.g. /home/user/project/src/image.png), or a live image URL (e.g. https://example.com/images/image.png). Relative paths are rejected.",
     },
   },
   required: ["file_path"],
@@ -64,7 +62,7 @@ The loaded image is attached to the conversation as a vision input, so in your n
 Supported image formats: ${SUPPORTED_IMAGE_EXTENSIONS.join(", ")}.
 
 Usage:
-- file_path must be an absolute workspace path (the workspace-relative path reported by file_list also works) OR a live hosted image URL such as https://example.com/images/image.png
+- file_path must be an absolute path to any accessible local file (the workspace root is not an access boundary) OR a live hosted image URL such as https://example.com/images/image.png
 - This tool only works with models that support image inputs.
 
 ${JSON.stringify(descriptionParameters, null, 2)}`;
@@ -154,37 +152,17 @@ function isHttpUrl(input: string): boolean {
 }
 
 /**
- * Resolve a model supplied path for reading. Accepts, in order:
- *  - a real absolute path already inside the workspace root,
- *  - a "/workspace/..." virtual mount (maps onto the workspace root),
- *  - a workspace-relative path (as reported by file_list).
- * Anything else absolute is rejected as escaping the workspace.
+ * Resolve a model supplied local path for reading. The path must be absolute and may be any
+ * accessible location on the local filesystem; relative paths are rejected.
  */
 function resolveWorkspaceImage(workspaceRoot: string, input: string): { absPath: string; relPath: string } {
   const trimmed = input.trim();
-  const root = path.resolve(workspaceRoot);
-
-  if (path.isAbsolute(trimmed) && isPathAllowed(workspaceRoot, trimmed)) {
-    const abs = safeResolve(workspaceRoot, trimmed);
-    return { absPath: abs, relPath: toWorkspaceRelative(workspaceRoot, abs) };
-  }
-
-  if (trimmed === WORKSPACE_MOUNT) {
-    return { absPath: root, relPath: "." };
-  }
-  if (trimmed.startsWith(WORKSPACE_MOUNT + "/")) {
-    const remainder = trimmed.slice(WORKSPACE_MOUNT.length).replace(/^[/\\]+/, "");
-    const abs = safeResolve(workspaceRoot, remainder);
-    return { absPath: abs, relPath: toWorkspaceRelative(workspaceRoot, abs) };
-  }
-
-  if (path.isAbsolute(trimmed)) {
+  if (!path.isAbsolute(trimmed)) {
     throw new ReadImageError(
       "invalid_file_path",
-      `Absolute path "${trimmed}" is outside the workspace root (${root}).`,
+      `file_path must be an absolute path. Received: "${input}".`,
     );
   }
-
   const abs = safeResolve(workspaceRoot, trimmed);
   return { absPath: abs, relPath: toWorkspaceRelative(workspaceRoot, abs) };
 }

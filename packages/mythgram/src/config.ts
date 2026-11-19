@@ -225,8 +225,8 @@ export function ensureWorkspace(): void {
 
 /**
  * Switch the active workspace at runtime (used by the custom workspace picker).
- * Creates the directory when missing and points all workspace-sandboxed file tools at the
- * new root from now on. The fixed ".mythgram" data directory is deliberately left untouched:
+ * Creates the directory when missing and updates the contextual workspace root used by prompts,
+ * default tool paths, and the UI. It does not impose a filesystem access boundary. The fixed ".mythgram" data directory is deliberately left untouched:
  * the app keeps using the single data dir created at boot, and no ".mythgram" folder is
  * created inside the newly selected workspace.
  */

@@ -9,11 +9,11 @@ import { includeToRegExp } from "./grep.js";
 export const MAX_GLOB_MATCHES = 100;
 
 /**
- * Directories never searched (build artifacts, VCS data, agent state, caches).
+ * Directories never searched (build artifacts, VCS data, caches).
  * Mirrors the grep tool exclusions so glob never spelunks generated output.
+ * Hidden directories (including ".mythgram") are deliberately NOT excluded.
  */
 const EXCLUDED_DIR_NAMES: ReadonlySet<string> = new Set([
-  ".mythgram",
   ".git",
   ".svn",
   ".hg",
@@ -52,7 +52,7 @@ const schema = z
       .trim()
       .optional()
       .describe(
-        "Optional directory to search in. If omitted, the current working directory is used. Must be a valid directory path.",
+        "Optional absolute directory to search in (e.g. /home/user/project). Relative paths are rejected. If omitted, the current workspace root is used. The directory may be anywhere on the local filesystem.",
       ),
   })
   .strict();
@@ -84,7 +84,7 @@ async function resolveSearchRoot(
   workspaceRoot: string,
   rawPath: string | undefined,
 ): Promise<ResolvedSearch> {
-  const requested = rawPath && rawPath.trim() ? rawPath.trim() : ".";
+  const requested = rawPath && rawPath.trim() ? rawPath.trim() : workspaceRoot;
   const absolute = safeResolve(workspaceRoot, requested);
   let stat: Awaited<ReturnType<typeof fs.stat>>;
   try {
@@ -110,7 +110,10 @@ async function resolveSearchRoot(
 export const globTool = defineTool({
   name: "glob",
   description:
-    "Find files and directories matching a glob pattern. Searches recursively within the specified directory or the current working directory when no path is provided. Returns matching file paths, up to 100 results.",
+    "Find files and directories matching a glob pattern. Searches recursively within the specified " +
+    "absolute directory (any location on the local filesystem) or the workspace root when no path is " +
+    "provided. Hidden directories, including .mythgram, are searched; VCS data, dependencies, and build " +
+    "artifacts are skipped. Returns matching file paths, up to 100 results.",
   schema,
   label: (args: GlobArgs) => {
     const pattern = typeof args.pattern === "string" ? args.pattern.trim().slice(0, 60) : "";

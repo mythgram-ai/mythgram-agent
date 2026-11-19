@@ -125,9 +125,33 @@ describe("glob tool", () => {
     assert.equal(result.ok, false);
   });
 
-  it("rejects paths outside the workspace", async () => {
-    const result = await run({ pattern: "**/*.ts", path: "/etc" });
+  it("supports absolute paths outside the workspace", async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "mythgram-glob-outside-"));
+    try {
+      await fs.writeFile(path.join(outside, "outside.ts"), "x\n");
+      const result = await run({ pattern: "**/*.ts", path: outside });
+      assert.equal(result.ok, true);
+      const matches = (result.data as { matches: string[] }).matches;
+      assert.ok(matches.some((m) => m.endsWith("outside.ts")), JSON.stringify(matches));
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects relative paths", async () => {
+    const result = await run({ pattern: "**/*.ts", path: "relative-dir" });
     assert.equal(result.ok, false);
+    assert.equal((result.error as { code?: string })?.code, "invalid_path");
+  });
+
+  it("finds files in hidden directories including .mythgram", async () => {
+    await writeFile(".mythgram/agent.json", "{}\n");
+    await writeFile(".hidden/secret.txt", "x\n");
+    const result = await run({ pattern: "**/*.{json,txt}" });
+    assert.equal(result.ok, true);
+    const matches = (result.data as { matches: string[] }).matches.map((m) => m.replace(/\\/g, "/"));
+    assert.ok(matches.some((m) => m.includes(".mythgram/agent.json")), JSON.stringify(matches));
+    assert.ok(matches.some((m) => m.includes(".hidden/secret.txt")), JSON.stringify(matches));
   });
 
   it("rejects a file path (must be a directory)", async () => {

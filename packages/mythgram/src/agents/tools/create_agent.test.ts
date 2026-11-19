@@ -87,9 +87,9 @@ describe("create_agent tool", () => {
       const { ctx, events } = ctxFor(manager, ws.dir);
 
       await fs.mkdir(path.join(ws.dir, "prompt"), { recursive: true });
-      const rel = "prompt/prompt.md";
+      const rel = path.join(ws.dir, "prompt/prompt.md");
       const body = "# Helper\nYou are a helpful custom agent.";
-      await fs.writeFile(path.join(ws.dir, rel), body, "utf8");
+      await fs.writeFile(rel, body, "utf8");
 
       const result = await registry.execute(
         "create_agent",
@@ -143,14 +143,14 @@ describe("create_agent tool", () => {
 
       const first = await registry.execute(
         "create_agent",
-        { name: "Dup", short_description: "first", system_prompt_file: "a.md" },
+        { name: "Dup", short_description: "first", system_prompt_file: path.join(ws.dir, "a.md") },
         ctx,
       );
       assert.equal(first.ok, true);
 
       const second = await registry.execute(
         "create_agent",
-        { name: "dup", short_description: "second", system_prompt_file: "b.md" },
+        { name: "dup", short_description: "second", system_prompt_file: path.join(ws.dir, "b.md") },
         ctx,
       );
       assert.equal(second.ok, false);
@@ -170,7 +170,7 @@ describe("create_agent tool", () => {
 
       const missing = await registry.execute(
         "create_agent",
-        { name: "Ghost", short_description: "missing file", system_prompt_file: "nope.md" },
+        { name: "Ghost", short_description: "missing file", system_prompt_file: path.join(ws.dir, "nope.md") },
         ctx,
       );
       assert.equal(missing.ok, false);
@@ -179,7 +179,7 @@ describe("create_agent tool", () => {
       await fs.writeFile(path.join(ws.dir, "empty.md"), "   \n", "utf8");
       const empty = await registry.execute(
         "create_agent",
-        { name: "Empty", short_description: "empty file", system_prompt_file: "empty.md" },
+        { name: "Empty", short_description: "empty file", system_prompt_file: path.join(ws.dir, "empty.md") },
         ctx,
       );
       assert.equal(empty.ok, false);
@@ -188,7 +188,7 @@ describe("create_agent tool", () => {
       await fs.writeFile(path.join(ws.dir, "notes.txt"), "not markdown", "utf8");
       const notMd = await registry.execute(
         "create_agent",
-        { name: "Txt", short_description: "wrong type", system_prompt_file: "notes.txt" },
+        { name: "Txt", short_description: "wrong type", system_prompt_file: path.join(ws.dir, "notes.txt") },
         ctx,
       );
       assert.equal(notMd.ok, false);

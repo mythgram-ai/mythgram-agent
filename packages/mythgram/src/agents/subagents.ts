@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AppConfig } from "../config.js";
+import { resolveDataRoot, type AppConfig } from "../config.js";
 import type { ToolRegistry } from "./tools/registry.js";
 import type { Provider } from "./providers/types.js";
 import type { ToolCall, ToolCallDelta } from "./providers/types.js";
@@ -18,7 +18,7 @@ import type {
   ToolResult,
 } from "./tools/types.js";
 import { safeJsonParse } from "../utils/json.js";
-import { safeResolve } from "../utils/paths.js";
+
 import { createSubAgentSessionId, isSafeSessionId } from "../database/ids.js";
 import { subAgentSessionStore, type SubAgentSessionStatus } from "./subAgentSessionStore.js";
 import type { OpenAIToolSchema } from "./tools/registry.js";
@@ -49,8 +49,8 @@ import {
  */
 export const SUB_AGENT_EXCLUDED_TOOLS: readonly string[] = SUB_AGENT_RESTRICTED_TOOLS;
 
-/** Directory (relative to the workspace root) where background sub-agent outputs are written. */
-export const SUB_AGENT_OUTPUT_DIR = ".mythgram/sub-agent";
+/** Directory name (under the fixed .mythgram data root) where background sub-agent outputs are written. */
+export const SUB_AGENT_OUTPUT_DIR = "sub-agent";
 
 export interface SubAgentRuntimeDeps {
   /** The resolved provider serving this turn (built-in or custom). */
@@ -532,20 +532,7 @@ class SubAgentRunner {
   ): Promise<ToolResult> {
     const parentId = eventId ?? ctx.toolCallId ?? `subagent_${Date.now()}`;
     const fileName = `${slugifyName(definition.name)}-output-${random5()}.md`;
-    const relPath = `${SUB_AGENT_OUTPUT_DIR}/${fileName}`;
-
-    let outputAbs: string;
-    try {
-      outputAbs = safeResolve(ctx.workspaceRoot, relPath);
-    } catch (error) {
-      return {
-        ok: false,
-        error: {
-          code: "sub_agent_output_path_error",
-          message: `Could not resolve the background output file path: ${messageOf(error)}`,
-        },
-      };
-    }
+    const outputAbs = path.join(resolveDataRoot(ctx.workspaceRoot), SUB_AGENT_OUTPUT_DIR, fileName);
 
     // Write an initial "running" placeholder so the main agent can read the file immediately and
     // see the sub-agent is still working, even before it finishes.
@@ -561,7 +548,7 @@ class SubAgentRunner {
         ok: false,
         error: {
           code: "sub_agent_output_write_error",
-          message: `Could not create the background output file "${relPath}": ${messageOf(error)}`,
+          message: `Could not create the background output file "${outputAbs}": ${messageOf(error)}`,
         },
       };
     }
@@ -584,7 +571,7 @@ class SubAgentRunner {
       sub_session_id: subSessionId,
       agent: definition.name,
       task,
-      output_file: relPath,
+      output_file: outputAbs,
       context_shared: contextText !== undefined,
     });
 
@@ -622,11 +609,11 @@ class SubAgentRunner {
         wait_for_output: false,
         background: true,
         context_shared: contextText !== undefined,
-        output_file: relPath,
+        output_file: outputAbs,
         message:
           `Sub-agent "${definition.name}" has started in the background. You can keep doing other ` +
           `work now — you do not need to wait. Its final output will be written to the file ` +
-          `"${relPath}". Read that file with file_read when you need the result; while the sub-agent ` +
+          `"${outputAbs}". Read that file with file_read when you need the result; while the sub-agent ` +
           `is still working the file shows a "running" status, and it is replaced with the complete ` +
           `report once the sub-agent finishes.`,
       },
@@ -1461,8 +1448,8 @@ function buildSubAgentSystemPrompt(
 
 # Environment
 - You are "${definition.name}", a specialized sub-agent working autonomously on a single delegated task.
-- You run on the same machine and share the same workspace as the main agent: ${workspaceRoot}
-- All file paths are relative to this workspace (file_read requires an absolute path). Shell commands run from it. Files you create persist on disk.
+- You run on the same machine and share the same workspace as the main agent: ${workspaceRoot}. The workspace is contextual, not an access boundary.
+- Every filesystem tool requires ABSOLUTE paths and may operate anywhere the operating system allows (parent/sibling directories, other drives, hidden directories such as .mythgram). Relative paths are rejected. Shell commands run from the workspace by default. Files you create persist on disk.
 ${contextLine}
 
 # Tools (native function calling only)

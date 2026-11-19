@@ -5,13 +5,13 @@ import { z } from "zod";
 import Tesseract from "tesseract.js";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
 import { resolveDataRoot } from "../../config.js";
-import { isPathAllowed, safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
+import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 
 /**
  * Extract text from an image with Tesseract.js (OCR). The image may be a publicly reachable
- * HTTP/HTTPS URL or a local file inside the workspace. Unlike read_image — which attaches the
- * image to the model's vision input and requires a vision-capable model — this tool runs OCR on
- * the bytes locally and returns the recognized TEXT, so it works with any model.
+ * HTTP/HTTPS URL or an absolute local file path anywhere on the filesystem. Unlike read_image —
+ * which attaches the image to the model's vision input and requires a vision-capable model — this
+ * tool runs OCR on the bytes locally and returns the recognized TEXT, so it works with any model.
  */
 
 /** Language(s) loaded by default. "eng" ships first and keeps first-run downloads small. */
@@ -23,8 +23,6 @@ const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const REMOTE_FETCH_TIMEOUT_MS = 60_000;
 /** Hard ceiling on a single OCR run so a stuck worker can never hang the turn forever. */
 const OCR_TIMEOUT_MS = 120_000;
-/** Virtual mount prefix the model may use to reference the workspace root. */
-const WORKSPACE_MOUNT = "/workspace";
 
 const schema = z
   .object({
@@ -62,50 +60,29 @@ function isHttpUrl(input: string): boolean {
 }
 
 /**
- * Resolve a model supplied local path for reading. Accepts, in order: a real absolute path inside
- * the workspace root, a "/workspace/..." virtual mount, or a workspace-relative path. Any other
- * absolute path is rejected as escaping the workspace (mirrors read_image).
+ * Resolve a model supplied local path for reading. The path must be absolute and may point
+ * anywhere on the local filesystem; relative paths are rejected (mirrors read_image).
  */
 function resolveWorkspaceImage(
   workspaceRoot: string,
   input: string,
 ): { absPath: string; relPath: string } {
   const trimmed = input.trim();
-  const root = path.resolve(workspaceRoot);
-
-  const resolveSafely = (value: string): string => {
-    try {
-      return safeResolve(workspaceRoot, value);
-    } catch (error) {
-      throw new FetchTextError(
-        "invalid_file_path",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  };
-
-  if (path.isAbsolute(trimmed) && isPathAllowed(workspaceRoot, trimmed)) {
-    const abs = resolveSafely(trimmed);
-    return { absPath: abs, relPath: toWorkspaceRelative(workspaceRoot, abs) };
-  }
-
-  if (trimmed === WORKSPACE_MOUNT) {
-    return { absPath: root, relPath: "." };
-  }
-  if (trimmed.startsWith(WORKSPACE_MOUNT + "/")) {
-    const remainder = trimmed.slice(WORKSPACE_MOUNT.length).replace(/^[/\\]+/, "");
-    const abs = resolveSafely(remainder);
-    return { absPath: abs, relPath: toWorkspaceRelative(workspaceRoot, abs) };
-  }
-
-  if (path.isAbsolute(trimmed)) {
+  if (!path.isAbsolute(trimmed)) {
     throw new FetchTextError(
       "invalid_file_path",
-      `Absolute path "${trimmed}" is outside the workspace root (${root}).`,
+      `image_source must be an absolute path for local files. Received: "${input}".`,
     );
   }
-
-  const abs = resolveSafely(trimmed);
+  let abs: string;
+  try {
+    abs = safeResolve(workspaceRoot, trimmed);
+  } catch (error) {
+    throw new FetchTextError(
+      "invalid_file_path",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
   return { absPath: abs, relPath: toWorkspaceRelative(workspaceRoot, abs) };
 }
 
@@ -389,9 +366,9 @@ export const fetchTextFromImageTool = defineTool({
   description:
     "Use this tool whenever you need to extract, read, or analyze text contained in an image. " +
     "Provide the image source as either a publicly accessible HTTP/HTTPS image URL or an absolute " +
-    "local file path. Use this tool when a task requires reading screenshots, scanned documents, " +
+    "local file path anywhere on the local filesystem. Use this tool when a task requires reading screenshots, scanned documents, " +
     "photographs, receipts, signs, handwritten notes, or other images containing text. Pass the " +
-    "image source in the image_source parameter. Ensure that local file paths are absolute and that " +
+    "image source in the image_source parameter. Ensure that local file paths are absolute (relative paths are rejected) and that " +
     "remote image URLs are accessible. After receiving the result, use the extracted text to " +
     "continue the user's task.",
   schema,
@@ -411,7 +388,7 @@ export const fetchTextFromImageTool = defineTool({
 
     try {
       // A value carrying a non-http(s) URL scheme (e.g. "ftp://...") is rejected up front rather
-      // than being mistaken for a workspace-relative file path.
+      // than being mistaken for a local file path.
       if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(input) && !isHttpUrl(input)) {
         throw new FetchTextError(
           "invalid_url",

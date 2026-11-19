@@ -4,7 +4,11 @@ import { defineTool, type ToolResult } from "./types.js";
 import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 
 const schema = z.object({
-  file_path: z.string().describe("Path of the file to edit, relative to the workspace root."),
+  file_path: z
+    .string()
+    .describe(
+      "Absolute path of the file to edit (e.g. /home/user/project/src/index.ts). Relative paths are rejected.",
+    ),
   old_string: z
     .string()
     .describe(
@@ -34,7 +38,8 @@ function countOccurrences(haystack: string, needle: string): number {
 export const strReplaceTool = defineTool({
   name: "str_replace",
   description:
-    "Perform an exact string replacement inside a file. old_string must match the file content exactly " +
+    "Perform an exact string replacement inside a file. file_path MUST be an absolute path (anywhere " +
+    "on the local filesystem). old_string must match the file content exactly " +
     "(including indentation and newlines). The matched text — and its lines — is fully removed and replaced " +
     "by new_string. Fails if old_string is not found, or is not unique unless replace_all is true.",
   schema,

@@ -10,7 +10,7 @@ const schema = z.object({
     .array(z.string().trim().min(1, "file paths must be non-empty strings"))
     .min(1, "file_paths must contain at least one file")
     .describe(
-      "Absolute paths of the files to attach. There is no fixed limit on the number of files. Each path must be a real file inside the workspace you want to hand to the user.",
+      "Absolute paths of the files to attach (e.g. /home/user/project/report.pdf). Relative paths are rejected. There is no fixed limit on the number of files. Each path must be a real file you want to hand to the user.",
     ),
 });
 
@@ -58,7 +58,7 @@ export function formatFileSizeLabel(bytes: number): string {
 export const attachFilesTool = defineTool({
   name: "attach_files",
   description:
-    "Attach one or more files from their absolute paths to the user's conversation. The attached files are made available to the user for preview or download — a popup lists each file with its size and type, plus Preview and Download actions. Use it whenever the user would benefit from accessing a file you created or modified (reports, configs, scripts, logs, build artifacts, images, documents, etc.). Only attach real files inside the workspace; files that do not exist or are not regular files are reported and skipped.",
+    "Attach one or more files from their absolute paths to the user's conversation. Paths may point anywhere on the local filesystem; the workspace root is not an access boundary. The attached files are made available to the user for preview or download — a popup lists each file with its size and type, plus Preview and Download actions. Use it whenever the user would benefit from accessing a file you created or modified (reports, configs, scripts, logs, build artifacts, images, documents, etc.). Only attach real files; files that do not exist or are not regular files are reported and skipped.",
   schema,
   label: (args) =>
     `Attach ${Array.isArray(args.file_paths) ? args.file_paths.length : 0} File` +

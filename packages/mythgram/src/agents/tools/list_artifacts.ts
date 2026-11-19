@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { artifactsManager } from "../../artifacts/index.js";
+import { artifactsManager, artifactAbs } from "../../artifacts/index.js";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
 import { artifactsFailure } from "./artifactSupport.js";
 
@@ -20,7 +20,10 @@ export const listArtifactsTool = defineTool({
   label: (_args: ListArtifactsArgs) => "Artifacts: list",
   async execute(_args: ListArtifactsArgs, ctx: ToolContext): Promise<ToolResult> {
     try {
-      const artifacts = await artifactsManager.list(ctx.workspaceRoot);
+      const artifacts = (await artifactsManager.list(ctx.workspaceRoot)).map((artifact) => ({
+        ...artifact,
+        absolute_file: artifactAbs(ctx.workspaceRoot, artifact.file),
+      }));
       return {
         ok: true,
         data: {

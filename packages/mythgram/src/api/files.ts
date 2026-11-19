@@ -4,7 +4,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import multer from "multer";
 import type { AppConfig } from "../config.js";
-import { safeResolve, toWorkspaceRelative } from "../utils/paths.js";
+import { resolveWorkspacePath, toWorkspaceRelative } from "../utils/paths.js";
 import { mimeTypeFromPath } from "../utils/mime.js";
 
 export interface FileNode {
@@ -56,7 +56,7 @@ export function buildFilesRouter(config: AppConfig): Router {
   router.get("/tree", async (req: Request, res: Response) => {
     const requested = typeof req.query.path === "string" && req.query.path.trim() ? req.query.path : ".";
     try {
-      const absolute = safeResolve(config.workspaceRoot, requested);
+      const absolute = resolveWorkspacePath(config.workspaceRoot, requested);
       const counter = { count: 0 };
       const tree = await buildNode(config.workspaceRoot, absolute, 0, counter);
       res.json({ root: toWorkspaceRelative(config.workspaceRoot, absolute), tree });
@@ -75,7 +75,7 @@ export function buildFilesRouter(config: AppConfig): Router {
       return;
     }
     try {
-      const absolute = safeResolve(config.workspaceRoot, requested);
+      const absolute = resolveWorkspacePath(config.workspaceRoot, requested);
       const content = await fsp.readFile(absolute, "utf8");
       res.json({ path: toWorkspaceRelative(config.workspaceRoot, absolute), content });
     } catch (error) {
@@ -92,7 +92,7 @@ export function buildFilesRouter(config: AppConfig): Router {
       return;
     }
     try {
-      const absolute = safeResolve(config.workspaceRoot, requested);
+      const absolute = resolveWorkspacePath(config.workspaceRoot, requested);
       sendWorkspaceFile(res, absolute, {
         disposition: "inline",
         contentType: mimeTypeFromPath(absolute),
@@ -111,7 +111,7 @@ export function buildFilesRouter(config: AppConfig): Router {
       return;
     }
     try {
-      const absolute = safeResolve(config.workspaceRoot, requested);
+      const absolute = resolveWorkspacePath(config.workspaceRoot, requested);
       sendWorkspaceFile(res, absolute, {
         disposition: "attachment",
         contentType: mimeTypeFromPath(absolute),

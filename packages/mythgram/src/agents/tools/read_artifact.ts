@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { artifactsManager } from "../../artifacts/index.js";
+import { artifactsManager, artifactAbs } from "../../artifacts/index.js";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
 import { artifactsFailure } from "./artifactSupport.js";
 
@@ -37,6 +37,7 @@ export const readArtifactTool = defineTool({
           description: artifact.description,
           type: artifact.type,
           file: artifact.file,
+          absolute_file: artifactAbs(ctx.workspaceRoot, artifact.file),
           size_bytes: artifact.sizeBytes,
           content: artifact.content,
         },

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { AcpClientManager } from "../acp-client/manager.js";
 import type { AcpClientPublic, AcpSessionPublic } from "../acp-client/types.js";
-import { safeResolve } from "../utils/paths.js";
+import { resolveDataRoot } from "../config.js";
 import type {
   AcpAgentsCallParam,
   AcpAgentsConnectInput,
@@ -27,8 +27,8 @@ import type {
  * `.mythgram/acp/<agent>-output-<id>.md` file the LLM can read later.
  */
 
-/** Directory (relative to the fixed .mythgram data root) where background ACP outputs are written. */
-export const ACP_AGENT_OUTPUT_DIR = ".mythgram/acp";
+/** Directory name (under the fixed .mythgram data root) where background ACP outputs are written. */
+export const ACP_AGENT_OUTPUT_DIR = "acp";
 
 /** How long interrupt waits for the cancelled turn to release the session before sending the prompt. */
 const INTERRUPT_RELEASE_TIMEOUT_MS = 20_000;
@@ -607,16 +607,11 @@ class AcpAgentRuntimeBridge {
     }
 
     const fileName = `${slugifyName(agentName)}-output-${random5()}.md`;
-    const relPath = `${ACP_AGENT_OUTPUT_DIR}/${fileName}`;
-    let outputAbs: string;
-    try {
-      outputAbs = safeResolve(ctx.workspaceRoot || this.workspaceRoot, relPath);
-    } catch (error) {
-      return {
-        ok: false,
-        error: `Could not resolve the background output file path: ${messageOf(error)}`,
-      };
-    }
+    const outputAbs = path.join(
+      resolveDataRoot(ctx.workspaceRoot || this.workspaceRoot),
+      ACP_AGENT_OUTPUT_DIR,
+      fileName,
+    );
 
     const header: OutputFile = {
       agentName,
@@ -632,7 +627,7 @@ class AcpAgentRuntimeBridge {
     } catch (error) {
       return {
         ok: false,
-        error: `Could not create the background output file "${relPath}": ${messageOf(error)}`,
+        error: `Could not create the background output file "${outputAbs}": ${messageOf(error)}`,
       };
     }
 
@@ -654,7 +649,7 @@ class AcpAgentRuntimeBridge {
         }),
       );
 
-    return { ok: true, outputFile: relPath };
+    return { ok: true, outputFile: outputAbs };
   }
 
   private async waitForIdle(sessionId: string): Promise<void> {

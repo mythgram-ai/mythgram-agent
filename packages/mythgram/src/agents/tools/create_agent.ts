@@ -19,8 +19,8 @@ const schema = z
       .trim()
       .min(1, "A system prompt file path is required.")
       .describe(
-        "Workspace-relative path to the Markdown file containing the custom agent's system prompt, " +
-          "for example: workspace/prompt/prompt.md",
+        "Absolute path to the Markdown file containing the custom agent's system prompt, " +
+          "for example: /home/user/project/prompt/prompt.md. Relative paths are rejected.",
       ),
   })
   .strict();
@@ -28,19 +28,19 @@ const schema = z
 type CreateAgentArgs = z.infer<typeof schema>;
 
 /**
- * create_agent — create a custom AI agent from a workspace Markdown prompt file.
+ * create_agent — create a custom AI agent from a Markdown prompt file.
  *
  * Flow the model must follow: first create the Markdown file holding the agent's system
  * prompt (with file_write / apply_patch), then call this tool with the agent name, a
- * short description, and that file's workspace-relative path. The file's FULL contents
+ * short description, and that file's absolute path. The file's FULL contents
  * are saved as the new agent's system prompt verbatim. This creates a top-level custom
  * agent (not a sub-agent).
  */
 export const createAgentTool = defineTool({
   name: "create_agent",
   description:
-    "Create a custom AI agent from a name, short description, and a workspace-relative Markdown " +
-    "file containing the agent's system prompt. The contents of the specified prompt file are " +
+    "Create a custom AI agent from a name, short description, and an absolute Markdown " +
+    "file path containing the agent's system prompt. The contents of the specified prompt file are " +
     "saved as the agent's system prompt.",
   schema,
   label: (args: CreateAgentArgs) => {

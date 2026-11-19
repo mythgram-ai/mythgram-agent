@@ -25,7 +25,7 @@ const schema = z
       .string()
       .trim()
       .min(1, "filePath must be a non-empty path")
-      .describe("The absolute or workspace-relative path to the file."),
+      .describe("The absolute path to the file (relative paths are rejected)."),
     line: z
       .number()
       .int("line must be an integer")
@@ -76,8 +76,8 @@ export const lspTool = defineTool({
     "- prepareCallHierarchy: Get call hierarchy item at a position (functions/methods)\n" +
     "- incomingCalls: Find all functions/methods that call the function at a position\n" +
     "- outgoingCalls: Find all functions/methods called by the function at a position\n\n" +
-    "All operations require a file path plus a 1-based line and character offset (as shown " +
-    "in editors). workspaceSymbol optionally accepts a `query`; when omitted the identifier " +
+    "All operations require an absolute file path plus a 1-based line and character offset (as shown " +
+    "in editors). The file may be anywhere on the local filesystem. workspaceSymbol optionally accepts a `query`; when omitted the identifier " +
     "under the cursor is used.\n\n" +
     "Note: an LSP server must be installed/configured for the file type. If no server is " +
     "available, a structured error is returned explaining what is missing.",

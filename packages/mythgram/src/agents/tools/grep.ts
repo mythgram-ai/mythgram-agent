@@ -15,11 +15,11 @@ const MAX_FALLBACK_FILE_BYTES = 1_000_000;
 const DEFAULT_RG_TIMEOUT_MS = 30_000;
 
 /**
- * Directories never searched (build artifacts, VCS data, agent state, caches).
+ * Directories never searched (build artifacts, VCS data, caches).
  * Mirrors the checkpoint snapshot exclusions so grep never spelunks generated output.
+ * Hidden directories (including ".mythgram") are deliberately NOT excluded.
  */
 const EXCLUDED_DIR_NAMES: ReadonlySet<string> = new Set([
-  ".mythgram",
   ".git",
   ".svn",
   ".hg",
@@ -58,7 +58,7 @@ const schema = z
       .trim()
       .optional()
       .describe(
-        "The absolute path to the directory to search within. If omitted, searches the current working directory (the workspace root)",
+        "The absolute path to the file or directory to search within (e.g. /home/user/project). Relative paths are rejected. If omitted, searches the current workspace root. The path may be anywhere on the local filesystem.",
       ),
     include: z
       .string()
@@ -222,7 +222,7 @@ async function resolveSearchRoot(
   workspaceRoot: string,
   rawPath: string | undefined,
 ): Promise<ResolvedSearch> {
-  const requested = rawPath && rawPath.trim() ? rawPath.trim() : ".";
+  const requested = rawPath && rawPath.trim() ? rawPath.trim() : workspaceRoot;
   const absolute = safeResolve(workspaceRoot, requested);
   let stat: Awaited<ReturnType<typeof fs.stat>>;
   try {
@@ -261,6 +261,10 @@ function runRipgrep(
       "--line-number",
       "--no-heading",
       "--color=never",
+      // Hidden directories/files (including ".mythgram") must be searchable. Ignore-file rules
+      // are bypassed too; the explicit EXCLUDED_DIR_NAMES globs below still skip VCS/deps/build.
+      "--hidden",
+      "--no-ignore",
       "--max-count",
       String(MAX_GREP_MATCHES),
       "-e",
@@ -488,6 +492,7 @@ export const grepTool = defineTool({
   name: "grep",
   description:
     "Fast text-based regex search that finds exact pattern matches within files or directories, utilizing the ripgrep command for efficient searching.\n" +
+    "Searches any absolute path on the local filesystem; the workspace root is only the default when path is omitted. Hidden directories (including .mythgram) are searchable.\n" +
     "Results will be formatted in the style of ripgrep and can be configured to include line numbers and content.\n" +
     "To avoid overwhelming output, the results are capped at 50 matches.\n" +
     "Use the include or exclude patterns to filter the search scope by file type or specific paths.\n\n" +

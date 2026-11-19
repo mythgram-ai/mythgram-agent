@@ -59,7 +59,7 @@ describe("generate_image tool", () => {
     assert.equal(schema!.function.parameters.type, "object");
     assert.equal(
       schema!.function.description,
-      "Generate an image from a text prompt and save it to the specified output path.",
+      "Generate an image from a text prompt and save it to the specified absolute output path (any accessible location on the local filesystem).",
     );
     const props = schema!.function.parameters.properties as Record<string, any>;
     assert.ok(props.prompt, "prompt property must be declared");
@@ -80,7 +80,7 @@ describe("generate_image tool", () => {
     const ctx = ctxFor(workspace, { image: fakeRuntime() });
     const result = await registry.execute(
       "generate_image",
-      { prompt: "a red panda astronaut", output_path: "images/cat.png" },
+      { prompt: "a red panda astronaut", output_path: path.join(workspace, "images/cat.png") },
       ctx,
     );
     assert.equal(result.ok, true);
@@ -120,7 +120,7 @@ describe("generate_image tool", () => {
     });
     const result = await registry.execute(
       "generate_image",
-      { prompt: "wide shot", output_path: "out/wide.png", aspect_ratio: "16:9" },
+      { prompt: "wide shot", output_path: path.join(workspace, "out/wide.png"), aspect_ratio: "16:9" },
       ctx,
     );
     assert.equal(result.ok, true);
@@ -131,7 +131,7 @@ describe("generate_image tool", () => {
     const ctx = ctxFor(workspace, { image: fakeRuntime() });
     const result = await registry.execute(
       "generate_image",
-      { prompt: "Nested", output_path: "a/b/c/pic.png" },
+      { prompt: "Nested", output_path: path.join(workspace, "a/b/c/pic.png") },
       ctx,
     );
     assert.equal(result.ok, true);
@@ -143,12 +143,12 @@ describe("generate_image tool", () => {
     const ctx = ctxFor(workspace, { image: fakeRuntime() });
     const first = await registry.execute(
       "generate_image",
-      { prompt: "One", output_path: "dup/pic.png" },
+      { prompt: "One", output_path: path.join(workspace, "dup/pic.png") },
       ctx,
     );
     const second = await registry.execute(
       "generate_image",
-      { prompt: "Two", output_path: "dup/pic.png" },
+      { prompt: "Two", output_path: path.join(workspace, "dup/pic.png") },
       ctx,
     );
     assert.equal(first.ok, true);
@@ -181,7 +181,7 @@ describe("generate_image tool", () => {
     });
     const result = await registry.execute(
       "generate_image",
-      { prompt: "slow", output_path: "bg/pic.png", wait_for_output: false },
+      { prompt: "slow", output_path: path.join(workspace, "bg/pic.png"), wait_for_output: false },
       ctx,
     );
     assert.equal(result.ok, true);
@@ -203,7 +203,7 @@ describe("generate_image tool", () => {
     });
     const result = await registry.execute(
       "generate_image",
-      { prompt: "Hi", output_path: "out/x.png" },
+      { prompt: "Hi", output_path: path.join(workspace, "out/x.png") },
       ctx,
     );
     assert.equal(result.ok, false);
@@ -215,7 +215,7 @@ describe("generate_image tool", () => {
     const ctx = ctxFor(workspace);
     const result = await registry.execute(
       "generate_image",
-      { prompt: "Hi", output_path: "out/x.png" },
+      { prompt: "Hi", output_path: path.join(workspace, "out/x.png") },
       ctx,
     );
     assert.equal(result.ok, false);
@@ -245,7 +245,7 @@ describe("generate_image tool", () => {
     });
     const result = await registry.execute(
       "generate_image",
-      { prompt: "   ", output_path: "out/x.png" },
+      { prompt: "   ", output_path: path.join(workspace, "out/x.png") },
       ctx,
     );
     assert.equal(result.ok, false);
@@ -270,7 +270,7 @@ describe("generate_image tool", () => {
     });
     const result = await registry.execute(
       "generate_image",
-      { prompt: "Hi", output_path: "out/x.png" },
+      { prompt: "Hi", output_path: path.join(workspace, "out/x.png") },
       ctx,
     );
     assert.equal(result.ok, false);
@@ -281,10 +281,10 @@ describe("generate_image tool", () => {
     assert.equal(
       generateImageTool.label({
         prompt: "Hi",
-        output_path: "images/cat.png",
+        output_path: path.join(workspace, "images/cat.png"),
         wait_for_output: true,
       }),
-      "Generate image: images/cat.png",
+      `Generate image: ${path.join(workspace, "images/cat.png")}`,
     );
   });
 });

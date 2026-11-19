@@ -15,11 +15,11 @@ export const MAX_CAPTURE_CHARS = 500;
 const MAX_FILE_BYTES = 1_000_000;
 
 /**
- * Directories never searched (build artifacts, VCS data, agent state, caches).
+ * Directories never searched (build artifacts, VCS data, caches).
  * Mirrors the grep tool exclusions so AST search never spelunks generated output.
+ * Hidden directories (including ".mythgram") are deliberately NOT excluded.
  */
 const EXCLUDED_DIR_NAMES: ReadonlySet<string> = new Set([
-  ".mythgram",
   ".git",
   ".svn",
   ".hg",
@@ -58,7 +58,7 @@ const schema = z
       .trim()
       .optional()
       .describe(
-        "The absolute path to the directory to search within. If omitted, searches the current working directory (the workspace root)",
+        "The absolute path to the file or directory to search within (e.g. /home/user/project). Relative paths are rejected. If omitted, searches the current workspace root. The path may be anywhere on the local filesystem.",
       ),
     include: z
       .string()
@@ -299,7 +299,7 @@ async function resolveSearchRoot(
   workspaceRoot: string,
   rawPath: string | undefined,
 ): Promise<ResolvedSearch> {
-  const requested = rawPath && rawPath.trim() ? rawPath.trim() : ".";
+  const requested = rawPath && rawPath.trim() ? rawPath.trim() : workspaceRoot;
   const absolute = safeResolve(workspaceRoot, requested);
   let stat: Awaited<ReturnType<typeof fs.stat>>;
   try {
@@ -336,6 +336,7 @@ export const astgrepTool = defineTool({
   name: "astgrep",
   description:
     "Searches for AST patterns within code files using structural matching. Supports multiple programming languages and returns matches with file paths, line numbers, and code context. " +
+    "The path may be any absolute location on the local filesystem; the workspace root is only the default when omitted. Hidden directories (including .mythgram) are searchable. " +
     "YOU MUST USE THIS TOOL WHENEVER YOU WANT TO SEARCH FOR CODE. " +
     "Usage: AST patterns use code-like patterns with wildcards (e.g. 'function $NAME($ARGS) { $BODY }', 'import $MODULE from \"$PATH\"'). " +
     "Wildcards use $UPPERCASE for capturing parts (e.g. $NAME, $ARGS, $BODY). " +

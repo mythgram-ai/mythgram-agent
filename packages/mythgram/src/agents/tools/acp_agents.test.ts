@@ -279,9 +279,10 @@ describe("agent-driven ACP tools", () => {
     const bgData = bgCall.data as { agents: Array<Record<string, unknown>> };
     assert.equal(bgData.agents[0]!.background, true);
     const outputFile = String(bgData.agents[0]!.output_file);
-    assert.ok(outputFile.startsWith(".mythgram/acp/"));
+    assert.equal(path.isAbsolute(outputFile), true);
+    assert.ok(outputFile.startsWith(path.join(tmp, ".mythgram", "acp") + path.sep));
 
-    const absOutput = path.join(tmp, ".mythgram", "acp", path.basename(outputFile));
+    const absOutput = outputFile;
     await waitFor(() => {
       try {
         return fs.readFileSync(absOutput, "utf8").includes("echo:background task");

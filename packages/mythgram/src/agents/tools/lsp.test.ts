@@ -509,7 +509,7 @@ describe("lsp primitives", () => {
         () =>
           manager.execute({
             operation: "hover",
-            filePath: "missing.unknown",
+            filePath: path.join(workspace, "missing.unknown"),
             line: 1,
             character: 1,
             workspaceRoot: workspace,
@@ -521,7 +521,7 @@ describe("lsp primitives", () => {
         () =>
           manager.execute({
             operation: "hover",
-            filePath: "notes.unknown",
+            filePath: path.join(workspace, "notes.unknown"),
             line: 1,
             character: 1,
             workspaceRoot: workspace,
@@ -574,7 +574,11 @@ describe("lsp tool end to end", () => {
     await fs.rm(workspace, { recursive: true, force: true });
   });
 
-  function run(args: Record<string, unknown>, overrides: Partial<ToolContext> = {}) {
+  function run(rawArgs: Record<string, unknown>, overrides: Partial<ToolContext> = {}) {
+    const args = { ...rawArgs };
+    if (typeof args.filePath === "string" && !path.isAbsolute(args.filePath)) {
+      args.filePath = path.join(workspace, args.filePath);
+    }
     return registry.execute("lsp", args, { ...ctx, ...overrides });
   }
 

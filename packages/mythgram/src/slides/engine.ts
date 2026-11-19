@@ -441,7 +441,7 @@ export class SlidesManager {
     return number;
   }
 
-  /** Read and validate one HTML slide file from inside the workspace. */
+  /** Read and validate one HTML slide file from an absolute path. */
   private async readSlideFile(
     inputPath: string,
     slideNumber: number,
@@ -475,7 +475,7 @@ export class SlidesManager {
     } catch {
       throw new SlidesEngineError(
         "slide_file_not_found",
-        `The slide file "${rawPath}" does not exist in the workspace.`,
+        `The slide file "${rawPath}" does not exist.`,
       );
     }
     if (!stat.isFile()) {

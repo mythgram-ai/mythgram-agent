@@ -16,7 +16,11 @@ const editSchema = z
 
 const schema = z
   .object({
-    file_path: z.string().describe("Absolute path of the file to edit."),
+    file_path: z
+      .string()
+      .describe(
+        "Absolute path of the file to edit (e.g. /home/user/project/src/index.ts). Relative paths are rejected.",
+      ),
     edits: z
       .array(editSchema)
       .min(1, "At least one edit is required.")
@@ -90,7 +94,8 @@ function buildValidationError(filePath: string, issues: ValidationIssue[]): Tool
 export const applyMultipleEditsTool = defineTool({
   name: "apply_multiple_edits",
   description:
-    "Apply multiple exact text edits to a single file in one operation. Each edit replaces an exact existing " +
+    "Apply multiple exact text edits to a single file in one operation. file_path MUST be an absolute " +
+    "path (anywhere on the local filesystem). Each edit replaces an exact existing " +
     "text block (old_text, including its lines) with new_text; use an empty new_text to delete the matched block. " +
     "All old_text values are validated against the current file content BEFORE anything is written: the call fails " +
     "if any old_text is not found, matches more than once, or overlaps another edit — in that case NO changes are " +

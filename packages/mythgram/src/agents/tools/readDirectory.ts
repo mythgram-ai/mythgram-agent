@@ -23,11 +23,11 @@ export const READ_DIRECTORY_CHARS_PER_TOKEN = 4;
 export const READ_DIRECTORY_CONTEXT_FRACTION = 0.5;
 
 /**
- * Directories never traversed (VCS data, dependencies, build artifacts, agent state, caches).
+ * Directories never traversed (VCS data, dependencies, build artifacts, caches).
  * Mirrors the grep/glob exclusions so read_directory never spelunks generated output.
+ * Hidden directories (including the ".mythgram" data directory) are deliberately NOT excluded.
  */
 const EXCLUDED_DIR_NAMES: ReadonlySet<string> = new Set([
-  ".mythgram",
   ".git",
   ".svn",
   ".hg",
@@ -137,7 +137,9 @@ const schema = z
       .string()
       .trim()
       .min(1, "directory_path must be a non-empty string")
-      .describe("Absolute or relative path of the directory to read."),
+      .describe(
+        "Absolute path of the directory to read (e.g. /home/user/project). Relative paths are rejected. The directory may be anywhere on the local filesystem.",
+      ),
     read_only_files: readOnlyFilesSchema,
   })
   .strict();
@@ -232,20 +234,21 @@ async function discoverFiles(
   return found;
 }
 
-/** Resolve the requested directory inside the workspace and verify it is a directory. */
+/** Resolve the requested directory and verify it is a directory. */
 function resolveDirectory(workspaceRoot: string, input: string): string {
-  const absolute = safeResolve(workspaceRoot, input);
-  return absolute;
+  return safeResolve(workspaceRoot, input);
 }
 
 export const readDirectoryTool = defineTool({
   name: "read_directory",
   description:
     "Read all supported text files in a directory in a single tool call and return their complete " +
-    "contents with their paths. Use this to load a whole folder quickly instead of calling file_read " +
-    "for every file. Set read_only_files=true to read only the files directly inside the directory " +
-    "(ignoring subdirectories); otherwise files in all subdirectories are read recursively. " +
-    "VCS data, dependencies, build artifacts, and binary files are skipped. If the combined content " +
+    "contents with their paths. directory_path MUST be an absolute path and may point anywhere on " +
+    "the local filesystem (the workspace root is not an access boundary). Use this to load a whole " +
+    "folder quickly instead of calling file_read for every file. Set read_only_files=true to read " +
+    "only the files directly inside the directory (ignoring subdirectories); otherwise files in all " +
+    "subdirectories are read recursively. VCS data, dependencies, build artifacts, and binary files " +
+    "are skipped; hidden directories (including .mythgram) are accessible. If the combined content " +
     "would exceed the available context budget, the tool returns a structured error listing the files " +
     "and their sizes instead of partial or truncated content — in that case read the files you need " +
     "individually with file_read.",

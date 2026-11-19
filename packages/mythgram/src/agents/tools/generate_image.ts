@@ -12,8 +12,8 @@ const schema = z
       .string()
       .min(1)
       .describe(
-        "File path where the generated image will be saved (relative to the workspace). " +
-          "The parent directory is created on demand; an existing file is never overwritten.",
+        "Absolute file path where the generated image will be saved (e.g. /home/user/project/images/cat.png). " +
+          "Relative paths are rejected. The parent directory is created on demand; an existing file is never overwritten.",
       ),
     aspect_ratio: z
       .enum(IMAGE_ASPECT_RATIOS)
@@ -66,12 +66,13 @@ async function uniqueTarget(dirAbs: string, filename: string): Promise<string> {
  * generate_image — turn a text prompt into an image and persist it to disk. The provider is
  * selected automatically (keyed built-ins → keyless Pollinations → custom) from the user's image
  * configuration, so the LLM only supplies the prompt and the target path. The image file is
- * written inside the workspace and its workspace-relative path is returned for display.
+ * written to the requested absolute path (inside or outside the workspace) and a display path is returned.
  */
 export const generateImageTool = defineTool({
   name: "generate_image",
   description:
-    "Generate an image from a text prompt and save it to the specified output path.",
+    "Generate an image from a text prompt and save it to the specified absolute output path (any " +
+    "accessible location on the local filesystem).",
   schema,
   label: (args: GenerateImageArgs) => {
     const target = typeof args.output_path === "string" ? args.output_path.trim() : "";

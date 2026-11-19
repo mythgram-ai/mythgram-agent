@@ -133,6 +133,7 @@ class SkillRunner {
         const skillFile = normalizeSkillFile(definition.skillFile);
         const files = collectFiles(definition, skillFile);
         const written: string[] = [];
+        const writtenAbs: string[] = [];
 
         for (const file of files) {
           // Each file path is resolved under the skill folder and validated to stay inside it
@@ -144,13 +145,18 @@ class SkillRunner {
           await fs.mkdir(path.dirname(targetAbs), { recursive: true });
           await fs.writeFile(targetAbs, file.content, "utf8");
           written.push(dataRelative(dataRoot, targetAbs));
+          writtenAbs.push(targetAbs);
         }
 
+        const skillFileAbs = path.join(skillDirAbs, skillFile);
         initialized.push({
           skill_name: definition.name.trim(),
           path: dataRelative(dataRoot, skillDirAbs),
-          skill_file: dataRelative(dataRoot, path.join(skillDirAbs, skillFile)),
+          skill_file: dataRelative(dataRoot, skillFileAbs),
           files: written,
+          absolute_path: skillDirAbs,
+          absolute_skill_file: skillFileAbs,
+          absolute_files: writtenAbs,
         });
       } catch (error) {
         failed.push({

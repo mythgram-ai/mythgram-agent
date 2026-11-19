@@ -210,14 +210,14 @@ describe("apply_multiple_edits tool", () => {
     assert.equal((result.error as { code: string }).code, "file_read_failed");
   });
 
-  it("errors for a path that escapes the workspace", async () => {
+  it("rejects a relative file path", async () => {
     const result = await run({
       file_path: "../escape.txt",
       edits: [{ old_text: "a", new_text: "b" }],
     });
     assert.equal(result.ok, false);
     assert.equal((result.error as { code: string }).code, "file_read_failed");
-    assert.match((result.error as { message: string }).message, /escapes the workspace/i);
+    assert.match((result.error as { message: string }).message, /absolute path/i);
   });
 
   it("rejects an empty edits array", async () => {

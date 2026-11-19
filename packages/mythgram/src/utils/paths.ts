@@ -1,98 +1,86 @@
 import path from "node:path";
-import { MYTHGRAM_DATA_DIR_NAME, resolveDataRoot } from "../config.js";
+import { MYTHGRAM_DATA_DIR_NAME } from "../config.js";
 
 /** The logical namespace that always maps to the fixed application data directory. */
 export const MYTHGRAM_DIR = MYTHGRAM_DATA_DIR_NAME;
 
-/**
- * True when `input` addresses the logical ".mythgram" namespace (i.e. equals ".mythgram"
- * or starts with ".mythgram/" / ".mythgram\\"), ignoring any leading slashes/backslashes.
- */
-function isMythgramLogical(input: string): boolean {
-  const normalized = input.replace(/\\/g, "/").replace(/^\/+/, "");
-  return normalized === MYTHGRAM_DIR || normalized.startsWith(`${MYTHGRAM_DIR}/`);
-}
-
 /** Whether `target` is `root` itself or nested inside it. */
-function isInside(root: string, target: string): boolean {
-  const rel = path.relative(root, target);
+export function isInside(root: string, target: string): boolean {
+  const rel = path.relative(path.resolve(root), path.resolve(target));
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
 /**
- * Resolve a user/model supplied path and guarantee it never escapes the allowed roots.
- * Accepts:
- *   - relative paths ("src/app.ts") -> resolved inside the active workspace
- *   - absolute paths already inside the active workspace
- *   - absolute paths inside the fixed ".mythgram" data directory
- *   - logical ".mythgram/..." paths -> resolved inside the fixed data directory, so the
- *     database/artifacts/skills/checkpoints stay reachable after a workspace switch
- *   - "absolute looking" paths ("/workspace/project/x", "/foo") which are treated as
- *     relative to the workspace so the model can be sloppy without breaking things.
+ * Resolve a model-supplied filesystem path.
  *
- * Throws when the resolved path would escape the allowed roots.
+ * The workspace root is contextual metadata for the LLM, NOT a filesystem boundary: any absolute
+ * path the operating system allows is accepted. Relative paths are rejected so a tool never
+ * silently anchors a bare path to the workspace root.
  */
-export function safeResolve(workspaceRoot: string, input: string): string {
+export function resolveAbsolutePath(input: string): string {
+  if (!input || typeof input !== "string") {
+    throw new Error("A non-empty absolute file path is required.");
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error("A non-empty absolute file path is required.");
+  }
+  if (!path.isAbsolute(trimmed)) {
+    throw new Error(`An absolute path is required. Received: "${input}".`);
+  }
+  return path.normalize(trimmed);
+}
+
+/**
+ * Backwards-compatible path resolver used throughout the codebase.
+ *
+ * `workspaceRoot` is intentionally ignored for access-control purposes; it is only kept in the
+ * signature so callers do not need to change and so the workspace remains available as context.
+ * All model/tool supplied paths must be absolute (see {@link resolveAbsolutePath}).
+ */
+export function safeResolve(_workspaceRoot: string, input: string): string {
+  return resolveAbsolutePath(input);
+}
+
+/**
+ * Resolve a path for internal/UI callers that historically supplied workspace-relative paths
+ * (for example the file explorer and canvas events). This is NOT used by agent filesystem tools:
+ * those use {@link safeResolve} and require absolute paths. Relative input is resolved against the
+ * workspace, but the result is still allowed to point anywhere on disk.
+ */
+export function resolveWorkspacePath(workspaceRoot: string, input: string): string {
   if (!input || typeof input !== "string") {
     throw new Error("A non-empty file path is required.");
   }
-
-  const root = path.resolve(workspaceRoot);
-  const dataRoot = path.resolve(resolveDataRoot(workspaceRoot));
-  const normalizedInput = input.trim();
-
-  // Absolute paths that already live inside the workspace or the data dir are taken as-is.
-  if (path.isAbsolute(normalizedInput)) {
-    const absolute = path.normalize(normalizedInput);
-    if (isInside(root, absolute) || isInside(dataRoot, absolute)) return absolute;
-  }
-
-  // Logical ".mythgram/..." paths always resolve to the fixed data directory.
-  if (isMythgramLogical(normalizedInput)) {
-    const rel = normalizedInput
-      .replace(/^[\\/]+/, "")
-      .slice(MYTHGRAM_DIR.length)
-      .replace(/^[\\/]+/, "");
-    const target = path.resolve(dataRoot, rel);
-    if (!isInside(dataRoot, target)) {
-      throw new Error(`Path "${input}" escapes the data directory.`);
-    }
-    return target;
-  }
-
-  // Everything else is workspace-relative (leading slashes stripped).
-  const relative = normalizedInput.replace(/^[\\/]+/, "");
-  const target = path.resolve(root, relative);
-  if (!isInside(root, target)) {
-    throw new Error(`Path "${input}" escapes the workspace root.`);
-  }
-
-  return target;
+  const trimmed = input.trim();
+  if (!trimmed) throw new Error("A non-empty file path is required.");
+  return path.isAbsolute(trimmed)
+    ? path.normalize(trimmed)
+    : path.resolve(workspaceRoot, trimmed);
 }
 
 /**
- * True when an absolute path lives inside the active workspace OR the fixed data dir.
- * Used by tools that require an absolute path (file_read, read_image, ...) so files in
- * the fixed ".mythgram" data dir stay reachable after a workspace switch.
+ * True when an absolute path is valid for filesystem tools. The workspace root and the fixed data
+ * directory are no longer special: every absolute path is allowed, subject to OS permissions.
  */
-export function isPathAllowed(workspaceRoot: string, absolutePath: string): boolean {
-  const absolute = path.resolve(absolutePath);
-  if (isInside(path.resolve(workspaceRoot), absolute)) return true;
-  return isInside(path.resolve(resolveDataRoot(workspaceRoot)), absolute);
+export function isPathAllowed(_workspaceRoot: string, absolutePath: string): boolean {
+  return typeof absolutePath === "string" && path.isAbsolute(absolutePath.trim());
 }
 
 /**
- * Convert an absolute path into a clean, logical display path:
- *   - paths inside the fixed data dir become ".mythgram/<rel>"
- *   - everything else becomes workspace-relative
+ * Render a path for tool output.
+ *
+ * Paths inside the workspace are shown workspace-relative (e.g. "src/app.ts") to keep results
+ * compact. Paths outside the workspace are shown as absolute paths so the model can pass them
+ * straight back into another tool without guessing or resolving "..".
  */
 export function toWorkspaceRelative(workspaceRoot: string, absolutePath: string): string {
-  const dataRoot = path.resolve(resolveDataRoot(workspaceRoot));
   const absolute = path.resolve(absolutePath);
-  if (isInside(dataRoot, absolute)) {
-    const rel = path.relative(dataRoot, absolute);
-    return rel === "" ? MYTHGRAM_DIR : `${MYTHGRAM_DIR}/${rel.split(path.sep).join("/")}`;
+  const root = path.resolve(workspaceRoot);
+  const rel = path.relative(root, absolute);
+  if (rel === "") return ".";
+  if (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+    return absolute;
   }
-  const rel = path.relative(path.resolve(workspaceRoot), absolute);
-  return rel === "" ? "." : rel;
+  return rel;
 }

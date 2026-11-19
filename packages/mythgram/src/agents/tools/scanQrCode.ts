@@ -19,7 +19,9 @@ const schema = z
       .string()
       .trim()
       .min(1, "image_path must be a non-empty string")
-      .describe("Absolute or workspace-relative path to the image file containing the QR code."),
+      .describe(
+        "Absolute path to the image file containing the QR code (e.g. /home/user/pictures/code.png). Relative paths are rejected.",
+      ),
   })
   .strict();
 
@@ -135,7 +137,7 @@ function decodePixels(buffer: Buffer, display: string): DecodedPixels {
 export const scanQrCodeTool = defineTool({
   name: "scan_qr_code",
   description:
-    "Scan and decode QR codes from an image file. Provide the path to the image containing the QR code. The tool returns the decoded QR code data.",
+    "Scan and decode QR codes from an image file. Provide the absolute path to the image containing the QR code (any accessible location on the local filesystem). The tool returns the decoded QR code data.",
   schema,
   label: (args) => `Scan QR: ${args.image_path}`,
   async execute(args, ctx: ToolContext): Promise<ToolResult> {

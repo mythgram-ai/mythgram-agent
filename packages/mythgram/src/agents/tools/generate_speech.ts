@@ -9,7 +9,9 @@ const schema = z
     speech: z.string().describe("The text to convert into speech."),
     output_directory: z
       .string()
-      .describe("The directory where the generated audio file will be saved."),
+      .describe(
+      "The absolute directory where the generated audio file will be saved (e.g. /home/user/project/audio). Relative paths are rejected.",
+    ),
   })
   .strict();
 
@@ -41,13 +43,13 @@ function failure(code: string, message: string): ToolResult {
 /**
  * generate_speech — convert text into spoken audio and persist it to disk. The provider is
  * selected automatically (cloud → custom → local) from the user's TTS configuration, so the LLM
- * only supplies the text and the target directory. The audio file is written inside the workspace
- * and its workspace-relative path is returned for playback.
+ * only supplies the text and the target directory. The audio file is written to the requested
+ * absolute directory (inside or outside the workspace) and a display path is returned for playback.
  */
 export const generateSpeechTool = defineTool({
   name: "generate_speech",
   description:
-    "Generate spoken audio from text and save the generated audio file to the specified output directory.",
+    "Generate spoken audio from text and save the generated audio file to the specified absolute output directory (any accessible location on the local filesystem).",
   schema,
   label: (args: GenerateSpeechArgs) => {
     const dir = typeof args.output_directory === "string" ? args.output_directory.trim() : "";

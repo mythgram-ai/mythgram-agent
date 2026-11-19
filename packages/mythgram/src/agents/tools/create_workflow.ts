@@ -39,7 +39,7 @@ const schema = z
       .describe(
         "A direct absolute filesystem path to the completed workflow.md file you already wrote " +
           "with file_write. The backend reads the file's full contents and registers it as the " +
-          "workflow. The path must start with '/'.",
+          "workflow. The path must be absolute.",
       ),
   })
   .strict();

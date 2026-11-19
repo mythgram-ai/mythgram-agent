@@ -181,6 +181,12 @@ export interface InitializedSkill {
   skill_file: string;
   /** All file paths written for this skill, relative to the provided file_path. */
   files: string[];
+  /** Absolute path of the skill folder (use this with filesystem tools). */
+  absolute_path?: string;
+  /** Absolute path of the entry file (use this with file_read). */
+  absolute_skill_file?: string;
+  /** Absolute paths of every file written for this skill. */
+  absolute_files?: string[];
 }
 
 /** One skill skill_initialize could not write (unknown, disabled, or already initialized). */
@@ -970,7 +976,7 @@ export interface AgentSelfInfo {
     available_tools: string[];
     tool_count: number;
   };
-  /** Absolute workspace root all file tools are sandboxed to. */
+  /** Absolute workspace root (contextual primary project location; not an access boundary). */
   workspace_root: string;
   /** Enabled skills available to this agent (name + description). */
   skills?: Array<{ name: string; description: string }>;
@@ -1003,7 +1009,7 @@ export interface AgentInfoRuntime {
 
 /** Runtime context handed to a tool on execution. */
 export interface ToolContext {
-  /** Absolute path all file operations are sandboxed to. */
+  /** Absolute workspace root (contextual primary project location; not an access boundary). */
   workspaceRoot: string;
   /** Id of the chat session the tool is running within (used by human-in-the-loop tools). */
   chatId?: string;

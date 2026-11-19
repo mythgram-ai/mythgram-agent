@@ -7,7 +7,9 @@ import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 const schema = z.object({
   file_path: z
     .string()
-    .describe("Path of the file to create or overwrite, relative to the workspace root."),
+    .describe(
+      "Absolute path of the file to create or overwrite (e.g. /home/user/project/src/index.ts). Relative paths are rejected.",
+    ),
   content: z.string().describe("The full content to write to the file. Overwrites any existing file."),
 });
 
@@ -15,7 +17,9 @@ export const fileWriteTool = defineTool({
   name: "file_write",
   description:
     "Create a new file or completely overwrite an existing file with the provided content. " +
-    "Parent directories are created automatically. Use this for creating files or fully rewriting them.",
+    "file_path MUST be an absolute path; it may be anywhere on the local filesystem (the workspace " +
+    "root is only the primary project location, not an access boundary). Parent directories are " +
+    "created automatically. Use this for creating files or fully rewriting them.",
   schema,
   label: (args) => `Create: ${args.file_path}`,
   async execute(args, ctx): Promise<ToolResult> {

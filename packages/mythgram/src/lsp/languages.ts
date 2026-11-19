@@ -287,9 +287,11 @@ function isExecutableFile(file: string): boolean {
 }
 
 /**
- * Walk from `startDir` up to `workspaceRoot` looking for any of `markers`.
- * Returns the closest directory containing a marker, or the workspace root when
- * none is found. Never walks above the workspace root.
+ * Walk from `startDir` upward looking for any of `markers`.
+ *
+ * Files inside the workspace stop at the workspace root so the traversal cannot escape the
+ * primary project. Files outside the workspace are free to walk up to the filesystem root,
+ * because the workspace is contextual rather than an access boundary.
  */
 export async function findProjectRoot(
   startDir: string,
@@ -297,18 +299,26 @@ export async function findProjectRoot(
   workspaceRoot: string,
 ): Promise<string> {
   const root = path.resolve(workspaceRoot);
-  let dir = path.resolve(startDir);
-  if (markers.length === 0) return root;
+  const start = path.resolve(startDir);
+  const startRel = path.relative(root, start);
+  const startInside =
+    startRel === "" || (!startRel.startsWith("..") && !path.isAbsolute(startRel));
 
+  if (markers.length === 0) return startInside ? root : start;
+
+  let dir = start;
   while (true) {
     if (await hasAnyMarker(dir, markers)) return dir;
-    if (dir === root) break;
+    if (startInside && dir === root) break;
     const parent = path.dirname(dir);
-    const rel = path.relative(root, parent);
-    if (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) break;
+    if (parent === dir) break;
+    if (startInside) {
+      const rel = path.relative(root, parent);
+      if (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) break;
+    }
     dir = parent;
   }
-  return root;
+  return startInside ? root : start;
 }
 
 async function hasAnyMarker(dir: string, markers: readonly string[]): Promise<boolean> {

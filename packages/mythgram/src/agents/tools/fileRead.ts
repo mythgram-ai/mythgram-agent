@@ -3,7 +3,7 @@ import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { z } from "zod";
 import { defineTool, type ToolResult } from "./types.js";
-import { isPathAllowed, safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
+import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 
 /** Maximum number of lines the file_read tool returns when no limit is given. */
 export const MAX_FILE_READ_LINES = 4000;
@@ -131,8 +131,8 @@ interface ReadSection {
 }
 
 /**
- * Resolve and validate a model supplied path for reading. The path must be absolute and,
- * for safety, must stay inside the workspace root.
+ * Resolve and validate a model supplied path for reading. The path must be absolute; it may live
+ * anywhere on the local filesystem. The workspace root is only contextual and never a boundary.
  */
 function resolveForRead(workspaceRoot: string, input: string): string {
   const trimmed = input.trim();
@@ -140,15 +140,6 @@ function resolveForRead(workspaceRoot: string, input: string): string {
     throw new FileReadError(
       "invalid_file_path",
       `file_path must be an absolute path. Received: "${input}".`,
-    );
-  }
-  const root = path.resolve(workspaceRoot);
-  // Absolute paths inside the active workspace or the fixed data dir are allowed. The data dir
-  // stays reachable after a workspace switch (sub-agent outputs, skills, artifacts, ...).
-  if (!isPathAllowed(workspaceRoot, trimmed)) {
-    throw new FileReadError(
-      "invalid_file_path",
-      `Absolute path "${trimmed}" is outside the workspace root (${root}).`,
     );
   }
   return safeResolve(workspaceRoot, trimmed);

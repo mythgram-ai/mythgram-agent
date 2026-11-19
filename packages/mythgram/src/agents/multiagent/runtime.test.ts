@@ -229,7 +229,7 @@ function silentMemberProvider(): Provider {
 }
 
 /** A scripted provider where the member first calls generate_image, then reports the saved path. */
-function imageMemberProvider(): Provider {
+function imageMemberProvider(outputPath = "images/hero.png"): Provider {
   return {
     metadata: { id: "mock", label: "Mock", defaultBaseUrl: "" },
     async listModels() {
@@ -284,7 +284,7 @@ function imageMemberProvider(): Provider {
                 name: "generate_image",
                 arguments: JSON.stringify({
                   prompt: "a small blue square",
-                  output_path: "images/hero.png",
+                  output_path: outputPath,
                 }),
               },
             },
@@ -443,7 +443,8 @@ describe("TeamOrchestrator actor model", () => {
     try {
       const events: Array<{ e: string; d: Record<string, unknown> }> = [];
       const controller = new AbortController();
-      const orch = buildOrchestrator(events, controller.signal, imageMemberProvider(), {
+      const outputPath = path.join(workspace, "images", "hero.png");
+      const orch = buildOrchestrator(events, controller.signal, imageMemberProvider(outputPath), {
         image: fakeImageRuntime(),
         workspaceRoot: workspace,
       });

@@ -174,6 +174,7 @@ async function resolveSource(
 
   const seen = new Set<string>();
   const entries: string[] = [];
+  const absoluteFiles: string[] = [];
   for (const raw of args.file_paths!) {
     let abs: string;
     try {
@@ -192,14 +193,37 @@ async function resolveSource(
     if (!stat.isFile()) {
       return { code: "not_a_file", error: `file_paths entries must be regular files: ${toWorkspaceRelative(ctx.workspaceRoot, abs)}.` };
     }
-    entries.push(path.relative(ctx.workspaceRoot, abs));
+    absoluteFiles.push(abs);
+  }
+
+  // Anchor entries at a common base directory so files from anywhere on disk keep sane archive
+  // names and never need ".." paths (which would escape the archive program's working directory).
+  const baseDir = commonBaseDir(absoluteFiles) ?? ctx.workspaceRoot;
+  for (const abs of absoluteFiles) {
+    entries.push(path.relative(baseDir, abs));
   }
   return {
-    baseDir: ctx.workspaceRoot,
+    baseDir,
     entries,
     label: `${entries.length} file(s)`,
     fileCount: entries.length,
   };
+}
+
+/** Deepest directory that contains every supplied absolute path. */
+function commonBaseDir(absolutePaths: string[]): string | null {
+  if (absolutePaths.length === 0) return null;
+  let base = path.dirname(absolutePaths[0]!);
+  for (const file of absolutePaths.slice(1)) {
+    while (true) {
+      const rel = path.relative(base, file);
+      if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) break;
+      const parent = path.dirname(base);
+      if (parent === base) return base;
+      base = parent;
+    }
+  }
+  return base;
 }
 
 /** Build the command vector for the chosen format, or an error when the required program is absent. */

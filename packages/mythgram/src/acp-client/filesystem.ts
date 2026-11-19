@@ -7,43 +7,24 @@ import { ACP_ERRORS } from "./types.js";
  * Client-side filesystem implementation for ACP `fs/read_text_file` and
  * `fs/write_text_file`.
  *
- * Security: ACP explicitly makes the client responsible for checking paths. We
- * only allow absolute paths inside the session's root set (the configured
- * workspace and the session cwd). Everything else is rejected with a JSON-RPC
- * invalid-params error instead of silently reading/writing arbitrary files.
+ * The session workspace is contextual only. Any absolute path the operating
+ * system permits may be read or written; relative paths are rejected with a
+ * JSON-RPC invalid-params error.
  */
 export class AcpFileSystem {
-  constructor(private readonly workspaceRoot: string) {}
-
-  private normalizeRoots(roots: string[]): string[] {
-    const out = new Set<string>();
-    for (const root of [this.workspaceRoot, ...roots]) {
-      if (!root) continue;
-      out.add(path.resolve(root));
-    }
-    return [...out];
+  constructor(private readonly workspaceRoot: string) {
+    // Kept for backwards compatibility / logging; the workspace is not an access boundary.
+    void this.workspaceRoot;
   }
 
-  private isInside(child: string, parent: string): boolean {
-    const relative = path.relative(parent, child);
-    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-  }
-
-  /** Resolve and validate an absolute path against the session's allowed roots. */
+  /** Resolve an absolute path. The workspace/session roots are no longer an access boundary. */
   assertAllowed(filePath: string, roots: string[]): string {
     if (typeof filePath !== "string" || !path.isAbsolute(filePath)) {
       throw new JsonRpcError(ACP_ERRORS.invalidParams, "ACP file paths must be absolute.");
     }
-    const resolved = path.resolve(filePath);
-    const allowed = this.normalizeRoots(roots);
-    if (!allowed.some((root) => this.isInside(resolved, root))) {
-      throw new JsonRpcError(
-        ACP_ERRORS.invalidParams,
-        `Access denied: "${resolved}" is outside the session's workspace roots.`,
-        { path: resolved, roots: allowed },
-      );
-    }
-    return resolved;
+    // Session roots are still forwarded by the protocol; they are contextual only.
+    void roots;
+    return path.resolve(filePath);
   }
 
   async readTextFile(params: {

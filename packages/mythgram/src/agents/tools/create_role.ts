@@ -39,7 +39,7 @@ const schema = z
       .describe(
         "A direct absolute filesystem path to the completed role.md file you already wrote with " +
           "file_write. The backend reads the file's full contents and registers it as the role. " +
-          "The path must start with '/'.",
+          "The path must be absolute.",
       ),
   })
   .strict();

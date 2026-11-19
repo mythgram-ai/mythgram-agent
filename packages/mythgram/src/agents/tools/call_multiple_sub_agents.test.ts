@@ -248,7 +248,9 @@ describe("call_multiple_sub_agents runMany (concurrent execution)", () => {
     assert.equal(beta.ok, true);
     assert.equal(beta.wait_for_output, false);
     assert.equal(beta.background, true);
-    assert.match(String(beta.output_file), /\.mythgram\/sub-agent\/.*\.md$/);
+    const betaOutput = String(beta.output_file);
+    assert.equal(path.isAbsolute(betaOutput), true);
+    assert.match(betaOutput, /\.mythgram\/sub-agent\/.*\.md$/);
   });
 
   it("gives each sub-agent its own unique 10-character session id", async () => {
@@ -394,10 +396,10 @@ describe("call_multiple_sub_agents runMany (concurrent execution)", () => {
       ctxFor(h.workspaceRoot),
     );
     const entry = (result.data as { agents: any[] }).agents[0]!;
-    const rel = String(entry.output_file);
+    const abs = String(entry.output_file);
+    assert.equal(path.isAbsolute(abs), true);
     // Give the detached run a moment to finish writing its final report.
     await sleep(50);
-    const abs = path.join(h.workspaceRoot, rel);
     const content = await fs.readFile(abs, "utf8");
     assert.match(content, /Sub-agent: alpha/);
   });

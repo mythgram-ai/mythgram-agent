@@ -63,7 +63,7 @@ export interface ArtifactWithContent extends ArtifactMeta {
 
 /** Fields accepted by the save operation (mirrors the save_artifacts tool schema). */
 export interface SaveArtifactInput {
-  /** Absolute (or workspace-relative) path of the source file to save as an artifact. */
+  /** Absolute path of the source file to save as an artifact (relative paths are rejected). */
   artifactFilePath: string;
   /** Title of the artifact. */
   title: string;

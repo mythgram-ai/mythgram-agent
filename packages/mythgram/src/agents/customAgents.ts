@@ -80,7 +80,7 @@ function opList(manager: CustomAgentManager): ToolResult {
 /**
  * create_agent — create a custom agent from a workspace Markdown prompt file.
  *
- * The file is resolved workspace-sandboxed (safeResolve), must exist, must be a regular
+ * The file is resolved from its absolute path (safeResolve), must exist, must be a regular
  * `.md` file, and must contain non-empty text. Its FULL contents become the new agent's
  * system prompt verbatim. The new agent is granted every currently-registered tool the
  * requesting context knows about, minus the custom-agent-excluded (multi-agent) and
@@ -119,8 +119,8 @@ async function opCreate(
       error: {
         code: "system_prompt_file_required",
         message:
-          "A workspace-relative Markdown file path is required (system_prompt_file), " +
-          "for example: workspace/prompt/prompt.md. Create the prompt file first, then call create_agent.",
+          "An absolute Markdown file path is required (system_prompt_file), " +
+          "for example: /home/user/project/prompt/prompt.md. Create the prompt file first, then call create_agent.",
       },
     };
   }
@@ -147,7 +147,7 @@ async function opCreate(
     return customAgentsFailure(error);
   }
 
-  // Resolve + read the prompt file workspace-sandboxed.
+  // Resolve + read the prompt file. The path must be absolute; it may be anywhere on disk.
   let absolute: string;
   try {
     absolute = safeResolve(ctx.workspaceRoot, systemPromptFile);

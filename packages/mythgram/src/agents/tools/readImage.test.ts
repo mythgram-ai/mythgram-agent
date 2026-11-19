@@ -56,11 +56,12 @@ describe("read_image tool", () => {
     assert.deepEqual(Buffer.from(b64, "base64"), PNG_BUFFER);
   }
 
-  it("reads a local image given a workspace-relative path", async () => {
+  it("rejects a relative path", async () => {
     const rel = "photo.png";
     await fs.writeFile(path.join(workspace, rel), PNG_BUFFER);
     const result = await run({ file_path: rel });
-    assertOkImage(result, rel, "workspace");
+    assert.equal(result.ok, false);
+    assert.equal((result.error as { code: string }).code, "invalid_file_path");
   });
 
   it("reads a local image given an absolute path inside the workspace", async () => {
@@ -71,25 +72,23 @@ describe("read_image tool", () => {
     assertOkImage(result, rel, "workspace");
   });
 
-  it("reads a local image via the /workspace virtual mount", async () => {
-    const rel = "mount.png";
-    await fs.writeFile(path.join(workspace, rel), PNG_BUFFER);
-    const result = await run({ file_path: `/workspace/${rel}` });
-    assertOkImage(result, rel, "workspace");
-  });
-
-  it("reads a local image in a subfolder via the /workspace virtual mount", async () => {
-    const rel = path.join("assets", "icons", "mount.png");
-    await fs.mkdir(path.join(workspace, "assets", "icons"), { recursive: true });
-    await fs.writeFile(path.join(workspace, rel), PNG_BUFFER);
-    const result = await run({ file_path: `/workspace/${rel}` });
-    assertOkImage(result, rel, "workspace");
+  it("reads a local image from an absolute path outside the workspace", async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "mythgram-readimage-outside-"));
+    try {
+      const abs = path.join(outside, "outside.png");
+      await fs.writeFile(abs, PNG_BUFFER);
+      const result = await run({ file_path: abs });
+      assert.equal(result.ok, true);
+      assert.equal((result.data as Record<string, unknown>).file_path, abs);
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
   });
 
   it("supports jpeg extension mapping", async () => {
-    const rel = "photo.jpeg";
-    await fs.writeFile(path.join(workspace, rel), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]));
-    const result = await run({ file_path: rel });
+    const abs = path.join(workspace, "photo.jpeg");
+    await fs.writeFile(abs, Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]));
+    const result = await run({ file_path: abs });
     assert.equal(result.ok, true);
     const data = result.data as Record<string, unknown>;
     assert.equal(data.content_type, "image/jpeg");
@@ -127,26 +126,25 @@ describe("read_image tool", () => {
   });
 
   it("errors for an unsupported image extension", async () => {
-    const rel = "file.txt";
-    await fs.writeFile(path.join(workspace, rel), "hello");
-    const result = await run({ file_path: rel });
+    const abs = path.join(workspace, "file.txt");
+    await fs.writeFile(abs, "hello");
+    const result = await run({ file_path: abs });
     assert.equal(result.ok, false);
     assert.equal((result.error as { code: string }).code, "unsupported_image_type");
   });
 
   it("errors for data that is not a valid image despite the extension", async () => {
-    const rel = "fake.png";
-    await fs.writeFile(path.join(workspace, rel), Buffer.from("not really a png"));
-    const result = await run({ file_path: rel });
+    const abs = path.join(workspace, "fake.png");
+    await fs.writeFile(abs, Buffer.from("not really a png"));
+    const result = await run({ file_path: abs });
     assert.equal(result.ok, false);
     assert.equal((result.error as { code: string }).code, "invalid_image_data");
   });
 
-  it("errors for an absolute path outside the workspace", async () => {
-    const result = await run({ file_path: "/etc/hostname.png" });
+  it("returns a not-found error for an absolute path outside the workspace", async () => {
+    const result = await run({ file_path: "/etc/does-not-exist-mythgram.png" });
     assert.equal(result.ok, false);
-    assert.equal((result.error as { code: string }).code, "invalid_file_path");
-    assert.match((result.error as { message: string }).message, /outside the workspace/i);
+    assert.equal((result.error as { code: string }).code, "image_not_found");
   });
 
   it("errors for an empty file_path", async () => {
@@ -235,8 +233,9 @@ describe("read_image tool", () => {
   describe("attachment helpers", () => {
     it("withoutImageAttachment strips the image but keeps metadata", async () => {
       const rel = "strip.png";
-      await fs.writeFile(path.join(workspace, rel), PNG_BUFFER);
-      const result = await run({ file_path: rel });
+      const abs = path.join(workspace, rel);
+      await fs.writeFile(abs, PNG_BUFFER);
+      const result = await run({ file_path: abs });
       assert.equal(result.ok, true);
       const stripped = withoutImageAttachment(result);
       assert.equal((stripped.data as Record<string, unknown>)[IMAGE_ATTACHMENT_KEY], undefined);

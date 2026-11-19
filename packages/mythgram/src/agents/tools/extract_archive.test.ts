@@ -40,12 +40,28 @@ describe("extract_archive tool", () => {
     return { workspaceRoot: workspace, shellTimeoutMs: 30_000, ...overrides };
   }
 
+  function absolutize(args: Record<string, unknown>): Record<string, unknown> {
+    const out = { ...args };
+    for (const key of ["archive_path", "output_directory", "source_directory"] as const) {
+      const value = out[key];
+      if (typeof value === "string" && !path.isAbsolute(value)) {
+        out[key] = path.resolve(workspace, value);
+      }
+    }
+    if (Array.isArray(out.file_paths)) {
+      out.file_paths = (out.file_paths as string[]).map((value) =>
+        path.isAbsolute(value) ? value : path.resolve(workspace, value),
+      );
+    }
+    return out;
+  }
+
   async function archive(args: Record<string, unknown>) {
-    return registry.execute("archive_files", args, makeCtx());
+    return registry.execute("archive_files", absolutize(args), makeCtx());
   }
 
   async function extract(args: Record<string, unknown>) {
-    return registry.execute("extract_archive", args, makeCtx());
+    return registry.execute("extract_archive", absolutize(args), makeCtx());
   }
 
   it("is registered with a valid OpenAI function schema", () => {

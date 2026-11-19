@@ -133,11 +133,12 @@ describe("scan_qr_code tool", () => {
     assert.equal((result.data as { content: string }).content, "jpeg-qr-content");
   });
 
-  it("accepts a workspace-relative path", async () => {
-    await writeFile("nested/rel.png", await qrPngBuffer("relative-path-qr"));
-    const result = await run({ image_path: "nested/rel.png" });
-    assert.equal(result.ok, true, JSON.stringify(result.error));
-    assert.equal((result.data as { content: string }).content, "relative-path-qr");
+  it("rejects a relative path", async () => {
+    const abs = await writeFile("nested/rel.png", await qrPngBuffer("relative-path-qr"));
+    const relative = path.relative(workspace, abs);
+    const result = await run({ image_path: relative });
+    assert.equal(result.ok, false);
+    assert.equal((result.error as { code: string }).code, "invalid_image_path");
   });
 
   it("reports dimensions and format alongside the decoded content", async () => {
@@ -185,7 +186,7 @@ describe("scan_qr_code tool", () => {
     assert.equal((result.error as { code: string }).code, "unsupported_image_type");
   });
 
-  it("errors for a path that escapes the workspace", async () => {
+  it("rejects a relative path that tries to escape the workspace", async () => {
     const result = await run({ image_path: "../escape.png" });
     assert.equal(result.ok, false);
     assert.equal((result.error as { code: string }).code, "invalid_image_path");

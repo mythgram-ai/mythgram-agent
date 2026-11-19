@@ -58,7 +58,7 @@ describe("generate_speech tool", () => {
     assert.equal(schema!.function.parameters.type, "object");
     assert.equal(
       schema!.function.description,
-      "Generate spoken audio from text and save the generated audio file to the specified output directory.",
+      "Generate spoken audio from text and save the generated audio file to the specified absolute output directory (any accessible location on the local filesystem).",
     );
     const props = schema!.function.parameters.properties as Record<string, any>;
     assert.ok(props.speech, "speech property must be declared");
@@ -77,7 +77,7 @@ describe("generate_speech tool", () => {
     const ctx = ctxFor(workspace, { speech: fakeRuntime() });
     const result = await registry.execute(
       "generate_speech",
-      { speech: "Hello world", output_directory: "audio-out" },
+      { speech: "Hello world", output_directory: path.join(workspace, "audio-out") },
       ctx,
     );
     assert.equal(result.ok, true);
@@ -99,7 +99,7 @@ describe("generate_speech tool", () => {
     const ctx = ctxFor(workspace, { speech: fakeRuntime() });
     const result = await registry.execute(
       "generate_speech",
-      { speech: "Nested", output_directory: "a/b/c" },
+      { speech: "Nested", output_directory: path.join(workspace, "a/b/c") },
       ctx,
     );
     assert.equal(result.ok, true);
@@ -111,12 +111,12 @@ describe("generate_speech tool", () => {
     const ctx = ctxFor(workspace, { speech: fakeRuntime() });
     const first = await registry.execute(
       "generate_speech",
-      { speech: "One", output_directory: "dup" },
+      { speech: "One", output_directory: path.join(workspace, "dup") },
       ctx,
     );
     const second = await registry.execute(
       "generate_speech",
-      { speech: "Two", output_directory: "dup" },
+      { speech: "Two", output_directory: path.join(workspace, "dup") },
       ctx,
     );
     assert.equal(first.ok, true);
@@ -134,7 +134,7 @@ describe("generate_speech tool", () => {
     });
     const result = await registry.execute(
       "generate_speech",
-      { speech: "Hi", output_directory: "out" },
+      { speech: "Hi", output_directory: path.join(workspace, "out") },
       ctx,
     );
     assert.equal(result.ok, false);
@@ -146,7 +146,7 @@ describe("generate_speech tool", () => {
     const ctx = ctxFor(workspace);
     const result = await registry.execute(
       "generate_speech",
-      { speech: "Hi", output_directory: "out" },
+      { speech: "Hi", output_directory: path.join(workspace, "out") },
       ctx,
     );
     assert.equal(result.ok, false);
@@ -176,7 +176,7 @@ describe("generate_speech tool", () => {
     });
     const result = await registry.execute(
       "generate_speech",
-      { speech: "   ", output_directory: "out" },
+      { speech: "   ", output_directory: path.join(workspace, "out") },
       ctx,
     );
     assert.equal(result.ok, false);
@@ -202,7 +202,7 @@ describe("generate_speech tool", () => {
     });
     const result = await registry.execute(
       "generate_speech",
-      { speech: "Hi", output_directory: "out" },
+      { speech: "Hi", output_directory: path.join(workspace, "out") },
       ctx,
     );
     assert.equal(result.ok, false);
@@ -211,8 +211,8 @@ describe("generate_speech tool", () => {
 
   it("exposes a clear UI label", () => {
     assert.equal(
-      generateSpeechTool.label({ speech: "Hi", output_directory: "audio" }),
-      "Generate speech: audio",
+      generateSpeechTool.label({ speech: "Hi", output_directory: path.join(workspace, "audio") }),
+      `Generate speech: ${path.join(workspace, "audio")}`,
     );
   });
 });

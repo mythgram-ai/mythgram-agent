@@ -222,11 +222,17 @@ describe("file_read tool", () => {
     assert.match((result.error as { message: string }).message, /absolute path/i);
   });
 
-  it("errors for an absolute path outside the workspace", async () => {
-    const result = await run({ file_path: "/etc/hostname" });
-    assert.equal(result.ok, false);
-    assert.equal((result.error as { code: string }).code, "invalid_file_path");
-    assert.match((result.error as { message: string }).message, /outside the workspace/i);
+  it("reads an absolute path outside the workspace", async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "mythgram-fileread-outside-"));
+    try {
+      const abs = path.join(outside, "outside.txt");
+      await fs.writeFile(abs, "outside content\n", "utf8");
+      const result = await run({ file_path: abs });
+      assert.equal(result.ok, true);
+      assert.equal((result.data as Record<string, unknown>).content, "outside content");
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
   });
 
   it("errors for an empty file_path", async () => {

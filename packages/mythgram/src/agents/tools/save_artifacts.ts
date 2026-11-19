@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { artifactsManager } from "../../artifacts/index.js";
+import { artifactsManager, artifactAbs } from "../../artifacts/index.js";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
 import { artifactsFailure, emitArtifactsUpdated } from "./artifactSupport.js";
 
@@ -54,10 +54,11 @@ export const saveArtifactsTool = defineTool({
           artifact: meta,
           artifact_id: meta.id,
           file: meta.file,
+          absolute_file: artifactAbs(ctx.workspaceRoot, meta.file),
           message:
             `Saved artifact "${meta.title}" (id: ${meta.id}, type: ${meta.type}) at ` +
-            `"${meta.file}". Edit it directly at that path, or show it to the user with ` +
-            `show_artifact_to_user.`,
+            `"${artifactAbs(ctx.workspaceRoot, meta.file)}". Edit it directly at that absolute path, ` +
+            `or show it to the user with show_artifact_to_user.`,
         },
       };
     } catch (error) {

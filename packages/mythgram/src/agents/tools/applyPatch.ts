@@ -130,10 +130,10 @@ function assertValidPath(rawPath: string, kind: string, lineNumber: number): str
       lineNumber,
     );
   }
-  if (!filePath.startsWith("/")) {
+  if (!path.isAbsolute(filePath)) {
     throw new PatchError(
       "relative_path",
-      `Relative path "${filePath}" is not allowed (line ${lineNumber}). File references MUST be absolute paths starting with "/".`,
+      `Relative path "${filePath}" is not allowed (line ${lineNumber}). File references MUST be absolute paths.`,
       lineNumber,
     );
   }
@@ -816,7 +816,7 @@ const schema = z
           "and ending with '*** End Patch'. Inside the envelope, use '*** Add File: <path>', " +
           "'*** Update File: <path>' (optionally followed by '*** Move to: <path>' and one or more '@@' " +
           "hunks), or '*** Delete File: <path>'. In a hunk, prefix each line with ' ' (context), '-' " +
-          "(remove the line) or '+' (add the line). Paths MUST be absolute (start with '/').",
+          "(remove the line) or '+' (add the line). Paths MUST be absolute.",
       ),
   })
   .strict();
@@ -829,8 +829,9 @@ export const applyPatchTool = defineTool({
     "'*** Add File: <path>' (create a new file; every following line starts with '+'), '*** Update File: " +
     "<path>' (edit in place; optional '*** Move to: <path>' to rename, then '@@' hunks whose lines start " +
     "with ' ' for context, '-' to REMOVE/delete a line, or '+' to ADD a line), or '*** Delete File: <path>'. " +
-    "'-' lines are physically deleted from the file, not just replaced. Paths MUST be absolute (start with " +
-    "'/'). The tool validates the whole patch and verifies every operation can be applied BEFORE writing — " +
+    "'-' lines are physically deleted from the file, not just replaced. Paths MUST be absolute. " +
+    "Any accessible location on the local filesystem is allowed; the workspace root is not an access " +
+    "boundary. The tool validates the whole patch and verifies every operation can be applied BEFORE writing — " +
     "on any structural or apply error NO file is changed and a precise error is returned. Prefer this for " +
     "surgical, multi-file, token-efficient edits.",
   schema,

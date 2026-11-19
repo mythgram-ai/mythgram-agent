@@ -35,7 +35,19 @@ describe("archive_files tool", () => {
     return { workspaceRoot: workspace, shellTimeoutMs: 30_000, ...overrides };
   }
 
-  async function run(args: Record<string, unknown>, ctx: ToolContext = makeCtx()) {
+  async function run(rawArgs: Record<string, unknown>, ctx: ToolContext = makeCtx()) {
+    const args = { ...rawArgs };
+    for (const key of ["output_directory", "source_directory"] as const) {
+      const value = args[key];
+      if (typeof value === "string" && !path.isAbsolute(value)) {
+        args[key] = path.resolve(workspace, value);
+      }
+    }
+    if (Array.isArray(args.file_paths)) {
+      args.file_paths = (args.file_paths as string[]).map((value) =>
+        path.isAbsolute(value) ? value : path.resolve(workspace, value),
+      );
+    }
     return registry.execute("archive_files", args, ctx);
   }
 

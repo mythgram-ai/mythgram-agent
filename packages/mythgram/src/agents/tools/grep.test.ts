@@ -112,9 +112,37 @@ describe("grep tool", () => {
     assert.equal((invalid.error as { code?: string })?.code, "invalid_pattern");
   });
 
-  it("rejects paths outside the workspace", async () => {
-    const result = await run({ pattern: "x", path: "/etc" });
+  it("searches absolute paths outside the workspace", async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "mythgram-grep-outside-"));
+    try {
+      await fs.writeFile(path.join(outside, "outside.txt"), "outside-needle-xyz\n");
+      const result = await run({ pattern: "outside-needle-xyz", path: outside });
+      assert.equal(result.ok, true);
+      const matches = (result.data as { matches: Array<{ path: string }> }).matches;
+      assert.equal(matches.length, 1);
+      assert.equal(matches[0]?.path, path.join(outside, "outside.txt"));
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects relative paths", async () => {
+    const result = await run({ pattern: "x", path: "relative-dir" });
     assert.equal(result.ok, false);
+    assert.equal((result.error as { code?: string })?.code, "invalid_path");
+  });
+
+  it("searches hidden directories including .mythgram", async () => {
+    await writeFile(".mythgram/data.txt", "hidden-mythgram-needle\n");
+    await writeFile(".hidden/secret.txt", "hidden-dir-needle\n");
+    const mythgram = await run({ pattern: "hidden-mythgram-needle" });
+    assert.equal(mythgram.ok, true);
+    const mythgramMatches = (mythgram.data as { matches: Array<{ path: string }> }).matches;
+    assert.ok(mythgramMatches.some((m) => m.path.replace(/\\/g, "/").includes(".mythgram/data.txt")));
+    const hidden = await run({ pattern: "hidden-dir-needle" });
+    assert.equal(hidden.ok, true);
+    const hiddenMatches = (hidden.data as { matches: Array<{ path: string }> }).matches;
+    assert.ok(hiddenMatches.some((m) => m.path.replace(/\\/g, "/").includes(".hidden/secret.txt")));
   });
 
   it("includeToRegExp handles brace expansion", () => {

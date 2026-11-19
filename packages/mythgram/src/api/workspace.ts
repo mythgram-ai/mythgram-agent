@@ -3,15 +3,15 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { config, setWorkspaceRoot } from "../config.js";
-import { safeResolve, toWorkspaceRelative } from "../utils/paths.js";
+import { resolveWorkspacePath, toWorkspaceRelative } from "../utils/paths.js";
 
 /**
  * Workspace API — lets the user see and change the agent's workspace at runtime.
  *
  * The workspace defaults to wherever mythgram is started/running (process.cwd()).
- * All file tools are sandboxed to it. The fixed ".mythgram" data dir is created once at
- * boot and is never created or moved by a workspace switch — switching only changes the
- * file-tool sandbox.
+ * It is the agent's primary project location and contextual reference, not a filesystem
+ * access boundary: file tools accept absolute paths anywhere the OS allows. The fixed
+ * ".mythgram" data dir is created once at boot and is never created or moved by a workspace switch.
  *
  * - GET  /api/workspace         -> { workspace } (absolute path)
  * - POST /api/workspace         -> { workspace } — body { path?: string }.
@@ -70,7 +70,7 @@ export function buildWorkspaceRouter(): Router {
 
     let absolute: string;
     try {
-      absolute = safeResolve(config.workspaceRoot, raw);
+      absolute = resolveWorkspacePath(config.workspaceRoot, raw);
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
       return;

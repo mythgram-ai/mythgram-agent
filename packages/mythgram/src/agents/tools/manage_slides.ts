@@ -26,7 +26,7 @@ const schema = z
       .string()
       .optional()
       .describe(
-        "The path to the replacement HTML slide file. Required for replace_slide.",
+        "The absolute path to the replacement HTML slide file. Required for replace_slide.",
       ),
     new_position: z
       .number()

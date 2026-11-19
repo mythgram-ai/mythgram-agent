@@ -11,7 +11,7 @@ import type { ToolCall, ToolCallDelta } from "../providers/types.js";
 import type { ChatSession, StoredMessage } from "../../services/sessionStore.js";
 import type { SessionEventBuffer } from "../../services/eventBuffer.js";
 import { safeJsonParse } from "../../utils/json.js";
-import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
+import { resolveWorkspacePath, toWorkspaceRelative } from "../../utils/paths.js";
 import { createSkillRuntime } from "../skills.js";
 import { mergeDefaultSkills, resolveDefaultSkills } from "../skills/index.js";
 import { createPromptLibraryRuntime } from "../promptLibrary.js";
@@ -333,7 +333,7 @@ export class PromptAgentRunner {
     send: (event: string, data: Record<string, unknown>) => void,
   ): Promise<void> {
     try {
-      const absolute = safeResolve(this.config.workspaceRoot, rawPath.trim());
+      const absolute = resolveWorkspacePath(this.config.workspaceRoot, rawPath.trim());
       const content = await fs.readFile(absolute, "utf8");
       const relative = toWorkspaceRelative(this.config.workspaceRoot, absolute);
       const truncated = content.length > MAX_CANVAS_CHARS;

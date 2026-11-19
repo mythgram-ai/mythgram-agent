@@ -59,11 +59,17 @@ describe("read_directory tool", () => {
     assert.equal((result.error as { code: string }).code, "invalid_arguments");
   });
 
+  it("rejects a relative directory_path", async () => {
+    const result = await run({ directory_path: "tree" });
+    assert.equal(result.ok, false);
+    assert.equal((result.error as { code: string }).code, "invalid_directory_path");
+  });
+
   it("reads every supported file recursively with paths and complete contents", async () => {
     await writeFile("tree/a.txt", "alpha\n");
     await writeFile("tree/nested/b.ts", "export const b = 1;\n");
     await writeFile("tree/nested/deep/c.md", "# heading\n");
-    const result = await run({ directory_path: "tree" });
+    const result = await run({ directory_path: path.join(workspace, "tree") });
     assert.equal(result.ok, true);
     const data = result.data as { files: Array<{ path: string; content: string }>; file_count: number };
     assert.equal(data.file_count, 3);
@@ -76,11 +82,11 @@ describe("read_directory tool", () => {
   it("reads only top-level files when read_only_files is true", async () => {
     await writeFile("flat/top.txt", "top\n");
     await writeFile("flat/sub/deep.txt", "deep\n");
-    const recursive = await run({ directory_path: "flat" });
+    const recursive = await run({ directory_path: path.join(workspace, "flat") });
     assert.equal(recursive.ok, true);
     assert.equal((recursive.data as { file_count: number }).file_count, 2);
 
-    const filesOnly = await run({ directory_path: "flat", read_only_files: true });
+    const filesOnly = await run({ directory_path: path.join(workspace, "flat"), read_only_files: true });
     assert.equal(filesOnly.ok, true);
     const data = filesOnly.data as { files: Array<{ path: string }>; file_count: number; read_only_files: boolean };
     assert.equal(data.file_count, 1);
@@ -91,7 +97,7 @@ describe("read_directory tool", () => {
   it("accepts the string 'true' for read_only_files", async () => {
     await writeFile("stringy/top.txt", "t\n");
     await writeFile("stringy/sub/inner.txt", "i\n");
-    const result = await run({ directory_path: "stringy", read_only_files: "true" });
+    const result = await run({ directory_path: path.join(workspace, "stringy"), read_only_files: "true" });
     assert.equal(result.ok, true);
     assert.equal((result.data as { file_count: number }).file_count, 1);
   });
@@ -103,7 +109,7 @@ describe("read_directory tool", () => {
     await writeFile("bin/.git/HEAD", "ref: refs/heads/main\n");
     await writeFile("bin/blob.dat", Buffer.from([0x41, 0x00, 0x42]));
     await fs.symlink(path.join(workspace, "bin/keep.txt"), path.join(workspace, "bin/link.txt"));
-    const result = await run({ directory_path: "bin" });
+    const result = await run({ directory_path: path.join(workspace, "bin") });
     assert.equal(result.ok, true);
     const data = result.data as { files: Array<{ path: string }>; file_count: number };
     const paths = data.files.map((f) => f.path.split(path.sep).join("/"));
@@ -115,7 +121,7 @@ describe("read_directory tool", () => {
     await writeFile("huge/a.txt", "A".repeat(2000));
     await writeFile("huge/b.txt", "B".repeat(2000));
     // 10 tokens * 4 chars/token * 0.5 fraction = 20 chars budget -> far below 4000.
-    const result = await run({ directory_path: "huge" }, makeCtx({ contextLimit: 10 }));
+    const result = await run({ directory_path: path.join(workspace, "huge") }, makeCtx({ contextLimit: 10 }));
     assert.equal(result.ok, false);
     const error = result.error as unknown as {
       code: string;
@@ -134,21 +140,36 @@ describe("read_directory tool", () => {
   });
 
   it("returns a directory_not_found error for a missing directory", async () => {
-    const result = await run({ directory_path: "does-not-exist" });
+    const result = await run({ directory_path: path.join(workspace, "does-not-exist") });
     assert.equal(result.ok, false);
     assert.equal((result.error as { code: string }).code, "directory_not_found");
   });
 
   it("returns a not_a_directory error when the path is a file", async () => {
     await writeFile("single.txt", "x\n");
-    const result = await run({ directory_path: "single.txt" });
+    const result = await run({ directory_path: path.join(workspace, "single.txt") });
     assert.equal(result.ok, false);
     assert.equal((result.error as { code: string }).code, "not_a_directory");
   });
 
+  it("reads hidden directories including .mythgram", async () => {
+    await writeFile(".mythgram/data.json", "{}\n");
+    await writeFile(".hidden/secret.txt", "secret\n");
+    const result = await run({ directory_path: path.join(workspace, ".mythgram") });
+    assert.equal(result.ok, true);
+    const data = result.data as { files: Array<{ path: string; content: string }>; file_count: number };
+    assert.equal(data.file_count, 1);
+    assert.equal(data.files[0]!.path.replace(/\\/g, "/"), ".mythgram/data.json");
+    assert.equal(data.files[0]!.content, "{}\n");
+
+    const hidden = await run({ directory_path: path.join(workspace, ".hidden") });
+    assert.equal(hidden.ok, true);
+    assert.equal((hidden.data as { file_count: number }).file_count, 1);
+  });
+
   it("returns an empty result for a directory with no supported files", async () => {
     await fs.mkdir(path.join(workspace, "empty-dir"), { recursive: true });
-    const result = await run({ directory_path: "empty-dir" });
+    const result = await run({ directory_path: path.join(workspace, "empty-dir") });
     assert.equal(result.ok, true);
     const data = result.data as { files: unknown[]; file_count: number };
     assert.equal(data.file_count, 0);
@@ -157,6 +178,6 @@ describe("read_directory tool", () => {
 
   it("exposes a clear UI label", () => {
     assert.equal(readDirectoryTool.name, "read_directory");
-    assert.equal(readDirectoryTool.label({ directory_path: "src" } as never), "Read directory: src");
+    assert.equal(readDirectoryTool.label({ directory_path: path.join(workspace, "src") } as never), `Read directory: ${path.join(workspace, "src")}`);
   });
 });

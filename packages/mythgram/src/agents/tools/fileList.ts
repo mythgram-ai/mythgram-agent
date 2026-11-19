@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 import { defineTool, type ToolResult } from "./types.js";
 import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
@@ -6,25 +7,28 @@ import { safeResolve, toWorkspaceRelative } from "../../utils/paths.js";
 const schema = z.object({
   path: z
     .string()
-    .default(".")
-    .describe("Directory path (relative to the workspace root) to list. Defaults to the workspace root."),
+    .optional()
+    .describe(
+      "Absolute path of the directory to list (e.g. /home/user/project or /home/user). Relative paths are rejected. If omitted, the current workspace root is listed.",
+    ),
 });
 
 export const fileListTool = defineTool({
   name: "file_list",
   description:
-    "List the files and directories directly inside the given directory of the workspace. " +
-    "Use this to discover what files exist before reading or editing them.",
+    "List the files and directories directly inside the given absolute directory path. " +
+    "The directory may be anywhere on the local filesystem; the workspace root is only the default " +
+    "location, not an access boundary. Use this to discover what files exist before reading or editing them.",
   schema,
   label: (args) => `List: ${args.path || "."}`,
   async execute(args, ctx): Promise<ToolResult> {
-    const requested = args.path && args.path.trim() ? args.path : ".";
+    const requested = args.path && args.path.trim() ? args.path.trim() : ctx.workspaceRoot;
     try {
       const absolute = safeResolve(ctx.workspaceRoot, requested);
       const dirents = await fs.readdir(absolute, { withFileTypes: true });
       const items = await Promise.all(
         dirents.map(async (dirent) => {
-          const entryAbs = safeResolve(ctx.workspaceRoot, `${requested}/${dirent.name}`);
+          const entryAbs = path.join(absolute, dirent.name);
           let size: number | null = null;
           try {
             if (dirent.isFile()) {

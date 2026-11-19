@@ -60,8 +60,8 @@ const schema = z.object({
     .min(1, "A source path is required.")
     .describe(
       "A direct absolute filesystem path to the directory containing the completed SKILL.md and " +
-        "all skill reference files or folders. The path must start with '/'. Example: " +
-        "/workspace/egskill/. The tool reads the complete contents of this directory recursively. " +
+        "all skill reference files or folders. The path must be absolute. Example: " +
+        "/home/user/project/egskill/. The tool reads the complete contents of this directory recursively. " +
         "The source directory name is not used as the installed skill name; the value of name is " +
         "used instead.",
     ),

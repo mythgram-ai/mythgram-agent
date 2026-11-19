@@ -152,12 +152,13 @@ describe("astgrep tool", () => {
     assert.equal((plain.error as { code?: string })?.code, "invalid_pattern");
   });
 
-  it("rejects unknown languages and paths outside the workspace", async () => {
+  it("rejects unknown languages and relative paths", async () => {
     const badLang = await run({ pattern: "function $NAME() {}", language: "klingon" });
     assert.equal(badLang.ok, false);
     assert.equal((badLang.error as { code?: string })?.code, "invalid_language");
-    const badPath = await run({ pattern: "function $NAME() {}", path: "/etc" });
+    const badPath = await run({ pattern: "function $NAME() {}", path: "relative-dir" });
     assert.equal(badPath.ok, false);
+    assert.equal((badPath.error as { code?: string })?.code, "invalid_path");
   });
 
   it("compileAstPattern captures wildcards and tolerates whitespace", () => {
