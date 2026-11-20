@@ -1,5 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 import type { Writable } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 
 /** Maximum characters of stdout and of stderr buffered per session (each). */
 export const MAX_SESSION_BUFFER_CHARS = 1_000_000;
@@ -61,6 +62,9 @@ interface InternalShellSession {
   stdout: string;
   stderr: string;
   truncated: boolean;
+  /** Decode stream chunks without corrupting UTF-8 characters split across chunks. */
+  stdoutDecoder: StringDecoder;
+  stderrDecoder: StringDecoder;
   /** The live process (background sessions only). Kept after exit so snapshot keeps pid/exit_code. */
   child: ChildProcess | null;
   /** Serializes concurrent stdin writes to this session: each write awaits its predecessor. */
@@ -85,6 +89,8 @@ function createEntry(
     stdout: "",
     stderr: "",
     truncated: false,
+    stdoutDecoder: new StringDecoder("utf8"),
+    stderrDecoder: new StringDecoder("utf8"),
     child: null,
     writeChain: Promise.resolve(),
   };
@@ -125,8 +131,12 @@ export class ShellSessionStore {
    * Kept minimal: shell_view must reject it instead of pretending the name is unknown.
    */
   markForeground(session_name: string): void {
-    const existing = this.sessions.get(session_name);
-    if (existing?.kind === "foreground") return;
+    // Never overwrite an already-tracked session. In particular a foreground command
+    // that reuses the name of a live background session (the DEFAULT session_name is
+    // "default"!) must not destroy that session's buffered output. A name with no
+    // entry yet is recorded so shell_view reports "not a background session" rather
+    // than pretending the name is unknown.
+    if (this.sessions.has(session_name)) return;
     this.sessions.set(session_name, createEntry(session_name, "", "foreground"));
   }
 
@@ -141,8 +151,8 @@ export class ShellSessionStore {
     entry.child = child;
     this.sessions.set(session_name, entry);
 
-    const onStdout = (chunk: Buffer) => appendTo(entry, "stdout", chunk.toString("utf8"));
-    const onStderr = (chunk: Buffer) => appendTo(entry, "stderr", chunk.toString("utf8"));
+    const onStdout = (chunk: Buffer) => appendTo(entry, "stdout", entry.stdoutDecoder.write(chunk));
+    const onStderr = (chunk: Buffer) => appendTo(entry, "stderr", entry.stderrDecoder.write(chunk));
     // Permanent stdin error listener: writes against a closed pipe (e.g. the process
     // exited or closed its stdin) surface as an 'error' event on child.stdin. Without a
     // listener this would crash the server; writeToProcess still reports the failure to
@@ -158,6 +168,9 @@ export class ShellSessionStore {
     };
     const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
       if (entry.status !== "running") return;
+      // Flush bytes the decoder buffered mid-character before the process closed.
+      appendTo(entry, "stdout", entry.stdoutDecoder.end());
+      appendTo(entry, "stderr", entry.stderrDecoder.end());
       entry.status = code === 0 ? "completed" : "errored";
       entry.exit_code = code;
       entry.signal = signal ?? null;

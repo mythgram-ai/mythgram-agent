@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { z } from "zod";
 import { defineTool, type ToolContext, type ToolResult } from "./types.js";
 import { shellSessionStore } from "./shellSessions.js";
@@ -67,14 +68,29 @@ function runForeground(
   shellSessionStore.markForeground(sessionName);
 
   return new Promise((resolve) => {
-    const child = spawn("bash", ["-lc", command], {
+    // Run the command in a NON-login, non-interactive shell (`-c`). A login shell
+    // (`-lc`) sources /etc/profile and the user's profile scripts, which routinely
+    // print banners/prompts/warnings and can block or fail — polluting or even
+    // swallowing the command's real output and making it non-deterministic across
+    // machines. stdin is /dev/null so a command that reads input receives EOF and
+    // exits instead of hanging until the timeout with no output.
+    const child = spawn("bash", ["-c", command], {
       cwd: ctx.workspaceRoot,
       env: process.env,
+      // A dedicated process group (Unix) lets us terminate the command AND every
+      // process it spawned. Without it a grandchild can keep the stdout/stderr pipes
+      // open after the shell is killed, so 'close' never fires and the tool hangs.
+      detached: process.platform !== "win32",
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let timer: NodeJS.Timeout | undefined;
+
+    const stdoutDecoder = new StringDecoder("utf8");
+    const stderrDecoder = new StringDecoder("utf8");
 
     // The server-side hard cap (ctx.shellTimeoutMs) is a safety net over the
     // model-requested timeout: the command never outlives the smaller of the two.
@@ -83,21 +99,65 @@ function runForeground(
       : timeoutSeconds * 1000;
     const effectiveTimeoutMs = Math.min(timeoutSeconds * 1000, fallbackMs);
 
-    const onAbort = () => {
+    /** SIGKILL the whole process group (falling back to the direct child). */
+    const killTree = () => {
+      const pid = child.pid;
+      if (process.platform !== "win32" && typeof pid === "number" && pid > 0) {
+        try {
+          process.kill(-pid, "SIGKILL");
+          return;
+        } catch {
+          // The group is already gone — fall back to the direct child below.
+        }
+      }
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // Already exited.
+      }
+    };
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      ctx.signal?.removeEventListener("abort", onAbort);
+    };
+
+    /**
+     * Resolve exactly once. Every termination path (close, spawn error, timeout,
+     * abort) goes through here, so the tool ALWAYS returns a result and never
+     * stays pending on a pipe that an orphaned grandchild keeps open.
+     */
+    const settle = (result: ToolResult) => {
       if (settled) return;
-      child.kill("SIGKILL");
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const onAbort = () => {
+      killTree();
+      const out = truncate(stdout);
+      const err = truncate(stderr);
+      settle({
+        ok: false,
+        data: {
+          command,
+          exit_code: null,
+          signal: "SIGKILL",
+          stdout: out.text,
+          stderr: err.text,
+          truncated: out.truncated || err.truncated,
+          timed_out: false,
+        },
+      });
     };
     ctx.signal?.addEventListener("abort", onAbort, { once: true });
 
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      ctx.signal?.removeEventListener("abort", onAbort);
-      child.kill("SIGKILL");
+    timer = setTimeout(() => {
+      killTree();
       const out = truncate(stdout);
       const err = truncate(stderr);
-      resolve({
+      settle({
         ok: false,
         error: {
           code: "shell_timeout",
@@ -112,32 +172,27 @@ function runForeground(
     }, effectiveTimeoutMs);
 
     child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
+      stdout += stdoutDecoder.write(chunk);
     });
     child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
+      stderr += stderrDecoder.write(chunk);
     });
 
     child.on("error", (error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      ctx.signal?.removeEventListener("abort", onAbort);
-      resolve({
+      settle({
         ok: false,
         error: { code: "command_spawn_failed", message: error.message, command },
       });
     });
 
     child.on("close", (code, signal) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      ctx.signal?.removeEventListener("abort", onAbort);
+      // Flush any bytes buffered mid-character by the decoders.
+      stdout += stdoutDecoder.end();
+      stderr += stderrDecoder.end();
       const out = truncate(stdout);
       const err = truncate(stderr);
       const timedOut = signal === "SIGKILL" && !ctx.signal?.aborted;
-      resolve({
+      settle({
         ok: code === 0,
         data: {
           command,
@@ -153,40 +208,65 @@ function runForeground(
   });
 }
 
-function runBackground(command: string, sessionName: string, ctx: ToolContext): ToolResult {
-  try {
-    const child = spawn("bash", ["-lc", command], {
-      cwd: ctx.workspaceRoot,
-      env: process.env,
-      detached: true,
-      // stdin stays open as a pipe so bash_write_to_process can feed the running
-      // process input (prompts, interactive CLIs, REPLs, dev servers).
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    // Track the process under its session name: the shell_view tool reads the
-    // buffered stdout/stderr and status from this session at any moment.
+function runBackground(
+  command: string,
+  sessionName: string,
+  ctx: ToolContext,
+): Promise<ToolResult> {
+  return new Promise((resolve) => {
+    let child: ChildProcess;
+    try {
+      // Non-login shell for the same reason as runForeground: profile scripts must
+      // not inject banners/prompts into the output that shell_view reports.
+      child = spawn("bash", ["-c", command], {
+        cwd: ctx.workspaceRoot,
+        env: process.env,
+        detached: true,
+        // stdin stays open as a pipe so bash_write_to_process can feed the running
+        // process input (prompts, interactive CLIs, REPLs, dev servers).
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (error) {
+      resolve({
+        ok: false,
+        error: {
+          code: "command_spawn_failed",
+          message: error instanceof Error ? error.message : String(error),
+          command,
+        },
+      });
+      return;
+    }
+
+    // Track the process under its session name BEFORE yielding so the shell_view
+    // tool can read its buffered stdout/stderr and status from the very first chunk.
     shellSessionStore.attach(sessionName, child, command);
-    child.unref();
-    return {
-      ok: true,
-      data: {
-        command,
-        session_name: sessionName,
-        pid: child.pid,
-        background: true,
-        message: `Started command in background with PID ${child.pid}. Inspect its live output with the shell_view tool using session name "${sessionName}".`,
-      },
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: {
-        code: "command_spawn_failed",
-        message: error instanceof Error ? error.message : String(error),
-        command,
-      },
-    };
-  }
+
+    // A spawn failure (missing cwd, ENOENT, ...) is an ASYNC 'error' event, not a
+    // synchronous throw. Report it as a failed tool result instead of returning a
+    // false success with `pid: undefined`; the session is marked "errored" too.
+    child.once("error", (error: Error) => {
+      resolve({
+        ok: false,
+        error: { code: "command_spawn_failed", message: error.message, command },
+      });
+    });
+
+    // 'spawn' is emitted only after the process has started successfully.
+    child.once("spawn", () => {
+      child.unref();
+      resolve({
+        ok: true,
+        data: {
+          command,
+          session_name: sessionName,
+          pid: child.pid,
+          background: true,
+          message: `Started command in background with PID ${child.pid}. Inspect its live output with the shell_view tool using session name "${sessionName}".`,
+        },
+      });
+    });
+  });
 }
 
 export const shellTool = defineTool({

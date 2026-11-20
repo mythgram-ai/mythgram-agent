@@ -191,4 +191,25 @@ describe("shell_view", () => {
     const session = sessionOf(result) as ShellSessionSnapshot;
     assert.match(session.output, new RegExp(workspace.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
+
+  it("does not let a foreground command overwrite a background session with the same name", async () => {
+    await runShell({
+      command: "echo bg-marker; sleep 1",
+      session_name: "shared-session",
+      wait_for_output: false,
+    });
+    await waitForOutput("shared-session", /bg-marker/);
+
+    // A foreground command reusing the same session_name (the default is "default")
+    // must not destroy the live background session's tracked output.
+    await runShell({ command: "echo fg", session_name: "shared-session" });
+
+    const result = await runView(["shared-session"]);
+    assert.equal(result.ok, true);
+    const session = sessionOf(result) as ShellSessionSnapshot;
+    assert.equal(session.background, true);
+    assert.match(session.output, /bg-marker/);
+
+    await waitUntilFinished("shared-session");
+  });
 });

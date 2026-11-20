@@ -154,4 +154,83 @@ describe("shall_tool", () => {
       if (result.ok) assert.ok(result.data);
     }
   });
+
+  it("returns an empty successful result for a command with no output", async () => {
+    const result = await run({ command: "true" });
+    assert.equal(result.ok, true);
+    const data = result.data as Record<string, unknown>;
+    assert.equal(data.stdout, "");
+    assert.equal(data.stderr, "");
+    assert.equal(data.exit_code, 0);
+  });
+
+  it("does not source login profile scripts, so output stays deterministic", async () => {
+    // A login shell (-lc) sources /etc/profile and ~/.bash_profile/~/.profile; those
+    // can print banners and pollute (or crowd out) the command's real output. Point
+    // HOME at a profile that would print if it were ever sourced.
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "mythgram-home-"));
+    const prevHome = process.env.HOME;
+    try {
+      const noise = "echo PROFILE-NOISE\n";
+      await fs.writeFile(path.join(home, ".bash_profile"), noise, "utf8");
+      await fs.writeFile(path.join(home, ".profile"), noise, "utf8");
+      process.env.HOME = home;
+
+      const result = await run({ command: "echo clean-output" });
+      assert.equal(result.ok, true);
+      const data = result.data as Record<string, unknown>;
+      assert.equal(data.stdout, "clean-output\n");
+      assert.doesNotMatch(String(data.stdout), /PROFILE-NOISE/);
+    } finally {
+      if (prevHome === undefined) delete process.env.HOME;
+      else process.env.HOME = prevHome;
+      await fs.rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("does not hang on a command that reads stdin (gets EOF instead)", async () => {
+    const result = await run({ command: "cat", timeout: 5 });
+    assert.equal(result.ok, true);
+    const data = result.data as Record<string, unknown>;
+    assert.equal(data.stdout, "");
+    assert.equal(data.exit_code, 0);
+  });
+
+  it("always resolves after the turn is cancelled, even if a grandchild holds stdout", async () => {
+    // `sleep 30 & wait` leaves a grandchild holding the stdout pipe. If only the
+    // shell is killed, 'close' never fires and the tool hangs forever; the process
+    // group must be terminated AND the promise settled on abort.
+    const controller = new AbortController();
+    let guard: NodeJS.Timeout | undefined;
+    try {
+      const pending = registry.execute(
+        "shall_tool",
+        { command: "sleep 30 & wait" },
+        { ...ctx, signal: controller.signal },
+      );
+      setTimeout(() => controller.abort(), 200);
+      const result = await Promise.race([
+        pending,
+        new Promise<never>((_, reject) => {
+          guard = setTimeout(
+            () => reject(new Error("shall_tool did not resolve after abort")),
+            5_000,
+          );
+        }),
+      ]);
+      assert.equal(result.ok, false);
+    } finally {
+      if (guard) clearTimeout(guard);
+    }
+  });
+
+  it("reports an asynchronous background spawn failure instead of a false success", async () => {
+    const result = await registry.execute(
+      "shall_tool",
+      { command: "echo hi", wait_for_output: false, session_name: "spawn-fail-session" },
+      { workspaceRoot: path.join(workspace, "missing-dir"), shellTimeoutMs: 5_000 },
+    );
+    assert.equal(result.ok, false);
+    assert.equal((result.error as { code: string }).code, "command_spawn_failed");
+  });
 });
